@@ -1,5 +1,8 @@
 "use client"
 
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+
 import {
   LayoutDashboard,
   Briefcase,
@@ -13,15 +16,17 @@ import {
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", active: true },
-  { icon: Briefcase, label: "Portfolio", active: false },
-  { icon: Eye, label: "Watchlist", active: false },
-  { icon: ScanSearch, label: "Scanner", active: false },
-  { icon: Bot, label: "AI Advisor", active: false },
-  { icon: Newspaper, label: "News", active: false },
+  { icon: LayoutDashboard, label: "Dashboard", active: true, href: "/" },
+  { icon: Briefcase, label: "Portfolio", active: false, href: "/portfolio" },
+  { icon: Eye, label: "Watchlist", active: false, href: "#" },
+  { icon: ScanSearch, label: "Scanner", active: false, href: "#" },
+  { icon: Bot, label: "AI Advisor", active: false, href: "#" },
+  { icon: Newspaper, label: "News", active: false, href: "#" },
 ]
 
 export function Sidebar() {
+  const pathname = usePathname()
+  
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card">
       <div className="flex items-center gap-2 px-6 py-5">
@@ -35,20 +40,24 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 pt-2">
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-              item.active
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-            )}
-          >
-            <item.icon className="size-[18px]" />
-            {item.label}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const active = pathname === item.href
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                active
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+            >
+              <item.icon className="size-[18px]" />
+              {item.label}
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="mt-auto border-t border-border px-3 py-3">
