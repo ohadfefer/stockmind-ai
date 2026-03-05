@@ -2,6 +2,7 @@
 
 import {
   LayoutDashboard,
+  Briefcase,
   Eye,
   ScanSearch,
   Bot,
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", active: true },
+  { icon: Briefcase, label: "Portfolio", active: false },
   { icon: Eye, label: "Watchlist", active: false },
   { icon: ScanSearch, label: "Scanner", active: false },
   { icon: Bot, label: "AI Advisor", active: false },
