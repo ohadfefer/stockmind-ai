@@ -12,81 +12,111 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Share2, TrendingDown, TrendingUp } from "lucide-react"
+import { Plus, Share2 } from "lucide-react"
+import { finnhubFetch } from "@/lib/finnhub"
 import { PriceChart } from "@/components/details/price-chart"
 import { KeyStats, type KeyStatsData } from "@/components/details/key-stats"
 import { NewsFeed } from "@/components/details/news-feed"
 import { AboutSection } from "@/components/details/about-section"
+import { LivePrice } from "@/components/details/live-price"
 
-function getStockData(symbol: string) {
-  const stocks: Record<string, {
-    name: string
-    price: number
-    changeDollar: number
-    changePercent: number
-    afterHoursPrice: number
-    afterHoursChangePercent: number
-    afterHoursChangeDollar: number
-    closedAt: string
-    exchange: string
-    currency: string
-    tags: string[]
-    keyStats: KeyStatsData
-    about: string
-  }> = {
-    A: {
-      name: "Agilent Technologies Inc",
-      price: 115.07,
-      changeDollar: -3.04,
-      changePercent: -2.57,
-      afterHoursPrice: 116.41,
-      afterHoursChangePercent: 1.16,
-      afterHoursChangeDollar: 1.34,
-      closedAt: "Mar 6, 8:15:58 PM UTC-4",
-      exchange: "NYSE",
+interface FinnhubQuote {
+  c: number  // current price
+  d: number  // change
+  dp: number // percent change
+  h: number  // high
+  l: number  // low
+  o: number  // open
+  pc: number // previous close
+}
+
+interface FinnhubProfile {
+  country?: string
+  currency?: string
+  exchange?: string
+  finnhubIndustry?: string
+  logo?: string
+  marketCapitalization?: number
+  name?: string
+  ticker?: string
+  weburl?: string
+}
+
+function formatMarketCap(millions: number | undefined): string | null {
+  if (!millions) return null
+  if (millions >= 1_000_000) return `${(millions / 1_000_000).toFixed(2)}T`
+  if (millions >= 1_000) return `${(millions / 1_000).toFixed(2)}B`
+  return `${millions.toFixed(2)}M`
+}
+
+async function getStockData(symbol: string) {
+  try {
+    const [quote, profile] = await Promise.all([
+      finnhubFetch("/quote", { symbol }) as Promise<FinnhubQuote>,
+      finnhubFetch("/stock/profile2", { symbol }) as Promise<FinnhubProfile>,
+    ])
+
+    const hasQuote = quote && quote.c !== 0
+    const hasProfile = profile && profile.name
+    const exchangeShort = profile.exchange?.split(/\s+/)[0] ?? null
+
+    const tags: string[] = ["Stock"]
+    if (exchangeShort) tags.push(`${exchangeShort} listed`)
+    if (hasProfile && profile.country) tags.push(`${profile.country} headquartered`)
+
+    const mcRaw = hasProfile ? profile.marketCapitalization : undefined
+    const mcFormatted = formatMarketCap(mcRaw)
+    const currency = hasProfile ? profile.currency ?? "USD" : "USD"
+
+    const keyStats: KeyStatsData = {
+      previousClose: hasQuote ? quote.pc : null,
+      dayRange: hasQuote ? [quote.l, quote.h] : [null, null],
+      yearRange: [null, null],
+      marketCap: mcFormatted ? `${mcFormatted} ${currency}` : null,
+      avgVolume: null,
+      peRatio: null,
+      dividendYield: null,
+      primaryExchange: exchangeShort,
+    }
+
+    return {
+      name: hasProfile ? profile.name! : symbol.toUpperCase(),
+      price: hasQuote ? quote.c : 0,
+      changeDollar: hasQuote ? quote.d : 0,
+      changePercent: hasQuote ? quote.dp : 0,
+      previousClose: hasQuote ? quote.pc : 0,
+      exchange: exchangeShort ?? "-",
+      currency,
+      tags,
+      keyStats,
+      about: hasProfile
+        ? `${profile.name} is a ${profile.finnhubIndustry ?? ""} company${profile.country ? ` headquartered in ${profile.country}` : ""}.${profile.weburl ? ` Website: ${profile.weburl}` : ""}`
+        : `${symbol.toUpperCase()} — no profile data available.`,
+      logo: hasProfile ? profile.logo : undefined,
+    }
+  } catch {
+    return {
+      name: symbol.toUpperCase(),
+      price: 0,
+      changeDollar: 0,
+      changePercent: 0,
+      previousClose: 0,
+      exchange: "-",
       currency: "USD",
-      tags: ["Stock", "US listed security", "US headquartered"],
+      tags: ["Stock"],
       keyStats: {
-        previousClose: 118.11,
-        dayRange: [114.91, 116.77],
-        yearRange: [96.43, 160.27],
-        marketCap: "32.52B USD",
-        avgVolume: "2.39M",
-        peRatio: 25.4,
-        dividendYield: 0.89,
-        primaryExchange: "NYSE",
+        previousClose: null,
+        dayRange: [null, null] as [null, null],
+        yearRange: [null, null] as [null, null],
+        marketCap: null,
+        avgVolume: null,
+        peRatio: null,
+        dividendYield: null,
+        primaryExchange: null,
       },
-      about:
-        "Agilent Technologies, Inc. is an American global company headquartered in Santa Clara, California, that provides instruments, software, services, and consumables for laboratories. Agilent was established in 1999 as a spin-off from Hewlett-Packard. The resulting IPO of Agilent stock was the largest in the history of Silicon Valley at the time. From 1999 to 2014, the company produced optics, semiconductors, EDA software and test and measurement equipment for electronics.",
-    },
-  }
-
-  const data = stocks[symbol.toUpperCase()]
-  if (data) return data
-
-  return {
-    name: `${symbol.toUpperCase()} Corp`,
-    price: 189.43,
-    changeDollar: 2.31,
-    changePercent: 1.24,
-    afterHoursPrice: 190.12,
-    afterHoursChangePercent: 0.36,
-    afterHoursChangeDollar: 0.69,
-    closedAt: "Mar 6, 8:00:00 PM UTC-4",
-    exchange: "NASDAQ",
-    currency: "USD",
-    tags: ["Stock", "US listed security"],
-    keyStats: {
-      previousClose: 187.12,
-      dayRange: [185.5, 190.25] as [number, number],
-      yearRange: [142.0, 199.62] as [number, number],
-      marketCap: "2.94T USD",
-      avgVolume: "52.4M",
-      peRatio: 31.2,
-      dividendYield: 0.52,
-      primaryExchange: "NASDAQ",
-    },
-    about: `${symbol.toUpperCase()} Corp is a publicly traded company listed on major US stock exchanges.`,
+      about: "Unable to load company data.",
+      logo: undefined,
+    }
   }
 }
 
@@ -96,9 +126,8 @@ export default async function DetailsPage({
   params: Promise<{ symbol: string }>
 }) {
   const { symbol } = await params
-  const stock = getStockData(symbol)
-  const isDown = stock.changeDollar < 0
-  const afterHoursUp = stock.afterHoursChangeDollar >= 0
+  const upperSymbol = symbol.toUpperCase()
+  const stock = await getStockData(upperSymbol)
 
   return (
     <div className="flex flex-col gap-4">
@@ -113,16 +142,25 @@ export default async function DetailsPage({
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               <BreadcrumbPage>
-                {symbol.toUpperCase()} · {stock.exchange}
+                {upperSymbol} · {stock.exchange}
               </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
 
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {stock.name}
-          </h1>
+          <div className="flex items-center gap-3">
+            {stock.logo && (
+              <img
+                src={stock.logo}
+                alt={stock.name}
+                className="size-8 rounded-md"
+              />
+            )}
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {stock.name}
+            </h1>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm">
               <Plus className="size-4" />
@@ -141,69 +179,23 @@ export default async function DetailsPage({
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
         {/* Main content */}
         <div className="flex-1 space-y-6">
-          {/* Price */}
-          <div className="space-y-1">
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-bold tracking-tight text-foreground">
-                ${stock.price.toFixed(2)}
-              </span>
-              <Badge
-                variant="destructive"
-                className={clsx(
-                  "text-sm",
-                  !isDown && "bg-accent text-accent-foreground hover:bg-accent/90"
-                )}
-              >
-                {isDown ? (
-                  <TrendingDown className="size-3.5" />
-                ) : (
-                  <TrendingUp className="size-3.5" />
-                )}
-                {Math.abs(stock.changePercent).toFixed(2)}%
-              </Badge>
-              <span
-                className={clsx(
-                  "text-sm font-medium",
-                  isDown ? "text-destructive" : "text-accent"
-                )}
-              >
-                {stock.changeDollar > 0 ? "+" : ""}
-                {stock.changeDollar.toFixed(2)} Today
-              </span>
-            </div>
+          {/* Live Price */}
+          <LivePrice
+            symbol={upperSymbol}
+            initialPrice={stock.price}
+            initialChange={stock.changeDollar}
+            initialChangePercent={stock.changePercent}
+            previousClose={stock.previousClose}
+          />
 
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>After Hours:</span>
-              <span className="font-medium text-foreground">
-                ${stock.afterHoursPrice.toFixed(2)}
-              </span>
-              <span
-                className={clsx(
-                  "font-medium",
-                  afterHoursUp ? "text-accent" : "text-destructive"
-                )}
-              >
-                ({afterHoursUp ? "↑" : "↓"}
-                {Math.abs(stock.afterHoursChangePercent).toFixed(2)}%)
-              </span>
-              <span
-                className={clsx(
-                  "font-medium",
-                  afterHoursUp ? "text-accent" : "text-destructive"
-                )}
-              >
-                {afterHoursUp ? "+" : "-"}
-                {Math.abs(stock.afterHoursChangeDollar).toFixed(2)}
-              </span>
-            </div>
-
+          {stock.price > 0 && (
             <p className="text-xs text-muted-foreground">
-              Closed: {stock.closedAt} · {stock.currency} · {stock.exchange}
+              {stock.currency} · {stock.exchange}
             </p>
-          </div>
+          )}
 
           {/* Chart */}
-          <PriceChart previousClose={stock.keyStats.previousClose} />
+          <PriceChart previousClose={stock.previousClose} />
 
           <Separator />
 
