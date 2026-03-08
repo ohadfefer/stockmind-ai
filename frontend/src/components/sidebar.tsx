@@ -21,7 +21,7 @@ const navItems = [
   { icon: Eye, label: "Watchlist", active: false, href: "#" },
   { icon: ScanSearch, label: "Scanner", active: false, href: "#" },
   { icon: Bot, label: "AI Advisor", active: false, href: "#" },
-  { icon: Newspaper, label: "News", active: false, href: "#" },
+  { icon: Newspaper, label: "News", active: false, href: "/news" },
 ]
 
 export function Sidebar() {

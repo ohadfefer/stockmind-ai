@@ -200,7 +200,7 @@ export default async function DetailsPage({
           <Separator />
 
           {/* News Feed */}
-          <NewsFeed />
+          <NewsFeed symbol={upperSymbol} />
         </div>
 
         {/* Sidebar */}
