@@ -12,6 +12,7 @@ import {
   Newspaper,
   Settings,
   Zap,
+  LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -24,9 +25,24 @@ const navItems = [
   { icon: Newspaper, label: "News", active: false, href: "/news" },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  userName?: string
+  userImage?: string
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+export function Sidebar({ userName, userImage }: SidebarProps) {
   const pathname = usePathname()
-  
+  const displayName = userName ?? "User"
+
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card">
       <div className="flex items-center gap-2 px-6 py-5">
@@ -65,14 +81,28 @@ export function Sidebar() {
           <Settings className="size-[18px]" />
           Settings
         </button>
-        <div className="mt-3 flex items-center gap-3 px-3 pb-1">
-          <div className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-            JD
+        <div className="mt-3 flex items-center justify-between px-3 pb-1">
+          <div className="flex items-center gap-3">
+            {userImage ? (
+              <img
+                src={userImage}
+                alt={displayName}
+                className="size-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+                {getInitials(displayName)}
+              </div>
+            )}
+            <p className="text-sm font-medium text-foreground">{displayName}</p>
           </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">John Doe</p>
-            <p className="text-xs text-muted-foreground">Pro Plan</p>
-          </div>
+          <a
+            href="/auth/logout"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            title="Log out"
+          >
+            <LogOut className="size-4" />
+          </a>
         </div>
       </div>
     </aside>
