@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
 StockMind AI is an AI-powered stock research and analysis dashboard built with Next.js, using live market data from Finnhub and user authentication via Auth0.
@@ -24,7 +22,7 @@ npm run lint     # ESLint
 - **UI Components**: shadcn/ui (new-york style, Radix UI primitives, Lucide icons)
 - **Charts**: Recharts
 - **Authentication**: Auth0 (`@auth0/nextjs-auth0` v4)
-- **Database**: Neon Serverless Postgres (`@neondatabase/serverless`)
+- **Database**: Neon Serverless Postgres (`@neondatabase/serverless`), project: `misty-bread-61945131`
 - **Market Data**: Finnhub API (real-time quotes, company news, search)
 - **Path alias**: `@/*` maps to `frontend/src/*`
 
@@ -32,57 +30,26 @@ npm run lint     # ESLint
 
 ```
 frontend/src/
-├── proxy.ts                    # Next.js 16 proxy (route protection, Auth0 middleware)
+├── proxy.ts              # Next.js 16 proxy (Auth0 middleware, route protection)
 ├── app/
-│   ├── globals.css             # CSS variables, Tailwind theme
-│   ├── layout.tsx              # Root layout (html/body, Auth0Provider)
-│   ├── (auth)/                 # Auth route group (no sidebar/header)
-│   │   ├── layout.tsx          # Centered layout for auth pages
-│   │   ├── login/page.tsx      # Login page
-│   │   ├── signup/page.tsx     # Signup page
-│   │   └── onboarding/page.tsx # Post-signup name collection
-│   └── (main)/                 # Dashboard route group (sidebar + header)
-│       ├── layout.tsx          # Dashboard shell, reads user from DB
-│       ├── page.tsx            # Dashboard/home page
-│       ├── portfolio/page.tsx  # Portfolio page
-│       ├── news/page.tsx       # Market news
-│       ├── news/[symbol]/      # Symbol-specific news
-│       ├── details/[symbol]/   # Stock details (chart, stats, news)
-│       └── api/
-│           ├── auth/insert-user/route.ts  # Upsert user to Neon DB
-│           ├── company/news/route.ts      # Finnhub company news
-│           ├── market/status/route.ts     # Market open/closed status
-│           └── stocks/
-│               ├── quote/route.ts         # Stock quote + profile
-│               ├── search/route.ts        # Symbol search
-│               └── trades/route.ts        # Real-time trades (SSE via WebSocket)
+│   ├── layout.tsx        # Root layout (html/body, Auth0Provider)
+│   ├── (auth)/           # Auth route group (centered layout, no sidebar)
+│   └── (main)/           # Dashboard route group (sidebar + header shell)
+│       ├── api/          # API route handlers
+│       └── ...           # Pages: /, /portfolio, /news, /details/[symbol]
 ├── components/
-│   ├── dashboard/          # Dashboard widgets (KPI cards, heatmap, feeds)
-│   ├── details/            # Stock details components (chart, stats, news)
-│   ├── portfolio/          # Portfolio page tabs (portfolio, watchlist, alerts)
-│   ├── ui/                 # shadcn/ui primitives (do not manually edit)
-│   ├── sidebar.tsx         # App navigation sidebar (user name/avatar from props)
-│   ├── header.tsx          # Top header bar
-│   └── theme-provider.tsx  # Theme context
-├── hooks/                  # Custom React hooks
-├── services/
-│   ├── stock-service.ts    # Stock data fetching & formatting (Finnhub)
-│   └── user-service.ts     # User data queries (Neon DB)
-├── lib/
-│   ├── auth0.ts            # Auth0Client instance
-│   ├── db.ts               # Neon database connection helper
-│   ├── finnhub.ts          # Finnhub API fetch helper
-│   ├── mock-data.ts        # Mock/dummy data (used by some dashboard widgets)
-│   └── utils.ts            # cn() utility (tailwind-merge + clsx)
-└── styles/                 # Additional global styles
+│   ├── ui/               # shadcn/ui primitives (do not manually edit)
+│   └── ...               # Feature components (dashboard/, details/, portfolio/)
+├── services/             # Server-side data fetching (see convention below)
+├── hooks/                # Custom React hooks
+├── lib/                  # Utilities (auth0, db, finnhub, utils)
+└── styles/               # Additional global styles
 ```
 
 ### Route Groups & Layouts
 
-The app uses Next.js route groups to separate layouts:
-
-- **`(auth)`** — Login, signup, onboarding pages. Centered layout, no sidebar/header.
-- **`(main)`** — Dashboard pages. Sidebar + header shell. Reads authenticated user from DB for sidebar display.
+- **`(auth)`** — Login, signup, onboarding. Centered layout, no sidebar/header.
+- **`(main)`** — Dashboard pages. Sidebar + header shell.
 
 Route groups don't affect URLs (e.g., `(main)/portfolio/page.tsx` serves `/portfolio`).
 
@@ -90,64 +57,17 @@ Route groups don't affect URLs (e.g., `(main)/portfolio/page.tsx` serves `/portf
 
 Auth0 v4 SDK with Next.js 16 proxy pattern:
 
-1. `proxy.ts` runs Auth0 middleware on all requests, redirects unauthenticated users to `/login`
-2. Login/signup pages link to `/auth/login` (Auth0's hosted Universal Login)
-3. Signup flow: Auth0 → `/onboarding` (collect full name) → `POST /api/auth/insert-user` (upsert to Neon) → `/`
-4. Login flow: Auth0 → `/` directly
-5. Auth0 SDK auto-creates `/auth/login`, `/auth/logout`, `/auth/callback`, `/auth/profile` routes
-
-### Database (Neon)
-
-Neon Serverless Postgres with the `@neondatabase/serverless` driver.
-
-**Users table:**
-```sql
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  auth0_id TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT NOT NULL,
-  image_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-Connection via `DATABASE_URL` env var. Helper in `src/lib/db.ts`.
+1. `proxy.ts` runs Auth0 middleware, redirects unauthenticated users to `/login`
+2. Signup: Auth0 → `/onboarding` (collect name) → `POST /api/auth/insert-user` → `/`
+3. Login: Auth0 → `/` directly
+4. Auth0 SDK auto-creates `/auth/login`, `/auth/logout`, `/auth/callback`, `/auth/profile`
 
 ### Environment Variables
 
-Required in `frontend/.env.local` (not committed):
+Required in `frontend/.env.local` (not committed): `AUTH0_SECRET`, `APP_BASE_URL`, `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `DATABASE_URL`, `FINNHUB_API_KEY`
 
-```
-# Auth0
-AUTH0_SECRET=<openssl rand -hex 32>
-APP_BASE_URL=http://localhost:3000
-AUTH0_DOMAIN=your-tenant.auth0.com
-AUTH0_CLIENT_ID=your-client-id
-AUTH0_CLIENT_SECRET=your-client-secret
+### Conventions
 
-# Neon Database
-DATABASE_URL=postgresql://...
+**Services** — Server-side data-fetching functions live in `src/services/<domain>-service.ts`, not in page files. Page components import from services and focus only on rendering.
 
-# Finnhub
-FINNHUB_API_KEY=your-api-key
-```
-
-### Adding shadcn/ui Components
-
-```bash
-cd frontend
-npx shadcn@latest add <component-name>
-```
-
-Components are generated into `src/components/ui/`. Config is in `frontend/components.json`.
-
-### Services Convention
-
-Server-side data-fetching functions and their related types/helpers live in `src/services/`, not in page files. Page components import from services and focus only on rendering.
-
-- **`stock-service.ts`** — Finnhub API calls (`getStockData`), formatting helpers (`formatMarketCap`), and related interfaces (`FinnhubQuote`, `FinnhubProfile`)
-- **`user-service.ts`** — Database queries for user data (`getUserName`)
-
-When adding new server-side data-fetching logic, create or extend a service file in `src/services/` rather than defining functions inline in page/layout files. Name files as `<domain>-service.ts`.
+**shadcn/ui** — Add components via `npx shadcn@latest add <name>` from `frontend/`. Do not manually edit `src/components/ui/`.

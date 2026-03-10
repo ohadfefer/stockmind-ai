@@ -11,13 +11,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Share2 } from "lucide-react"
+import { Bot } from "lucide-react"
 import { PriceChart } from "@/components/details/price-chart"
 import { KeyStats } from "@/components/details/key-stats"
 import { NewsFeed } from "@/components/details/news-feed"
 import { AboutSection } from "@/components/details/about-section"
 import { LivePrice } from "@/components/details/live-price"
+import { FollowButton } from "@/components/details/follow-button"
 import { getStockData } from "@/services/stock-service"
+import { getUserIdByAuth0Id, isFollowing } from "@/services/watchlist-service"
+import { auth0 } from "@/lib/auth0"
 
 export default async function DetailsPage({
   params,
@@ -26,7 +29,19 @@ export default async function DetailsPage({
 }) {
   const { symbol } = await params
   const upperSymbol = symbol.toUpperCase()
-  const stock = await getStockData(upperSymbol)
+
+  const [stock, session] = await Promise.all([
+    getStockData(upperSymbol),
+    auth0.getSession(),
+  ])
+
+  let initialFollowing = false
+  if (session?.user?.sub) {
+    const userId = await getUserIdByAuth0Id(session.user.sub)
+    if (userId) {
+      initialFollowing = await isFollowing(userId, upperSymbol)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,13 +76,10 @@ export default async function DetailsPage({
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <FollowButton symbol={upperSymbol} initialFollowing={initialFollowing} />
             <Button variant="outline" size="sm">
-              <Plus className="size-4" />
-              Follow
-            </Button>
-            <Button variant="outline" size="sm">
-              <Share2 className="size-4" />
-              Share
+              <Bot className="size-4" />
+              Analyze
             </Button>
           </div>
         </div>
