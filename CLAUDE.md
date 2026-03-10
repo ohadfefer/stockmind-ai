@@ -65,6 +65,9 @@ frontend/src/
 │   ├── header.tsx          # Top header bar
 │   └── theme-provider.tsx  # Theme context
 ├── hooks/                  # Custom React hooks
+├── services/
+│   ├── stock-service.ts    # Stock data fetching & formatting (Finnhub)
+│   └── user-service.ts     # User data queries (Neon DB)
 ├── lib/
 │   ├── auth0.ts            # Auth0Client instance
 │   ├── db.ts               # Neon database connection helper
@@ -139,3 +142,12 @@ npx shadcn@latest add <component-name>
 ```
 
 Components are generated into `src/components/ui/`. Config is in `frontend/components.json`.
+
+### Services Convention
+
+Server-side data-fetching functions and their related types/helpers live in `src/services/`, not in page files. Page components import from services and focus only on rendering.
+
+- **`stock-service.ts`** — Finnhub API calls (`getStockData`), formatting helpers (`formatMarketCap`), and related interfaces (`FinnhubQuote`, `FinnhubProfile`)
+- **`user-service.ts`** — Database queries for user data (`getUserName`)
+
+When adding new server-side data-fetching logic, create or extend a service file in `src/services/` rather than defining functions inline in page/layout files. Name files as `<domain>-service.ts`.
