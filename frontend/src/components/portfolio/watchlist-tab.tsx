@@ -16,7 +16,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, Eye, Trash2, BellRing } from "lucide-react"
 import { Area, AreaChart, ResponsiveContainer } from "recharts"
-import { watchlistStocks } from "@/lib/mock-data"
+
+export interface WatchlistStockData {
+  ticker: string
+  company: string
+  price: number
+  changeDollar: number
+  changePercent: number
+  marketCap: string | null
+  dayLow: number | null
+  dayHigh: number | null
+  aiScore: number | null
+  sparkline: number[]
+}
 
 function getAIScoreColor(score: number): string {
   if (score >= 8) return "bg-[#10B981] text-[#FFFFFF]"
@@ -87,7 +99,24 @@ function RangeBar({
   )
 }
 
-export function WatchlistTab() {
+interface WatchlistTabProps {
+  stocks: WatchlistStockData[]
+}
+
+export function WatchlistTab({ stocks }: WatchlistTabProps) {
+  if (stocks.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
+        <p className="text-lg font-semibold text-foreground">
+          No stocks in your watchlist
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Follow stocks from their detail page to add them here.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card">
       <Table>
@@ -106,13 +135,10 @@ export function WatchlistTab() {
               Change %
             </TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Volume
-            </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Market Cap
             </TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              52W Range
+              Day Range
             </TableHead>
             <TableHead className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               AI Score
@@ -126,7 +152,7 @@ export function WatchlistTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {watchlistStocks.map((stock) => {
+          {stocks.map((stock) => {
             const positive = stock.changePercent >= 0
             return (
               <TableRow
@@ -162,29 +188,38 @@ export function WatchlistTab() {
                   {stock.changePercent.toFixed(2)}%
                 </TableCell>
                 <TableCell className="font-mono text-sm text-muted-foreground">
-                  {stock.volume}
-                </TableCell>
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  {stock.marketCap}
+                  {stock.marketCap ?? "—"}
                 </TableCell>
                 <TableCell>
-                  <RangeBar
-                    low={stock.low52w}
-                    high={stock.high52w}
-                    current={stock.price}
-                  />
+                  {stock.dayLow != null && stock.dayHigh != null ? (
+                    <RangeBar
+                      low={stock.dayLow}
+                      high={stock.dayHigh}
+                      current={stock.price}
+                    />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <span
-                    className={`inline-flex size-8 items-center justify-center rounded-lg font-mono text-xs font-bold ${getAIScoreColor(
-                      stock.aiScore
-                    )}`}
-                  >
-                    {stock.aiScore}
-                  </span>
+                  {stock.aiScore != null ? (
+                    <span
+                      className={`inline-flex size-8 items-center justify-center rounded-lg font-mono text-xs font-bold ${getAIScoreColor(
+                        stock.aiScore
+                      )}`}
+                    >
+                      {stock.aiScore}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>
-                  <MiniSparkline data={stock.sparkline} positive={positive} />
+                  {stock.sparkline.length > 0 ? (
+                    <MiniSparkline data={stock.sparkline} positive={positive} />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right pr-5">
                   <DropdownMenu>

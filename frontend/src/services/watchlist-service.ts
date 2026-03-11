@@ -10,6 +10,16 @@ export async function getUserIdByAuth0Id(auth0Id: string): Promise<number | null
   }
 }
 
+export async function getWatchlistSymbols(userId: number): Promise<string[]> {
+  const sql = getDb()
+  try {
+    const rows = await sql`SELECT symbol FROM watchlist WHERE user_id = ${userId} ORDER BY symbol`
+    return rows.map((r) => r.symbol as string)
+  } catch {
+    return []
+  }
+}
+
 export async function isFollowing(userId: number, symbol: string): Promise<boolean> {
   const sql = getDb()
   try {

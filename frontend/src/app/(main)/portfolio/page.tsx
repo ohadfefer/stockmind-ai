@@ -14,7 +14,6 @@ import {
   Sparkles,
   Clock,
 } from "lucide-react"
-import { WatchlistTab } from "@/components/portfolio/watchlist-tab"
 import { PortfolioTab } from "@/components/portfolio/portfolio-tab"
 import { AlertsTab } from "@/components/portfolio/alerts-tab"
 
@@ -48,8 +47,8 @@ export default function PortfolioPage() {
       <Tabs defaultValue="portfolio" className="gap-6">
         <div className="flex items-center justify-between">
           <TabsList className="h-10 bg-secondary">
-            <TabsTrigger value="watchlist" className="h-8 px-4 text-sm">
-              Watchlist
+            <TabsTrigger value="analyze" className="h-8 px-4 text-sm">
+              Analyze
             </TabsTrigger>
             <TabsTrigger value="portfolio" className="h-8 px-4 text-sm">
               Portfolio
@@ -95,8 +94,15 @@ export default function PortfolioPage() {
           </div>
         </div>
 
-        <TabsContent value="watchlist">
-          <WatchlistTab />
+        {/* the content inside TabsContent should be wrapped inside a component - like the other tabs */}
+        <TabsContent value="analyze">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
+            <Sparkles className="mb-3 size-8 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">
+              AI Portfolio Analysis
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">Coming soon</p>
+          </div>
         </TabsContent>
 
         <TabsContent value="portfolio">

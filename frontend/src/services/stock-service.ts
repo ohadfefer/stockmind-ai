@@ -1,5 +1,8 @@
 import { finnhubFetch } from "@/lib/finnhub"
+import { Converter } from "easy-currencies"
 import type { KeyStatsData } from "@/components/details/key-stats"
+
+const converter = new Converter()
 
 export interface FinnhubQuote {
   c: number  // current price
@@ -45,15 +48,23 @@ export async function getStockData(symbol: string) {
     if (exchangeShort) tags.push(`${exchangeShort} listed`)
     if (hasProfile && profile.country) tags.push(`${profile.country} headquartered`)
 
-    const mcRaw = hasProfile ? profile.marketCapitalization : undefined
-    const mcFormatted = formatMarketCap(mcRaw)
     const currency = hasProfile ? profile.currency ?? "USD" : "USD"
+    const mcRaw = hasProfile ? profile.marketCapitalization : undefined
+    let mcUsd = mcRaw
+    if (mcRaw && currency !== "USD") {
+      try {
+        mcUsd = await converter.convert(mcRaw, currency, "USD")
+      } catch {
+        mcUsd = mcRaw
+      }
+    }
+    const mcFormatted = formatMarketCap(mcUsd)
 
     const keyStats: KeyStatsData = {
       previousClose: hasQuote ? quote.pc : null,
       dayRange: hasQuote ? [quote.l, quote.h] : [null, null],
       yearRange: [null, null],
-      marketCap: mcFormatted ? `${mcFormatted} ${currency}` : null,
+      marketCap: mcFormatted ? `$${mcFormatted}` : null,
       avgVolume: null,
       peRatio: null,
       dividendYield: null,
@@ -66,6 +77,8 @@ export async function getStockData(symbol: string) {
       changeDollar: hasQuote ? quote.d : 0,
       changePercent: hasQuote ? quote.dp : 0,
       previousClose: hasQuote ? quote.pc : 0,
+      dayHigh: hasQuote ? quote.h : 0,
+      dayLow: hasQuote ? quote.l : 0,
       exchange: exchangeShort ?? "-",
       currency,
       tags,
@@ -82,6 +95,8 @@ export async function getStockData(symbol: string) {
       changeDollar: 0,
       changePercent: 0,
       previousClose: 0,
+      dayHigh: 0,
+      dayLow: 0,
       exchange: "-",
       currency: "USD",
       tags: ["Stock"],

@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", active: true, href: "/" },
   { icon: Briefcase, label: "Portfolio", active: false, href: "/portfolio" },
-  { icon: Eye, label: "Watchlist", active: false, href: "#" },
+  { icon: Eye, label: "Watchlist", active: false, href: "/watchlist" },
   { icon: ScanSearch, label: "Scanner", active: false, href: "#" },
   { icon: Bot, label: "AI Advisor", active: false, href: "#" },
   { icon: Newspaper, label: "News", active: false, href: "/news" },
