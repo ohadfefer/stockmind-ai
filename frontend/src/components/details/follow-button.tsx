@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Check, Plus, Loader2 } from "lucide-react"
+import { addStock, deleteStock } from "@/actions/watchlist"
 
 export function FollowButton({
   symbol,
@@ -16,14 +17,11 @@ export function FollowButton({
 
   function toggle() {
     startTransition(async () => {
-      const method = following ? "DELETE" : "POST"
-      const res = await fetch("/api/watchlist", {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol }),
-      })
-      if (res.ok) {
-        const data = await res.json()
+      if (following) {
+        await deleteStock(symbol)
+        setFollowing(false)
+      } else {
+        const data = await addStock(symbol)
         setFollowing(data.following)
       }
     })

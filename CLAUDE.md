@@ -40,6 +40,7 @@ frontend/src/
 ├── components/
 │   ├── ui/               # shadcn/ui primitives (do not manually edit)
 │   └── ...               # Feature components (dashboard/, details/, portfolio/)
+├── actions/              # Client-side API call functions (see convention below)
 ├── services/             # Server-side data fetching (see convention below)
 ├── hooks/                # Custom React hooks
 ├── lib/                  # Utilities (auth0, db, finnhub, utils)
@@ -69,5 +70,7 @@ Required in `frontend/.env.local` (not committed): `AUTH0_SECRET`, `APP_BASE_URL
 ### Conventions
 
 **Services** — Server-side data-fetching functions live in `src/services/<domain>-service.ts`, not in page files. Page components import from services and focus only on rendering.
+
+**Actions** — Client-side API calls (POST, DELETE, etc.) live in `src/actions/<domain>.ts` as named functions (e.g., `addStock`, `deleteStock`). Components import from actions instead of using inline `fetch` calls.
 
 **shadcn/ui** — Add components via `npx shadcn@latest add <name>` from `frontend/`. Do not manually edit `src/components/ui/`.

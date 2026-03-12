@@ -1,5 +1,7 @@
 "use client"
 
+import { useState, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import {
   Table,
   TableBody,
@@ -8,14 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Eye, Trash2, BellRing } from "lucide-react"
-import { Area, AreaChart, ResponsiveContainer } from "recharts"
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, X, Trash2 } from "lucide-react"
+import { deleteStock } from "@/actions/watchlist"
 
 export interface WatchlistStockData {
   ticker: string
@@ -27,47 +23,30 @@ export interface WatchlistStockData {
   dayLow: number | null
   dayHigh: number | null
   aiScore: number | null
-  sparkline: number[]
+}
+
+type SortColumn = "ticker" | "price" | "changeDollar" | "changePercent"
+type SortDirection = "asc" | "desc" | "default"
+
+function SortIcon({
+  column,
+  activeColumn,
+  direction,
+}: {
+  column: SortColumn
+  activeColumn: SortColumn | null
+  direction: SortDirection
+}) {
+  if (activeColumn !== column || direction === "default")
+    return <ArrowUpDown className="size-3 opacity-50" />
+  if (direction === "asc") return <ArrowUp className="size-3" />
+  return <ArrowDown className="size-3" />
 }
 
 function getAIScoreColor(score: number): string {
   if (score >= 8) return "bg-[#10B981] text-[#FFFFFF]"
   if (score >= 6) return "bg-[#F59E0B] text-[#0A0B0D]"
   return "bg-[#EF4444] text-[#FFFFFF]"
-}
-
-function MiniSparkline({
-  data,
-  positive,
-}: {
-  data: number[]
-  positive: boolean
-}) {
-  const chartData = data.map((v, i) => ({ i, v }))
-  const color = positive ? "#10B981" : "#EF4444"
-  const gradientId = `sparkline-${positive ? "up" : "down"}`
-
-  return (
-    <ResponsiveContainer width={80} height={32}>
-      <AreaChart data={chartData}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="v"
-          stroke={color}
-          strokeWidth={1.5}
-          fill={`url(#${gradientId})`}
-          dot={false}
-          isAnimationActive={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  )
 }
 
 function RangeBar({
@@ -104,7 +83,67 @@ interface WatchlistTabProps {
 }
 
 export function WatchlistTab({ stocks }: WatchlistTabProps) {
-  if (stocks.length === 0) {
+  const router = useRouter()
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default")
+  const [confirmingTicker, setConfirmingTicker] = useState<string | null>(null)
+  const [removedTickers, setRemovedTickers] = useState<Set<string>>(new Set())
+
+  function handleSort(column: SortColumn) {
+    if (sortColumn !== column) {
+      setSortColumn(column)
+      setSortDirection("asc")
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc")
+    } else {
+      setSortDirection("default")
+      setSortColumn(null)
+    }
+  }
+
+  async function handleDelete(ticker: string) {
+    if (confirmingTicker !== ticker) {
+      setConfirmingTicker(ticker)
+      return
+    }
+    setConfirmingTicker(null)
+    setRemovedTickers((prev) => new Set(prev).add(ticker))
+    try {
+      await deleteStock(ticker)
+      router.refresh()
+    } catch {
+      setRemovedTickers((prev) => {
+        const next = new Set(prev)
+        next.delete(ticker)
+        return next
+      })
+    }
+  }
+
+  const sortedStocks = useMemo(() => {
+    const filtered = stocks.filter((s) => !removedTickers.has(s.ticker))
+    if (!sortColumn || sortDirection === "default") return filtered
+    return [...filtered].sort((a, b) => {
+      let cmp = 0
+      switch (sortColumn) {
+        case "ticker":
+          cmp = a.ticker.localeCompare(b.ticker)
+          break
+        case "price":
+          cmp = a.price - b.price
+          break
+        case "changeDollar":
+          cmp = a.changeDollar - b.changeDollar
+          break
+        case "changePercent":
+          cmp = a.changePercent - b.changePercent
+          break
+      }
+      return sortDirection === "desc" ? -cmp : cmp
+    })
+  }, [stocks, sortColumn, sortDirection, removedTickers])
+
+  if (sortedStocks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
         <p className="text-lg font-semibold text-foreground">
@@ -122,17 +161,41 @@ export function WatchlistTab({ stocks }: WatchlistTabProps) {
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
-            <TableHead className="pl-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Ticker
+            <TableHead className="pl-5">
+              <button
+                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => handleSort("ticker")}
+              >
+                Ticker
+                <SortIcon column="ticker" activeColumn={sortColumn} direction={sortDirection} />
+              </button>
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Price
+            <TableHead>
+              <button
+                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => handleSort("price")}
+              >
+                Price
+                <SortIcon column="price" activeColumn={sortColumn} direction={sortDirection} />
+              </button>
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Change $
+            <TableHead>
+              <button
+                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => handleSort("changeDollar")}
+              >
+                Change $
+                <SortIcon column="changeDollar" activeColumn={sortColumn} direction={sortDirection} />
+              </button>
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Change %
+            <TableHead>
+              <button
+                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => handleSort("changePercent")}
+              >
+                Change %
+                <SortIcon column="changePercent" activeColumn={sortColumn} direction={sortDirection} />
+              </button>
             </TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Market Cap
@@ -143,21 +206,19 @@ export function WatchlistTab({ stocks }: WatchlistTabProps) {
             <TableHead className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               AI Score
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              7-Day
-            </TableHead>
-            <TableHead className="text-right pr-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="pr-5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Actions
             </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {stocks.map((stock) => {
+          {sortedStocks.map((stock) => {
             const positive = stock.changePercent >= 0
             return (
               <TableRow
                 key={stock.ticker}
-                className="border-border transition-colors hover:bg-secondary/40"
+                className="group cursor-pointer border-border transition-colors hover:bg-secondary/40"
+                onClick={() => router.push(`/details/${stock.ticker}`)}
               >
                 <TableCell className="pl-5">
                   <div>
@@ -173,16 +234,14 @@ export function WatchlistTab({ stocks }: WatchlistTabProps) {
                   ${stock.price.toFixed(2)}
                 </TableCell>
                 <TableCell
-                  className={`font-mono text-sm font-semibold ${
-                    positive ? "text-[#10B981]" : "text-[#EF4444]"
-                  }`}
+                  className={`font-mono text-sm font-semibold ${positive ? "text-[#10B981]" : "text-[#EF4444]"
+                    }`}
                 >
                   {positive ? "+" : ""}${stock.changeDollar.toFixed(2)}
                 </TableCell>
                 <TableCell
-                  className={`font-mono text-sm font-semibold ${
-                    positive ? "text-[#10B981]" : "text-[#EF4444]"
-                  }`}
+                  className={`font-mono text-sm font-semibold ${positive ? "text-[#10B981]" : "text-[#EF4444]"
+                    }`}
                 >
                   {positive ? "+" : ""}
                   {stock.changePercent.toFixed(2)}%
@@ -214,42 +273,47 @@ export function WatchlistTab({ stocks }: WatchlistTabProps) {
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell>
-                  {stock.sparkline.length > 0 ? (
-                    <MiniSparkline data={stock.sparkline} positive={positive} />
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right pr-5">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                        <MoreHorizontal className="size-4" />
-                        <span className="sr-only">Actions</span>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="bg-card border-border"
-                    >
-                      <DropdownMenuItem className="gap-2 text-foreground">
-                        <Eye className="size-4" />
-                        View
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2 text-foreground">
-                        <BellRing className="size-4" />
-                        Set Alert
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="gap-2 text-[#EF4444]"
-                        variant="destructive"
-                      >
-                        <Trash2 className="size-4" />
-                        Remove
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <TableCell className="pr-5">
+                  <div className={`grid w-[60px] grid-cols-[28px_28px] items-center justify-end gap-1 ml-auto transition-opacity ${confirmingTicker === stock.ticker ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    {confirmingTicker === stock.ticker ? (
+                      <>
+                        <button
+                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConfirmingTicker(null)
+                          }}
+                        >
+                          <X className="size-4" />
+                          <span className="sr-only">Cancel</span>
+                        </button>
+                        <button
+                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(stock.ticker)
+                          }}
+                        >
+                          <Check className="size-4" />
+                          <span className="sr-only">Confirm remove</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span />
+                        <button
+                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(stock.ticker)
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                          <span className="sr-only">Remove</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )
