@@ -1,21 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { ArrowRight, Newspaper } from "lucide-react"
+import { ArrowRight, Newspaper, Loader2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-
-interface FinnhubNewsItem {
-  category: string
-  datetime: number
-  headline: string
-  id: number
-  image: string
-  related: string
-  source: string
-  summary: string
-  url: string
-}
+import { Button } from "@/components/ui/button"
+import { companyNews, marketNews, type FinnhubNewsItem } from "@/actions/news-feed"
 
 function formatDatetime(unix: number): string {
   const date = new Date(unix * 1000)
@@ -38,20 +28,26 @@ function truncateSummary(summary: string, maxLength = 180): string {
 }
 
 interface NewsFeedProps {
-  symbol: string
+  symbol?: string
 }
 
 export function NewsFeed({ symbol }: NewsFeedProps) {
   const [news, setNews] = useState<FinnhubNewsItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
 
   useEffect(() => {
     async function fetchNews() {
       try {
-        const res = await fetch(`/api/company/news?symbol=${encodeURIComponent(symbol)}`)
-        if (!res.ok) throw new Error("Failed to fetch")
-        const data: FinnhubNewsItem[] = await res.json()
-        setNews(data.slice(0, 5))
+        if (symbol) {
+          const data = await companyNews(symbol)
+          setNews(data.slice(0, 5))
+        } else {
+          const data = await marketNews()
+          setNews(data)
+          setHasMore(data.length === 7)
+        }
       } catch {
         setNews([])
       } finally {
@@ -62,10 +58,27 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
     fetchNews()
   }, [symbol])
 
+  const loadMore = useCallback(async () => {
+    if (loadingMore || news.length === 0) return
+    setLoadingMore(true)
+    try {
+      const minId = Math.min(...news.map((n) => n.id))
+      const data = await marketNews(minId)
+      setNews((prev) => [...prev, ...data])
+      setHasMore(data.length === 7)
+    } catch {
+      setHasMore(false)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [news, loadingMore])
+
+  const title = symbol ? "Latest News" : "Market News"
+
   if (loading) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">In the news</h3>
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex gap-4 rounded-lg p-3">
             <div className="flex-1 space-y-2">
@@ -83,7 +96,7 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
   if (news.length === 0) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">In the news</h3>
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
         <p className="text-sm text-muted-foreground">No recent news found.</p>
       </div>
     )
@@ -91,13 +104,17 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
 
   return (
     <div className="space-y-4">
-      <Link
-        href={`/news/${symbol}`}
-        className="group inline-flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary"
-      >
-        Latest News
-        <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-      </Link>
+      {symbol ? (
+        <Link
+          href={`/news/${symbol}`}
+          className="group inline-flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary"
+        >
+          {title}
+          <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+        </Link>
+      ) : (
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      )}
 
       <div className="space-y-2">
         {news.map((item) => (
@@ -140,6 +157,21 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
           </a>
         ))}
       </div>
+
+      {!symbol && hasMore && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Load more"
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

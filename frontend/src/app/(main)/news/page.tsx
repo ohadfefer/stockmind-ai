@@ -1,4 +1,5 @@
 import { Newspaper } from "lucide-react"
+import { NewsFeed } from "@/components/details/news-feed"
 
 export default function NewsPage() {
   return (
@@ -9,9 +10,7 @@ export default function NewsPage() {
           Market News
         </h1>
       </div>
-      <p className="text-muted-foreground">
-        General market news feed — coming soon.
-      </p>
+      <NewsFeed />
     </div>
   )
 }
