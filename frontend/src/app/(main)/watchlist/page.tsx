@@ -4,6 +4,9 @@ import type { WatchlistStockData } from "@/components/portfolio/watchlist-tab"
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id, getWatchlistSymbols } from "@/services/watchlist-service"
 import { getStockData } from "@/services/stock-service"
+import { finnhubFetch } from "@/lib/finnhub"
+
+const stocksCache = new Map<number, { stocks: WatchlistStockData[]; marketWasOpen: boolean }>()
 
 export default async function WatchlistPage() {
   const session = await auth0.getSession()
@@ -14,6 +17,16 @@ export default async function WatchlistPage() {
   if (auth0Id) {
     const userId = await getUserIdByAuth0Id(auth0Id)
     if (userId) {
+      const cached = stocksCache.get(userId)
+      const status = await finnhubFetch("/stock/market-status", { exchange: "US" }) as { isOpen: boolean }
+      const marketIsOpen = status.isOpen
+
+      // Use cache only if market is closed AND data was captured after close
+      if (cached && !marketIsOpen && !cached.marketWasOpen) {
+        stocks = cached.stocks
+        return renderPage(stocks)
+      }
+
       const symbols = await getWatchlistSymbols(userId)
       const results = await Promise.all(symbols.map((s) => getStockData(s)))
 
@@ -28,9 +41,15 @@ export default async function WatchlistPage() {
         dayHigh: data.dayHigh || null,
         aiScore: null,
       }))
+
+      stocksCache.set(userId, { stocks, marketWasOpen: marketIsOpen })
     }
   }
 
+  return renderPage(stocks)
+}
+
+function renderPage(stocks: WatchlistStockData[]) {
   return (
     <div className="flex flex-col gap-6">
       <div>
