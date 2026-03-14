@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Newspaper } from "lucide-react"
 import { NewsFeed } from "@/components/details/news-feed"
 
 const categories = [
@@ -15,13 +14,7 @@ export default function NewsPage() {
   const [category, setCategory] = useState("general")
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <Newspaper className="size-6 text-primary" />
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Market News
-        </h1>
-      </div>
+    <>
       <div className="flex gap-2">
         {categories.map((cat) => (
           <button
@@ -38,6 +31,6 @@ export default function NewsPage() {
         ))}
       </div>
       <NewsFeed category={category} />
-    </div>
+    </>
   )
 }
