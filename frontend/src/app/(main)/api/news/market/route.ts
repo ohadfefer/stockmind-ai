@@ -6,7 +6,8 @@ export async function GET(request: Request) {
   const minId = searchParams.get("minId")
 
   try {
-    const params: Record<string, string> = { category: "general" }
+    const category = searchParams.get("category") || "general"
+    const params: Record<string, string> = { category }
     if (minId) params.minId = minId
 
     const data = await finnhubFetch("/news", params)

@@ -29,22 +29,27 @@ function truncateSummary(summary: string, maxLength = 180): string {
 
 interface NewsFeedProps {
   symbol?: string
+  category?: string
 }
 
-export function NewsFeed({ symbol }: NewsFeedProps) {
+export function NewsFeed({ symbol, category }: NewsFeedProps) {
   const [news, setNews] = useState<FinnhubNewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
 
   useEffect(() => {
+    setNews([])
+    setLoading(true)
+    setHasMore(false)
+
     async function fetchNews() {
       try {
         if (symbol) {
           const data = await companyNews(symbol)
           setNews(data.slice(0, 5))
         } else {
-          const data = await marketNews()
+          const data = await marketNews(undefined, category)
           setNews(data)
           setHasMore(data.length === 7)
         }
@@ -56,14 +61,14 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
     }
 
     fetchNews()
-  }, [symbol])
+  }, [symbol, category])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || news.length === 0) return
     setLoadingMore(true)
     try {
       const minId = Math.min(...news.map((n) => n.id))
-      const data = await marketNews(minId)
+      const data = await marketNews(minId, category)
       setNews((prev) => [...prev, ...data])
       setHasMore(data.length === 7)
     } catch {
@@ -71,14 +76,14 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
     } finally {
       setLoadingMore(false)
     }
-  }, [news, loadingMore])
+  }, [news, loadingMore, category])
 
   const title = symbol ? "Latest News" : "Market News"
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        {symbol && <h3 className="text-lg font-semibold text-foreground">{title}</h3>}
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex gap-4 rounded-lg p-3">
             <div className="flex-1 space-y-2">
@@ -96,7 +101,7 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
   if (news.length === 0) {
     return (
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        {symbol && <h3 className="text-lg font-semibold text-foreground">{title}</h3>}
         <p className="text-sm text-muted-foreground">No recent news found.</p>
       </div>
     )
@@ -104,7 +109,7 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
 
   return (
     <div className="space-y-4">
-      {symbol ? (
+      {symbol && (
         <Link
           href={`/news/${symbol}`}
           className="group inline-flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary"
@@ -112,8 +117,6 @@ export function NewsFeed({ symbol }: NewsFeedProps) {
           {title}
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
         </Link>
-      ) : (
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
       )}
 
       <div className="space-y-2">
