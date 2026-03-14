@@ -11,8 +11,8 @@ export async function GET(request: Request) {
 
   const now = new Date()
   const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
-  const from = twoDaysAgo.toISOString().split("T")[0]
-  const to = now.toISOString().split("T")[0]
+  const from = searchParams.get("from") || twoDaysAgo.toISOString().split("T")[0]
+  const to = searchParams.get("to") || now.toISOString().split("T")[0]
 
   try {
     const data = await finnhubFetch("/company-news", { symbol, from, to })

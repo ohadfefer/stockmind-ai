@@ -10,8 +10,11 @@ export interface FinnhubNewsItem {
     url: string
 }
 
-export async function companyNews(symbol: string): Promise<FinnhubNewsItem[]> {
-    const res = await fetch(`/api/news/company?symbol=${encodeURIComponent(symbol)}`)
+export async function companyNews(symbol: string, from?: string, to?: string): Promise<FinnhubNewsItem[]> {
+    const params = new URLSearchParams({ symbol })
+    if (from) params.set("from", from)
+    if (to) params.set("to", to)
+    const res = await fetch(`/api/news/company?${params.toString()}`)
     if (!res.ok) throw new Error("Failed to fetch company news")
     return res.json()
 }

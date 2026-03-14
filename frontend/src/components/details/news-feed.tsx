@@ -30,24 +30,35 @@ function truncateSummary(summary: string, maxLength = 180): string {
 interface NewsFeedProps {
   symbol?: string
   category?: string
+  full?: boolean
+  from?: string
+  to?: string
 }
 
-export function NewsFeed({ symbol, category }: NewsFeedProps) {
+export function NewsFeed({ symbol, category, full, from, to }: NewsFeedProps) {
   const [news, setNews] = useState<FinnhubNewsItem[]>([])
+  const [allCompanyNews, setAllCompanyNews] = useState<FinnhubNewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
 
   useEffect(() => {
     setNews([])
+    setAllCompanyNews([])
     setLoading(true)
     setHasMore(false)
 
     async function fetchNews() {
       try {
         if (symbol) {
-          const data = await companyNews(symbol)
-          setNews(data.slice(0, 5))
+          const data = await companyNews(symbol, from, to)
+          if (full) {
+            setAllCompanyNews(data)
+            setNews(data.slice(0, 7))
+            setHasMore(data.length > 7)
+          } else {
+            setNews(data.slice(0, 5))
+          }
         } else {
           const data = await marketNews(undefined, category)
           setNews(data)
@@ -61,29 +72,35 @@ export function NewsFeed({ symbol, category }: NewsFeedProps) {
     }
 
     fetchNews()
-  }, [symbol, category])
+  }, [symbol, category, full, from, to])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || news.length === 0) return
     setLoadingMore(true)
     try {
-      const minId = Math.min(...news.map((n) => n.id))
-      const data = await marketNews(minId, category)
-      setNews((prev) => [...prev, ...data])
-      setHasMore(data.length === 7)
+      if (symbol && full) {
+        const nextItems = allCompanyNews.slice(news.length, news.length + 7)
+        setNews((prev) => [...prev, ...nextItems])
+        setHasMore(news.length + nextItems.length < allCompanyNews.length)
+      } else {
+        const minId = Math.min(...news.map((n) => n.id))
+        const data = await marketNews(minId, category)
+        setNews((prev) => [...prev, ...data])
+        setHasMore(data.length === 7)
+      }
     } catch {
       setHasMore(false)
     } finally {
       setLoadingMore(false)
     }
-  }, [news, loadingMore, category])
+  }, [news, loadingMore, category, symbol, full, allCompanyNews])
 
   const title = symbol ? "Latest News" : "Market News"
 
   if (loading) {
     return (
       <div className="space-y-4">
-        {symbol && <h3 className="text-lg font-semibold text-foreground">{title}</h3>}
+        {symbol && !full && <h3 className="text-lg font-semibold text-foreground">{title}</h3>}
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex gap-4 rounded-lg p-3">
             <div className="flex-1 space-y-2">
@@ -101,7 +118,7 @@ export function NewsFeed({ symbol, category }: NewsFeedProps) {
   if (news.length === 0) {
     return (
       <div className="space-y-4">
-        {symbol && <h3 className="text-lg font-semibold text-foreground">{title}</h3>}
+        {symbol && !full && <h3 className="text-lg font-semibold text-foreground">{title}</h3>}
         <p className="text-sm text-muted-foreground">No recent news found.</p>
       </div>
     )
@@ -109,7 +126,7 @@ export function NewsFeed({ symbol, category }: NewsFeedProps) {
 
   return (
     <div className="space-y-4">
-      {symbol && (
+      {symbol && !full && (
         <Link
           href={`/news/${symbol}`}
           className="group inline-flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary"
@@ -161,7 +178,7 @@ export function NewsFeed({ symbol, category }: NewsFeedProps) {
         ))}
       </div>
 
-      {!symbol && hasMore && (
+      {hasMore && (
         <div className="flex justify-center pt-2">
           <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? (
