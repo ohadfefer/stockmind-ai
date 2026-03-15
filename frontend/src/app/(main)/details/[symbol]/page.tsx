@@ -106,7 +106,7 @@ export default async function DetailsPage({
           )}
 
           {/* Chart */}
-          <PriceChart previousClose={stock.previousClose} />
+          <PriceChart symbol={upperSymbol} />
 
           <Separator />
 

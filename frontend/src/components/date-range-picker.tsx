@@ -60,18 +60,33 @@ export function DateRangePicker({ from, to, onRangeChange }: DateRangePickerProp
           ) : (
             <span />
           )}
-          <Button
-            size="sm"
-            disabled={!canApply || !!tooOld}
-            onClick={() => {
-              if (range?.from && range?.to) {
-                onRangeChange(range.from, range.to)
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const now = new Date()
+                const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+                setRange({ from: twoDaysAgo, to: now })
+                onRangeChange(twoDaysAgo, now)
                 setOpen(false)
-              }
-            }}
-          >
-            Filter
-          </Button>
+              }}
+            >
+              Reset
+            </Button>
+            <Button
+              size="sm"
+              disabled={!canApply || !!tooOld}
+              onClick={() => {
+                if (range?.from && range?.to) {
+                  onRangeChange(range.from, range.to)
+                  setOpen(false)
+                }
+              }}
+            >
+              Filter
+            </Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
