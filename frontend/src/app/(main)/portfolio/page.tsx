@@ -1,21 +1,14 @@
 "use client"
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Plus,
-  ArrowUpDown,
   FileDown,
   Sparkles,
   Clock,
 } from "lucide-react"
 import { PortfolioTab } from "@/components/portfolio/portfolio-tab"
 import { AlertsTab } from "@/components/portfolio/alerts-tab"
+import { PortfolioTabsBar } from "@/components/portfolio/portfolio-tabs-bar"
 
 export default function PortfolioPage() {
   return (
@@ -45,54 +38,7 @@ export default function PortfolioPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="portfolio" className="gap-6">
-        <div className="flex items-center justify-between">
-          <TabsList className="h-10 bg-secondary">
-            <TabsTrigger value="analyze" className="h-8 px-4 text-sm">
-              Analyze
-            </TabsTrigger>
-            <TabsTrigger value="portfolio" className="h-8 px-4 text-sm">
-              Portfolio
-            </TabsTrigger>
-            <TabsTrigger value="alerts" className="h-8 px-4 text-sm">
-              Alerts
-            </TabsTrigger>
-          </TabsList>
-
-          <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                  <ArrowUpDown className="size-4" />
-                  Sort by
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="bg-card border-border"
-              >
-                <DropdownMenuItem className="text-foreground">
-                  Ticker (A-Z)
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-foreground">
-                  Price (High-Low)
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-foreground">
-                  Change % (High-Low)
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-foreground">
-                  AI Score (High-Low)
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-foreground">
-                  Market Cap
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
-              <Plus className="size-4" />
-              Add Stock
-            </button>
-          </div>
-        </div>
+        <PortfolioTabsBar />
 
         {/* the content inside TabsContent should be wrapped inside a component - like the other tabs */}
         <TabsContent value="analyze">

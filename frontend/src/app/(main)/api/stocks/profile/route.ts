@@ -10,11 +10,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const quote = await finnhubFetch("/quote", { symbol })
-    return NextResponse.json(quote)
+    const profile = await finnhubFetch("/stock/profile2", { symbol })
+    return NextResponse.json(profile)
   } catch {
     return NextResponse.json(
-      { error: "Failed to fetch quote" },
+      { error: "Failed to fetch profile" },
       { status: 500 }
     )
   }

@@ -1,6 +1,6 @@
-import { finnhubFetch } from "@/lib/finnhub"
 import { Converter } from "easy-currencies"
 import type { KeyStatsData } from "@/components/details/key-stats"
+import { finnhubFetch } from "@/lib/finnhub"
 
 const converter = new Converter()
 
@@ -42,7 +42,7 @@ export async function getStockData(symbol: string) {
 
     const hasQuote = quote && quote.c !== 0
     const hasProfile = profile && profile.name
-    const exchangeShort = profile.exchange?.split(/\s+/)[0] ?? null
+    const exchangeShort = profile?.exchange?.split(/\s+/)[0] ?? null
 
     const tags: string[] = ["Stock"]
     if (exchangeShort) tags.push(`${exchangeShort} listed`)
