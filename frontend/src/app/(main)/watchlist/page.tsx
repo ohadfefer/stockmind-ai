@@ -2,11 +2,13 @@ import { Clock } from "lucide-react"
 import { WatchlistTab } from "@/components/portfolio/watchlist-tab"
 import type { WatchlistStockData } from "@/components/portfolio/watchlist-tab"
 import { auth0 } from "@/lib/auth0"
-import { getUserIdByAuth0Id, getWatchlistSymbols } from "@/services/watchlist-service"
+import { getUserIdByAuth0Id } from "@/services/user-service"
+import { getWatchlistSymbols } from "@/services/watchlist-service"
 import { getStockData } from "@/services/stock-service"
 import { finnhubFetch } from "@/lib/finnhub"
 
-const stocksCache = new Map<number, { stocks: WatchlistStockData[]; marketWasOpen: boolean }>()
+// Cache market data per symbol (not the symbol list) so unfollows are reflected immediately
+const priceCache = new Map<string, { data: WatchlistStockData; marketWasOpen: boolean }>()
 
 export default async function WatchlistPage() {
   const session = await auth0.getSession()
@@ -17,32 +19,33 @@ export default async function WatchlistPage() {
   if (auth0Id) {
     const userId = await getUserIdByAuth0Id(auth0Id)
     if (userId) {
-      const cached = stocksCache.get(userId)
+      const symbols = await getWatchlistSymbols(userId)
       const status = await finnhubFetch("/stock/market-status", { exchange: "US" }) as { isOpen: boolean }
       const marketIsOpen = status.isOpen
 
-      // Use cache only if market is closed AND data was captured after close
-      if (cached && !marketIsOpen && !cached.marketWasOpen) {
-        stocks = cached.stocks
-        return renderPage(stocks)
-      }
+      stocks = await Promise.all(
+        symbols.map(async (symbol) => {
+          const cached = priceCache.get(symbol)
+          if (cached && !marketIsOpen && !cached.marketWasOpen) {
+            return cached.data
+          }
 
-      const symbols = await getWatchlistSymbols(userId)
-      const results = await Promise.all(symbols.map((s) => getStockData(s)))
-
-      stocks = results.map((data, i) => ({
-        ticker: symbols[i],
-        company: data.name,
-        price: data.price,
-        changeDollar: data.changeDollar,
-        changePercent: data.changePercent,
-        marketCap: data.keyStats.marketCap,
-        dayLow: data.dayLow || null,
-        dayHigh: data.dayHigh || null,
-        aiScore: null,
-      }))
-
-      stocksCache.set(userId, { stocks, marketWasOpen: marketIsOpen })
+          const data = await getStockData(symbol)
+          const entry: WatchlistStockData = {
+            ticker: symbol,
+            company: data.name,
+            price: data.price,
+            changeDollar: data.changeDollar,
+            changePercent: data.changePercent,
+            marketCap: data.keyStats.marketCap,
+            dayLow: data.dayLow || null,
+            dayHigh: data.dayHigh || null,
+            aiScore: null,
+          }
+          priceCache.set(symbol, { data: entry, marketWasOpen: marketIsOpen })
+          return entry
+        })
+      )
     }
   }
 

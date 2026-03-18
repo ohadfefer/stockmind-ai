@@ -16,3 +16,29 @@ export async function deleteStock(symbol: string): Promise<void> {
   })
   if (!res.ok) throw new Error("Failed to delete stock")
 }
+
+export type WatchlistEntry = {
+  id: number
+  name: string
+  hasSymbol: boolean
+}
+
+export async function fetchWatchlists(symbol: string): Promise<WatchlistEntry[]> {
+  const res = await fetch(`/api/watchlist/lists?symbol=${encodeURIComponent(symbol)}`)
+  if (!res.ok) throw new Error("Failed to fetch watchlists")
+  const data = await res.json()
+  return data.watchlists
+}
+
+export async function toggleWatchlistItem(
+  watchlistId: number,
+  symbol: string,
+  add: boolean
+): Promise<void> {
+  const res = await fetch("/api/watchlist/lists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ watchlistId, symbol, add }),
+  })
+  if (!res.ok) throw new Error("Failed to toggle watchlist item")
+}

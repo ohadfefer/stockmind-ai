@@ -47,6 +47,10 @@ frontend/src/
 └── styles/               # Additional global styles
 ```
 
+### Migrations
+
+Plain `.sql` files in `/migrations/` (e.g., `001_create_users.sql`, `002_create_accounts.sql`) document the database structure of the mini-brokerage backend. These are run manually against Neon and serve as the schema reference.
+
 ### Route Groups & Layouts
 
 - **`(auth)`** — Login, signup, onboarding. Centered layout, no sidebar/header.

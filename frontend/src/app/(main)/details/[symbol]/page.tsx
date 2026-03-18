@@ -19,7 +19,8 @@ import { AboutSection } from "@/components/details/about-section"
 import { LivePrice } from "@/components/details/live-price"
 import { FollowButton } from "@/components/details/follow-button"
 import { getStockData } from "@/services/stock-service"
-import { getUserIdByAuth0Id, isFollowing } from "@/services/watchlist-service"
+import { getUserIdByAuth0Id } from "@/services/user-service"
+import { isFollowing } from "@/services/watchlist-service"
 import { auth0 } from "@/lib/auth0"
 
 export default async function DetailsPage({

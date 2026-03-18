@@ -1,20 +1,10 @@
 import { getDb } from "@/lib/db"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
 
-export async function getUserIdByAuth0Id(auth0Id: string): Promise<number | null> {
-  const sql = getDb()
-  try {
-    const rows = await sql`SELECT id FROM users WHERE auth0_id = ${auth0Id}`
-    return rows[0]?.id ?? null
-  } catch {
-    return null
-  }
-}
-
 /**
  * Returns the "General" watchlist id for a user's default account.
  */
-async function getDefaultWatchlistId(userId: number): Promise<number> {
+export async function getDefaultWatchlistId(userId: number): Promise<number> {
   const sql = getDb()
   const accountId = await getOrCreateDefaultAccount(userId)
 
@@ -56,10 +46,9 @@ export async function isFollowing(userId: number, symbol: string): Promise<boole
   }
 }
 
-export async function addToWatchlist(userId: number, symbol: string): Promise<boolean> {
+export async function addToWatchlist(watchlistId: number, symbol: string): Promise<boolean> {
   const sql = getDb()
   try {
-    const watchlistId = await getDefaultWatchlistId(userId)
     await sql`
       INSERT INTO watchlist_items (watchlist_id, symbol)
       VALUES (${watchlistId}, ${symbol})
@@ -71,10 +60,9 @@ export async function addToWatchlist(userId: number, symbol: string): Promise<bo
   }
 }
 
-export async function removeFromWatchlist(userId: number, symbol: string): Promise<boolean> {
+export async function removeFromWatchlist(watchlistId: number, symbol: string): Promise<boolean> {
   const sql = getDb()
   try {
-    const watchlistId = await getDefaultWatchlistId(userId)
     await sql`
       DELETE FROM watchlist_items
       WHERE watchlist_id = ${watchlistId} AND symbol = ${symbol}
@@ -83,4 +71,34 @@ export async function removeFromWatchlist(userId: number, symbol: string): Promi
   } catch {
     return false
   }
+}
+
+export type WatchlistWithStatus = {
+  id: number
+  name: string
+  hasSymbol: boolean
+}
+
+export async function getUserWatchlistsForSymbol(
+  userId: number,
+  symbol: string
+): Promise<WatchlistWithStatus[]> {
+  const sql = getDb()
+  const accountId = await getOrCreateDefaultAccount(userId)
+
+  const rows = await sql`
+    SELECT w.id, w.name,
+      EXISTS (
+        SELECT 1 FROM watchlist_items wi
+        WHERE wi.watchlist_id = w.id AND wi.symbol = ${symbol}
+      ) AS has_symbol
+    FROM watchlists w
+    WHERE w.account_id = ${accountId}
+    ORDER BY w.created_at
+  `
+  return rows.map((r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    hasSymbol: r.has_symbol as boolean,
+  }))
 }

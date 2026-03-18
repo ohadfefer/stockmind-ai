@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
-import { Check, Plus, Loader2 } from "lucide-react"
-import { addStock, deleteStock } from "@/actions/watchlist"
+import { ChevronsUpDown, Plus, Loader2 } from "lucide-react"
+import { addStock } from "@/actions/watchlist"
+import { WatchlistPicker } from "@/components/details/watchlist-picker"
 
 export function FollowButton({
   symbol,
@@ -13,31 +14,43 @@ export function FollowButton({
   initialFollowing: boolean
 }) {
   const [following, setFollowing] = useState(initialFollowing)
+  const [showPicker, setShowPicker] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  function toggle() {
-    startTransition(async () => {
-      if (following) {
-        await deleteStock(symbol)
-        setFollowing(false)
-      } else {
+  function handleClick() {
+    if (following) {
+      setShowPicker(true)
+    } else {
+      startTransition(async () => {
         const data = await addStock(symbol)
         setFollowing(data.following)
-      }
-    })
+      })
+    }
+  }
+
+  if (showPicker) {
+    return (
+      <WatchlistPicker
+        symbol={symbol}
+        onFollowingChange={(still) => {
+          setFollowing(still)
+          setShowPicker(false)
+        }}
+      />
+    )
   }
 
   return (
     <Button
       variant={following ? "default" : "outline"}
       size="sm"
-      onClick={toggle}
+      onClick={handleClick}
       disabled={isPending}
     >
       {isPending ? (
         <Loader2 className="size-4 animate-spin" />
       ) : following ? (
-        <Check className="size-4" />
+        <ChevronsUpDown className="size-4" />
       ) : (
         <Plus className="size-4" />
       )}

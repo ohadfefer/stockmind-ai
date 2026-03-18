@@ -1,10 +1,11 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
+import { getUserIdByAuth0Id } from "@/services/user-service"
 import {
-  getUserIdByAuth0Id,
   isFollowing,
   addToWatchlist,
   removeFromWatchlist,
+  getDefaultWatchlistId,
 } from "@/services/watchlist-service"
 
 export async function GET(request: Request) {
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  const ok = await addToWatchlist(userId, symbol.toUpperCase())
+  const watchlistId = await getDefaultWatchlistId(userId)
+  const ok = await addToWatchlist(watchlistId, symbol.toUpperCase())
   if (!ok) {
     return NextResponse.json({ error: "Failed to add" }, { status: 500 })
   }
@@ -67,7 +69,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  const ok = await removeFromWatchlist(userId, symbol.toUpperCase())
+  const watchlistId = await getDefaultWatchlistId(userId)
+  const ok = await removeFromWatchlist(watchlistId, symbol.toUpperCase())
   if (!ok) {
     return NextResponse.json({ error: "Failed to remove" }, { status: 500 })
   }
