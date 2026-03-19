@@ -17,16 +17,6 @@ export async function getDefaultWatchlistId(userId: number): Promise<number> {
   return rows[0].id as number
 }
 
-export async function getWatchlistSymbolsById(watchlistId: number): Promise<string[]> {
-  const sql = getDb()
-  const rows = await sql`
-    SELECT symbol FROM watchlist_items
-    WHERE watchlist_id = ${watchlistId}
-    ORDER BY symbol
-  `
-  return rows.map((r) => r.symbol as string)
-}
-
 export async function getUserWatchlistsWithCounts(userId: number): Promise<WatchlistInfo[]> {
   const sql = getDb()
   const accountId = await getOrCreateDefaultAccount(userId)
@@ -58,48 +48,6 @@ export async function createWatchlist(userId: number, name: string): Promise<num
   return rows[0].id as number
 }
 
-export async function isFollowing(userId: number, symbol: string): Promise<boolean> {
-  const sql = getDb()
-  try {
-    const rows = await sql`
-      SELECT 1 FROM watchlist_items wi
-      JOIN watchlists w ON w.id = wi.watchlist_id
-      JOIN accounts a ON a.id = w.account_id
-      WHERE a.user_id = ${userId} AND wi.symbol = ${symbol}
-    `
-    return rows.length > 0
-  } catch {
-    return false
-  }
-}
-
-export async function addToWatchlist(watchlistId: number, symbol: string): Promise<boolean> {
-  const sql = getDb()
-  try {
-    await sql`
-      INSERT INTO watchlist_items (watchlist_id, symbol)
-      VALUES (${watchlistId}, ${symbol})
-      ON CONFLICT (watchlist_id, symbol) DO NOTHING
-    `
-    return true
-  } catch {
-    return false
-  }
-}
-
-export async function removeFromWatchlist(watchlistId: number, symbol: string): Promise<boolean> {
-  const sql = getDb()
-  try {
-    await sql`
-      DELETE FROM watchlist_items
-      WHERE watchlist_id = ${watchlistId} AND symbol = ${symbol}
-    `
-    return true
-  } catch {
-    return false
-  }
-}
-
 export async function getUserWatchlistsForSymbol(
   userId: number,
   symbol: string
@@ -122,4 +70,39 @@ export async function getUserWatchlistsForSymbol(
     name: r.name as string,
     hasSymbol: r.has_symbol as boolean,
   }))
+}
+
+export async function renameWatchlist(userId: number, watchlistId: number, name: string): Promise<boolean> {
+  const sql = getDb()
+  const accountId = await getOrCreateDefaultAccount(userId)
+
+  try {
+    await sql`
+      UPDATE watchlists
+      SET name = ${name}
+      WHERE id = ${watchlistId} AND account_id = ${accountId}
+    `
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function deleteWatchlist(userId: number, watchlistId: number): Promise<boolean> {
+  const sql = getDb()
+  const accountId = await getOrCreateDefaultAccount(userId)
+
+  try {
+    await sql`
+      DELETE FROM watchlist_items
+      WHERE watchlist_id = ${watchlistId}
+    `
+    await sql`
+      DELETE FROM watchlists
+      WHERE id = ${watchlistId} AND account_id = ${accountId}
+    `
+    return true
+  } catch {
+    return false
+  }
 }

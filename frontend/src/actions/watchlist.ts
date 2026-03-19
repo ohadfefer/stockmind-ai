@@ -40,6 +40,24 @@ export async function createWatchlist(name: string): Promise<{ id: number; name:
   return res.json()
 }
 
+export async function renameWatchlist(watchlistId: number, name: string): Promise<void> {
+  const res = await fetch("/api/watchlist/manage", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ watchlistId, name }),
+  })
+  if (!res.ok) throw new Error("Failed to rename watchlist")
+}
+
+export async function deleteWatchlist(watchlistId: number): Promise<void> {
+  const res = await fetch("/api/watchlist/manage", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ watchlistId }),
+  })
+  if (!res.ok) throw new Error("Failed to delete watchlist")
+}
+
 export async function toggleWatchlistItem(
   watchlistId: number,
   symbol: string,

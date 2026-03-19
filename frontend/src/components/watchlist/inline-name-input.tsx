@@ -5,12 +5,13 @@ import { Check, X } from "lucide-react"
 
 interface InlineNameInputProps {
   placeholder?: string
+  defaultValue?: string
   onSave: (name: string) => void
   onCancel: () => void
 }
 
-export function InlineNameInput({ placeholder = "Watchlist name", onSave, onCancel }: InlineNameInputProps) {
-  const [value, setValue] = useState("")
+export function InlineNameInput({ placeholder = "Watchlist name", defaultValue = "", onSave, onCancel }: InlineNameInputProps) {
+  const [value, setValue] = useState(defaultValue)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
