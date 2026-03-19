@@ -1,15 +1,18 @@
 "use client"
 
+import { useState } from "react"
 import { List, Plus } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { InlineNameInput } from "@/components/watchlist/inline-name-input"
 import type { WatchlistInfo } from "@/types/watchlist"
 
 export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }) {
   const searchParams = useSearchParams()
   const activeId = searchParams.get("id")
   const activeWatchlistId = activeId ? Number(activeId) : watchlists[0]?.id
+  const [isCreating, setIsCreating] = useState(false)
 
   return (
     <div className="flex items-center gap-1 border-b">
@@ -34,10 +37,25 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
           </Link>
         )
       })}
-      <button className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-        <Plus className="size-4" />
-        New watchlist
-      </button>
+      {isCreating ? (
+        <InlineNameInput
+          placeholder="Watchlist name"
+          onSave={(name) => {
+            // TODO: call backend to create watchlist
+            console.log("Create watchlist:", name)
+            setIsCreating(false)
+          }}
+          onCancel={() => setIsCreating(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setIsCreating(true)}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+        >
+          <Plus className="size-4" />
+          New watchlist
+        </button>
+      )}
     </div>
   )
 }

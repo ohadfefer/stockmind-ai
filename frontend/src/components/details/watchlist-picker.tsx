@@ -11,7 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { ChevronsUpDown, Plus, Loader2 } from "lucide-react"
+import { ChevronsUpDown, Loader2, Plus } from "lucide-react"
+import { InlineNameInput } from "@/components/watchlist/inline-name-input"
 import {
   fetchWatchlists,
   toggleWatchlistItem,
@@ -28,6 +29,7 @@ export function WatchlistPicker({
   const [watchlists, setWatchlists] = useState<WatchlistEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(true)
+  const [isCreating, setIsCreating] = useState(false)
 
   useEffect(() => {
     fetchWatchlists(symbol)
@@ -80,10 +82,24 @@ export function WatchlistPicker({
           ))
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
-          <Plus className="size-4" />
-          New watchlist
-        </DropdownMenuItem>
+        {isCreating ? (
+          <div className="px-1 py-1" onKeyDown={(e) => e.stopPropagation()}>
+            <InlineNameInput
+              placeholder="Watchlist name"
+              onSave={(name) => {
+                // TODO: call backend to create watchlist
+                console.log("Create watchlist:", name)
+                setIsCreating(false)
+              }}
+              onCancel={() => setIsCreating(false)}
+            />
+          </div>
+        ) : (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setIsCreating(true) }}>
+            <Plus className="size-4" />
+            New watchlist
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
