@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Table,
@@ -70,14 +70,20 @@ function RangeBar({
 
 interface WatchlistTabProps {
   stocks: WatchlistStockData[]
+  watchlistId?: number
 }
 
-export function WatchlistTab({ stocks }: WatchlistTabProps) {
+export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
   const router = useRouter()
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>("default")
   const [confirmingTicker, setConfirmingTicker] = useState<string | null>(null)
   const [removedTickers, setRemovedTickers] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setRemovedTickers(new Set())
+    setConfirmingTicker(null)
+  }, [watchlistId, stocks])
 
   function handleSort(column: SortColumn) {
     if (sortColumn !== column) {
@@ -99,7 +105,7 @@ export function WatchlistTab({ stocks }: WatchlistTabProps) {
     setConfirmingTicker(null)
     setRemovedTickers((prev) => new Set(prev).add(ticker))
     try {
-      await deleteStock(ticker)
+      await deleteStock(ticker, watchlistId)
       router.refresh()
     } catch {
       setRemovedTickers((prev) => {

@@ -63,7 +63,7 @@ export default async function WatchlistPage({
   return (
     <div className="flex flex-col gap-6">
       <WatchlistListBar watchlists={watchlists} />
-      <WatchlistTab stocks={stocks} />
+      <WatchlistTab stocks={stocks} watchlistId={id ? Number(id) : watchlists[0]?.id} />
     </div>
   )
 }

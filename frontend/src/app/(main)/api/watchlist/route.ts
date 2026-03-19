@@ -59,7 +59,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { symbol } = await request.json()
+  const { symbol, watchlistId: wlId } = await request.json()
   if (!symbol || typeof symbol !== "string") {
     return NextResponse.json({ error: "symbol is required" }, { status: 400 })
   }
@@ -69,7 +69,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  const watchlistId = await getDefaultWatchlistId(userId)
+  const watchlistId = wlId ?? await getDefaultWatchlistId(userId)
   const ok = await removeFromWatchlist(watchlistId, symbol.toUpperCase())
   if (!ok) {
     return NextResponse.json({ error: "Failed to remove" }, { status: 500 })

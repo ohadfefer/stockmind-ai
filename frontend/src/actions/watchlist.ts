@@ -8,11 +8,11 @@ export async function addStock(symbol: string): Promise<{ following: boolean }> 
   return res.json()
 }
 
-export async function deleteStock(symbol: string): Promise<void> {
+export async function deleteStock(symbol: string, watchlistId?: number): Promise<void> {
   const res = await fetch("/api/watchlist", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ symbol }),
+    body: JSON.stringify({ symbol, watchlistId }),
   })
   if (!res.ok) throw new Error("Failed to delete stock")
 }
@@ -28,6 +28,16 @@ export async function fetchWatchlists(symbol: string): Promise<WatchlistEntry[]>
   if (!res.ok) throw new Error("Failed to fetch watchlists")
   const data = await res.json()
   return data.watchlists
+}
+
+export async function createWatchlist(name: string): Promise<{ id: number; name: string }> {
+  const res = await fetch("/api/watchlist/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error("Failed to create watchlist")
+  return res.json()
 }
 
 export async function toggleWatchlistItem(

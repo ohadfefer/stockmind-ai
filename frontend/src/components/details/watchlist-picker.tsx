@@ -16,6 +16,7 @@ import { InlineNameInput } from "@/components/watchlist/inline-name-input"
 import {
   fetchWatchlists,
   toggleWatchlistItem,
+  createWatchlist,
   type WatchlistEntry,
 } from "@/actions/watchlist"
 
@@ -86,9 +87,9 @@ export function WatchlistPicker({
           <div className="px-1 py-1" onKeyDown={(e) => e.stopPropagation()}>
             <InlineNameInput
               placeholder="Watchlist name"
-              onSave={(name) => {
-                // TODO: call backend to create watchlist
-                console.log("Create watchlist:", name)
+              onSave={async (name) => {
+                const created = await createWatchlist(name)
+                setWatchlists((prev) => [...prev, { id: created.id, name: created.name, hasSymbol: false }])
                 setIsCreating(false)
               }}
               onCancel={() => setIsCreating(false)}

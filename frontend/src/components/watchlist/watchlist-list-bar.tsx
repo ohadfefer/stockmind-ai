@@ -3,12 +3,14 @@
 import { useState } from "react"
 import { List, Plus } from "lucide-react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { InlineNameInput } from "@/components/watchlist/inline-name-input"
+import { createWatchlist } from "@/actions/watchlist"
 import type { WatchlistInfo } from "@/types/watchlist"
 
 export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }) {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const activeId = searchParams.get("id")
   const activeWatchlistId = activeId ? Number(activeId) : watchlists[0]?.id
@@ -40,10 +42,11 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
       {isCreating ? (
         <InlineNameInput
           placeholder="Watchlist name"
-          onSave={(name) => {
-            // TODO: call backend to create watchlist
-            console.log("Create watchlist:", name)
+          onSave={async (name) => {
+            const { id } = await createWatchlist(name)
             setIsCreating(false)
+            router.push(`/watchlist?id=${id}`)
+            router.refresh()
           }}
           onCancel={() => setIsCreating(false)}
         />

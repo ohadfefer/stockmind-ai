@@ -46,6 +46,18 @@ export async function getUserWatchlistsWithCounts(userId: number): Promise<Watch
   }))
 }
 
+export async function createWatchlist(userId: number, name: string): Promise<number> {
+  const sql = getDb()
+  const accountId = await getOrCreateDefaultAccount(userId)
+
+  const rows = await sql`
+    INSERT INTO watchlists (account_id, name)
+    VALUES (${accountId}, ${name})
+    RETURNING id
+  `
+  return rows[0].id as number
+}
+
 export async function isFollowing(userId: number, symbol: string): Promise<boolean> {
   const sql = getDb()
   try {
