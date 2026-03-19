@@ -13,17 +13,7 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, X, Trash2 } from "lucide-react"
 import { deleteStock } from "@/actions/watchlist"
 
-export interface WatchlistStockData {
-  ticker: string
-  company: string
-  price: number
-  changeDollar: number
-  changePercent: number
-  marketCap: string | null
-  dayLow: number | null
-  dayHigh: number | null
-  aiScore: number | null
-}
+import type { WatchlistStockData } from "@/types/watchlist"
 
 type SortColumn = "ticker" | "price" | "changeDollar" | "changePercent"
 type SortDirection = "asc" | "desc" | "default"

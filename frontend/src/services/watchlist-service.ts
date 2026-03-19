@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
+import type { WatchlistInfo, WatchlistWithStatus } from "@/types/watchlist"
 
 /**
  * Returns the "General" watchlist id for a user's default account.
@@ -16,19 +17,33 @@ export async function getDefaultWatchlistId(userId: number): Promise<number> {
   return rows[0].id as number
 }
 
-export async function getWatchlistSymbols(userId: number): Promise<string[]> {
+export async function getWatchlistSymbolsById(watchlistId: number): Promise<string[]> {
   const sql = getDb()
-  try {
-    const watchlistId = await getDefaultWatchlistId(userId)
-    const rows = await sql`
-      SELECT symbol FROM watchlist_items
-      WHERE watchlist_id = ${watchlistId}
-      ORDER BY symbol
-    `
-    return rows.map((r) => r.symbol as string)
-  } catch {
-    return []
-  }
+  const rows = await sql`
+    SELECT symbol FROM watchlist_items
+    WHERE watchlist_id = ${watchlistId}
+    ORDER BY symbol
+  `
+  return rows.map((r) => r.symbol as string)
+}
+
+export async function getUserWatchlistsWithCounts(userId: number): Promise<WatchlistInfo[]> {
+  const sql = getDb()
+  const accountId = await getOrCreateDefaultAccount(userId)
+
+  const rows = await sql`
+    SELECT w.id, w.name, COUNT(wi.id)::int AS stock_count
+    FROM watchlists w
+    LEFT JOIN watchlist_items wi ON wi.watchlist_id = w.id
+    WHERE w.account_id = ${accountId}
+    GROUP BY w.id, w.name, w.created_at
+    ORDER BY w.created_at
+  `
+  return rows.map((r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    stockCount: r.stock_count as number,
+  }))
 }
 
 export async function isFollowing(userId: number, symbol: string): Promise<boolean> {
@@ -71,12 +86,6 @@ export async function removeFromWatchlist(watchlistId: number, symbol: string): 
   } catch {
     return false
   }
-}
-
-export type WatchlistWithStatus = {
-  id: number
-  name: string
-  hasSymbol: boolean
 }
 
 export async function getUserWatchlistsForSymbol(
