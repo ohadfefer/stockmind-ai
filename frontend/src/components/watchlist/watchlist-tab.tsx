@@ -193,9 +193,9 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                 <SortIcon column="changePercent" activeColumn={sortColumn} direction={sortDirection} />
               </button>
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {/* <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Market Cap
-            </TableHead>
+            </TableHead> */}
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Day Range
             </TableHead>
@@ -242,9 +242,9 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                   {positive ? "+" : ""}
                   {stock.changePercent.toFixed(2)}%
                 </TableCell>
-                <TableCell className="font-mono text-sm text-muted-foreground">
+                {/* <TableCell className="font-mono text-sm text-muted-foreground">
                   {stock.marketCap ?? "—"}
-                </TableCell>
+                </TableCell> */}
                 <TableCell>
                   {stock.dayLow != null && stock.dayHigh != null ? (
                     <RangeBar

@@ -41,14 +41,15 @@ export default async function WatchlistPage({
               return cached.data
             }
 
-            const data = await getStockData(symbol)
+            const data = await getStockData(symbol, { skipMarketCap: true })
             const entry: WatchlistStockData = {
               ticker: symbol,
               company: data.name,
               price: data.price,
               changeDollar: data.changeDollar,
               changePercent: data.changePercent,
-              marketCap: data.keyStats.marketCap,
+              // marketCap: data.keyStats.marketCap,
+              marketCap: null,
               dayLow: data.dayLow || null,
               dayHigh: data.dayHigh || null,
               aiScore: null,

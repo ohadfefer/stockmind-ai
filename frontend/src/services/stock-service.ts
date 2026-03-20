@@ -33,7 +33,7 @@ export function formatMarketCap(millions: number | undefined): string | null {
   return `${millions.toFixed(2)}M`
 }
 
-export async function getStockData(symbol: string) {
+export async function getStockData(symbol: string, { skipMarketCap = false } = {}) {
   try {
     const [quote, profile] = await Promise.all([
       finnhubFetch("/quote", { symbol }) as Promise<FinnhubQuote>,
@@ -49,16 +49,19 @@ export async function getStockData(symbol: string) {
     if (hasProfile && profile.country) tags.push(`${profile.country} headquartered`)
 
     const currency = hasProfile ? profile.currency ?? "USD" : "USD"
-    const mcRaw = hasProfile ? profile.marketCapitalization : undefined
-    let mcUsd = mcRaw
-    if (mcRaw && currency !== "USD") {
-      try {
-        mcUsd = await converter.convert(mcRaw, currency, "USD")
-      } catch {
-        mcUsd = mcRaw
+    let mcFormatted: string | null = null
+    if (!skipMarketCap) {
+      const mcRaw = hasProfile ? profile.marketCapitalization : undefined
+      let mcUsd = mcRaw
+      if (mcRaw && currency !== "USD") {
+        try {
+          mcUsd = await converter.convert(mcRaw, currency, "USD")
+        } catch {
+          mcUsd = mcRaw
+        }
       }
+      mcFormatted = formatMarketCap(mcUsd)
     }
-    const mcFormatted = formatMarketCap(mcUsd)
 
     const keyStats: KeyStatsData = {
       previousClose: hasQuote ? quote.pc : null,
