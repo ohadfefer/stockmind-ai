@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Briefcase,
+  CircleUserRound,
   Eye,
   ScanSearch,
   Bot,
@@ -23,6 +24,7 @@ const navItems = [
   { icon: ScanSearch, label: "Scanner", active: false, href: "#" },
   { icon: Bot, label: "AI Advisor", active: false, href: "#" },
   { icon: Newspaper, label: "News", active: false, href: "/news" },
+  { icon: CircleUserRound, label: "My Account", active: false, href: "/account" },
 ]
 
 interface SidebarProps {
