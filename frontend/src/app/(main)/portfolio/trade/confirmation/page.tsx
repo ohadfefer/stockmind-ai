@@ -1,19 +1,25 @@
 "use client"
 
+import { useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { ArrowLeft, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Suspense } from "react"
+import { fetchQuote } from "@/actions/stock-data"
+import { submitOrder } from "@/actions/orders"
 
 function ConfirmationContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const action = searchParams.get("action") ?? "buy"
   const symbol = searchParams.get("symbol") ?? ""
   const quantity = searchParams.get("quantity") ?? "0"
   const type = searchParams.get("type") ?? "market"
   const estimatedValue = searchParams.get("estimatedValue")
+  const filledAt = searchParams.get("filledAt") ?? new Date().toISOString()
 
   if (!symbol) {
     router.replace("/portfolio/trade")
@@ -28,9 +34,31 @@ function ConfirmationContent() {
     { label: "Estimated Value", value: estimatedValue ? `$${Number(estimatedValue).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "At market price" },
   ]
 
-  function handleConfirm() {
-    // TODO: submit order to backend
-    router.push("/portfolio")
+  async function handleConfirm() {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const quote = await fetchQuote(symbol)
+      if (!quote || quote.c === 0) {
+        setError("Unable to fetch current price. Please try again.")
+        setSubmitting(false)
+        return
+      }
+
+      await submitOrder({
+        symbol,
+        side: action as "buy" | "sell",
+        orderType: type,
+        quantity: Number(quantity),
+        averageFillPrice: quote.c,
+        filledAt,
+      })
+
+      router.push("/portfolio/orders")
+    } catch {
+      setError("Failed to submit order. Please try again.")
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -84,6 +112,11 @@ function ConfirmationContent() {
             ))}
           </div>
 
+          {/* Error */}
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+
           {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Link
@@ -94,9 +127,11 @@ function ConfirmationContent() {
             </Link>
             <button
               onClick={handleConfirm}
-              className="flex flex-1 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              disabled={submitting}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Confirm Order
+              {submitting && <Loader2 className="size-4 animate-spin" />}
+              {submitting ? "Submitting…" : "Confirm Order"}
             </button>
           </div>
         </div>

@@ -73,6 +73,7 @@ export default function TradePage() {
       quantity,
       type,
       ...(estimatedValue !== null && { estimatedValue: estimatedValue.toFixed(2) }),
+      filledAt: new Date().toISOString(),
     })
     router.push(`/portfolio/trade/confirmation?${params.toString()}`)
   }
