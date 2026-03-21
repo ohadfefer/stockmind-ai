@@ -4,6 +4,7 @@ import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { createExecution } from "@/services/execution-service"
 import { markOrderFilled } from "@/services/order-service"
+import { recordTradeSettlement } from "@/services/cash-ledger-service"
 import { finnhubFetch } from "@/lib/finnhub"
 
 export async function POST(request: Request) {
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unable to fetch current price" }, { status: 502 })
   }
 
+  const commission = 2.0
+  const fees = 0.5
+
   const executionId = await createExecution({
     orderId: Number(orderId),
     accountId,
@@ -37,6 +41,17 @@ export async function POST(request: Request) {
     side,
     quantity: Number(quantity),
     price: quote.c,
+  })
+
+  await recordTradeSettlement({
+    accountId,
+    executionId,
+    symbol,
+    side,
+    quantity: Number(quantity),
+    price: quote.c,
+    commission,
+    fees,
   })
 
   await markOrderFilled(Number(orderId), accountId, quote.c)
