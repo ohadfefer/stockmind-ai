@@ -5,6 +5,7 @@ import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { createExecution } from "@/services/execution-service"
 import { markOrderFilled } from "@/services/order-service"
 import { recordTradeSettlement } from "@/services/cash-ledger-service"
+import { updatePosition } from "@/services/position-service"
 import { finnhubFetch } from "@/lib/finnhub"
 
 export async function POST(request: Request) {
@@ -46,6 +47,16 @@ export async function POST(request: Request) {
   await recordTradeSettlement({
     accountId,
     executionId,
+    symbol,
+    side,
+    quantity: Number(quantity),
+    price: quote.c,
+    commission,
+    fees,
+  })
+
+  await updatePosition({
+    accountId,
     symbol,
     side,
     quantity: Number(quantity),
