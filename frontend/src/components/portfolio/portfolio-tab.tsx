@@ -120,6 +120,7 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
                   paddingAngle={3}
                   dataKey="value"
                   strokeWidth={0}
+                  isAnimationActive={false}
                 >
                   {sectorAllocation.map((entry) => (
                     <Cell key={entry.name} fill={entry.color} />
