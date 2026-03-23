@@ -14,7 +14,9 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { fetchQuote } from "@/actions/stock-data"
+import { fetchTradingInfo } from "@/actions/portfolio"
 import type { FinnhubQuote } from "@/services/stock-service"
+import type { TradingInfo } from "@/actions/portfolio"
 
 export default function TradePage() {
   const router = useRouter()
@@ -24,16 +26,26 @@ export default function TradePage() {
   const [type] = useState("market")
   const [quote, setQuote] = useState<FinnhubQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const [tradingInfo, setTradingInfo] = useState<TradingInfo | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [debouncedSymbol, setDebouncedSymbol] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const holdingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  async function refreshQuote() {
-    const trimmed = symbol.trim()
-    if (!trimmed) return
-    setQuoteLoading(true)
-    const data = await fetchQuote(trimmed)
-    setQuote(data && data.c !== 0 ? data : null)
-    setQuoteLoading(false)
-  }
+  useEffect(() => {
+    fetchTradingInfo().then(setTradingInfo)
+  }, [])
+
+  // Debounce the symbol used for holding display
+  useEffect(() => {
+    if (holdingDebounceRef.current) clearTimeout(holdingDebounceRef.current)
+    holdingDebounceRef.current = setTimeout(() => {
+      setDebouncedSymbol(symbol.trim().toUpperCase())
+    }, 1000)
+    return () => {
+      if (holdingDebounceRef.current) clearTimeout(holdingDebounceRef.current)
+    }
+  }, [symbol])
 
   // Debounced quote fetch on symbol change
   useEffect(() => {
@@ -42,6 +54,7 @@ export default function TradePage() {
     const trimmed = symbol.trim()
     if (!trimmed) {
       setQuote(null)
+      setQuoteLoading(false)
       return
     }
 
@@ -57,16 +70,57 @@ export default function TradePage() {
     }
   }, [symbol])
 
+  async function refreshQuote() {
+    const trimmed = symbol.trim()
+    if (!trimmed) return
+    setQuoteLoading(true)
+    const data = await fetchQuote(trimmed)
+    setQuote(data && data.c !== 0 ? data : null)
+    setQuoteLoading(false)
+  }
+
   const currentPrice = quote?.c ?? null
   const estimatedValue =
     currentPrice && Number(quantity) > 0
       ? currentPrice * Number(quantity)
       : null
 
+  const heldShares = tradingInfo?.positions.find(
+    (p) => p.symbol === debouncedSymbol
+  )?.quantity ?? 0
+
   const canContinue = symbol.trim() !== "" && Number(quantity) > 0
 
   function handleContinue() {
     if (!canContinue) return
+    setValidationError(null)
+
+    const qty = Number(quantity)
+
+    if (action === "buy") {
+      const cost = estimatedValue ?? 0
+      const cash = tradingInfo?.cashBalance ?? 0
+      if (cost > cash) {
+        setValidationError(
+          `Insufficient funds. Order value $${cost.toLocaleString("en-US", { minimumFractionDigits: 2 })} exceeds available cash $${cash.toLocaleString("en-US", { minimumFractionDigits: 2 })}.`
+        )
+        return
+      }
+    }
+
+    if (action === "sell") {
+      if (heldShares <= 0) {
+        setValidationError(`You don't hold any shares of ${symbol.trim().toUpperCase()}.`)
+        return
+      }
+      if (qty > heldShares) {
+        setValidationError(
+          `Insufficient shares. You hold ${heldShares} but tried to sell ${qty}.`
+        )
+        return
+      }
+    }
+
     const params = new URLSearchParams({
       action,
       symbol: symbol.toUpperCase().trim(),
@@ -88,7 +142,14 @@ export default function TradePage() {
           <ArrowLeft className="size-4" />
           Back to Portfolio
         </Link>
-        <h1 className="text-2xl font-bold text-foreground">Place Order</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Place Order</h1>
+          {debouncedSymbol && tradingInfo && (
+            <span className="text-sm text-muted-foreground">
+              · Holding <span className="font-mono font-semibold text-foreground">{heldShares}</span> {debouncedSymbol}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Trade stocks with your paper trading account
         </p>
@@ -198,6 +259,9 @@ export default function TradePage() {
           >
             Continue
           </button>
+          {validationError && (
+            <p className="text-sm text-destructive">{validationError}</p>
+          )}
         </div>
       </div>
     </div>
