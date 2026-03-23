@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   Table,
   TableBody,
@@ -24,53 +25,65 @@ import {
 } from "lucide-react"
 import {
   holdings,
-  portfolioSummary,
   sectorAllocation,
 } from "@/lib/mock-data"
+import { fetchPortfolioSummary } from "@/actions/portfolio"
+import type { PortfolioSummary } from "@/services/portfolio-service"
 
-export function PortfolioTab() {
+interface PortfolioTabProps {
+  summary: PortfolioSummary
+}
+
+export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
+  const [summary, setSummary] = useState(initialSummary)
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const updated = await fetchPortfolioSummary()
+      if (updated) setSummary(updated)
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [])
+  
   return (
     <div className="flex flex-col gap-6">
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
-          label="Total Value"
+          label="Cash Balance"
           icon={<Wallet className="size-4 text-primary" />}
-          value={`$${portfolioSummary.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={`$${summary.runningBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
           sub={
-            <span className="flex items-center gap-1 text-sm text-[#10B981]">
-              <TrendingUp className="size-3.5" />
-              +1.2% Today
-            </span>
+            <span className="text-sm text-muted-foreground">Available Cash</span>
           }
         />
         <SummaryCard
-          label="Total Invested"
+          label="Total Value"
           icon={<DollarSign className="size-4 text-muted-foreground" />}
-          value={`$${portfolioSummary.totalInvested.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={`$${summary.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
           sub={
-            <span className="text-sm text-muted-foreground">Cost Basis</span>
+            <span className="text-sm text-muted-foreground">Market Value</span>
           }
         />
         <SummaryCard
           label="Total P&L"
-          icon={<TrendingUp className="size-4 text-[#10B981]" />}
-          value={`+$${portfolioSummary.totalPL.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-          valueColor="text-[#10B981]"
+          icon={<TrendingUp className={`size-4 ${summary.totalPL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`} />}
+          value={`${summary.totalPL >= 0 ? "+" : ""}$${summary.totalPL.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          valueColor={summary.totalPL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}
           sub={
-            <span className="text-sm text-[#10B981]">
-              +{portfolioSummary.totalPLPercent}% Lifetime
+            <span className={`text-sm ${summary.totalPL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+              {summary.totalPL >= 0 ? "+" : ""}{summary.totalPLPercent.toFixed(1)}% Lifetime
             </span>
           }
         />
         <SummaryCard
           label="Today's P&L"
-          icon={<ArrowUpRight className="size-4 text-[#10B981]" />}
-          value={`+$${portfolioSummary.todayPL.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-          valueColor="text-[#10B981]"
+          icon={<ArrowUpRight className={`size-4 ${summary.todayPL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`} />}
+          value={`${summary.todayPL >= 0 ? "+" : ""}$${summary.todayPL.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          valueColor={summary.todayPL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}
           sub={
-            <span className="text-sm text-[#10B981]">
-              +{portfolioSummary.todayPLPercent}%
+            <span className={`text-sm ${summary.todayPL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+              {summary.todayPL >= 0 ? "+" : ""}{summary.todayPLPercent.toFixed(1)}%
             </span>
           }
         />
