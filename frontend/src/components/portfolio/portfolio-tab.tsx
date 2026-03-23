@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -23,13 +23,10 @@ import {
   Wallet,
   ArrowUpRight,
 } from "lucide-react"
-import {
-  holdings,
-  sectorAllocation,
-} from "@/lib/mock-data"
 import { fetchPortfolioSummary } from "@/actions/portfolio"
 import type { PortfolioSummary } from "@/services/portfolio-service"
 
+const SECTOR_COLORS = ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316"]
 interface PortfolioTabProps {
   summary: PortfolioSummary
 }
@@ -44,6 +41,24 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
     }, 60_000)
     return () => clearInterval(interval)
   }, [])
+
+  {/* PieChart */}
+  const sectorAllocation = useMemo(() => {
+    const sectorMap = new Map<string, number>()
+    for (const h of summary.holdings) {
+      sectorMap.set(h.sector, (sectorMap.get(h.sector) ?? 0) + h.totalValue)
+    }
+    const total = [...sectorMap.values()].reduce((a, b) => a + b, 0)
+    return [...sectorMap.entries()]
+      .map(([name, value], i) => ({
+        name,
+        value: total > 0 ? Math.round((value / total) * 100) : 0,
+        color: SECTOR_COLORS[i % SECTOR_COLORS.length],
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [summary.holdings])
+
+  const topSector = sectorAllocation[0]
   
   return (
     <div className="flex flex-col gap-6">
@@ -58,9 +73,9 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
           }
         />
         <SummaryCard
-          label="Total Value"
+          label="Portfolio Value"
           icon={<DollarSign className="size-4 text-muted-foreground" />}
-          value={`$${summary.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={`$${summary.portfolioValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
           sub={
             <span className="text-sm text-muted-foreground">Market Value</span>
           }
@@ -113,14 +128,16 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
               </PieChart>
             </ResponsiveContainer>
             {/* Center Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-mono text-2xl font-bold text-foreground">
-                52%
-              </span>
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Tech
-              </span>
-            </div>
+            {topSector && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="font-mono text-2xl font-bold text-foreground">
+                  {topSector.value}%
+                </span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {topSector.name}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-1 flex-col gap-3">
@@ -220,7 +237,7 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {holdings.map((h) => {
+              {summary.holdings.map((h) => {
                 const plPositive = h.plDollar >= 0
                 const dayPositive = h.dayChangeDollar >= 0
                 return (

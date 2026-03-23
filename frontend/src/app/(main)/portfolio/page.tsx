@@ -15,11 +15,12 @@ import { PortfolioTabsBar } from "@/components/portfolio/portfolio-tabs-bar"
 export default async function PortfolioPage() {
   let summary: PortfolioSummary = {
     runningBalance: 0,
-    totalValue: 0,
+    portfolioValue: 0,
     totalPL: 0,
     totalPLPercent: 0,
     todayPL: 0,
     todayPLPercent: 0,
+    holdings: [],
   }
 
   const session = await auth0.getSession()
