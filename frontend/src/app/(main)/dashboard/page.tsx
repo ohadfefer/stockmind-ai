@@ -4,8 +4,11 @@ import { WatchlistQuickView } from "@/components/dashboard/watchlist-quick-view"
 import { AIAdvisorFeed } from "@/components/dashboard/ai-advisor-feed"
 import { SectorHeatmap } from "@/components/dashboard/sector-heatmap"
 import { NewsFeed } from "@/components/dashboard/news-feed"
+import { getSectorPerformance } from "@/services/sector-service"
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const sectorData = await getSectorPerformance("1D")
+
   return (
     <div className="flex flex-col gap-6">
       {/* Market Overview Ticker Strip */}
@@ -22,7 +25,7 @@ export default function DashboardPage() {
 
       {/* Sector Heatmap + News */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        <SectorHeatmap />
+        <SectorHeatmap initialData={sectorData} />
         <NewsFeed />
       </div>
     </div>

@@ -1,19 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import type { SectorPerformance } from "@/services/sector-service"
+import { fetchSectorPerformance } from "@/actions/sectors"
 
-const sectors = [
-  { name: "Technology", change: "+2.45%", positive: true, size: 6 },
-  { name: "Finance", change: "+1.12%", positive: true, size: 3 },
-  { name: "Energy", change: "-3.1%", positive: false, size: 2 },
-  { name: "Communication", change: "+1.8%", positive: true, size: 4 },
-  { name: "Health", change: "+0.4%", positive: true, size: 2 },
-  { name: "Consumer", change: "-0.8%", positive: false, size: 3 },
+const gridClasses = [
+  "col-span-3 row-span-2",
+  "col-span-2 row-span-2",
+  "col-span-1 row-span-2",
+  "col-span-2 row-span-1",
+  "col-span-2 row-span-1",
+  "col-span-1 row-span-1",
+  "col-span-1 row-span-1",
+  "col-span-1 row-span-1",
+  "col-span-2 row-span-1",
+  "col-span-2 row-span-1",
+  "col-span-1 row-span-1",
 ]
 
-function getColor(positive: boolean, change: string) {
-  const val = Math.abs(parseFloat(change))
-  if (!positive) {
+function getColor(change: number) {
+  const val = Math.abs(change)
+  if (change < 0) {
     if (val > 2) return "bg-[#B91C1C]"
     return "bg-[#991B1B]/80"
   }
@@ -22,8 +29,25 @@ function getColor(positive: boolean, change: string) {
   return "bg-[#065F46]/70"
 }
 
-export function SectorHeatmap() {
-  const [period, setPeriod] = useState<"1D" | "1W">("1W")
+interface SectorHeatmapProps {
+  initialData: SectorPerformance[]
+}
+
+export function SectorHeatmap({ initialData }: SectorHeatmapProps) {
+  const [period, setPeriod] = useState<"1D" | "1W">("1D")
+  const [sectors, setSectors] = useState(initialData)
+  const [isPending, startTransition] = useTransition()
+
+  function handlePeriodChange(newPeriod: "1D" | "1W") {
+    if (newPeriod === period) return
+    setPeriod(newPeriod)
+    startTransition(async () => {
+      const data = await fetchSectorPerformance(newPeriod)
+      if (data) setSectors(data)
+    })
+  }
+
+  const visible = sectors.slice(0, gridClasses.length)
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
@@ -33,118 +57,44 @@ export function SectorHeatmap() {
         </h2>
         <div className="flex items-center gap-1 rounded-lg bg-secondary p-0.5">
           <button
-            onClick={() => setPeriod("1D")}
-            className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-              period === "1D"
-                ? "bg-card text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            onClick={() => handlePeriodChange("1D")}
+            className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${period === "1D"
+              ? "bg-card text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             1D
           </button>
           <button
-            onClick={() => setPeriod("1W")}
-            className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-              period === "1W"
-                ? "bg-card text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            onClick={() => handlePeriodChange("1W")}
+            className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${period === "1W"
+              ? "bg-card text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             1W
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-6 grid-rows-3 gap-1.5" style={{ minHeight: 200 }}>
-        {/* Technology - large block */}
-        <div
-          className={`col-span-3 row-span-2 flex flex-col justify-end rounded-lg p-3 ${getColor(
-            sectors[0].positive,
-            sectors[0].change
-          )}`}
-        >
-          <span className="text-sm font-semibold text-foreground">
-            {sectors[0].name}
-          </span>
-          <span className="font-mono text-xs text-foreground/80">
-            {sectors[0].change}
-          </span>
-        </div>
-
-        {/* Finance */}
-        <div
-          className={`col-span-2 row-span-2 flex flex-col justify-end rounded-lg p-3 ${getColor(
-            sectors[1].positive,
-            sectors[1].change
-          )}`}
-        >
-          <span className="text-sm font-semibold text-foreground">
-            {sectors[1].name}
-          </span>
-          <span className="font-mono text-xs text-foreground/80">
-            {sectors[1].change}
-          </span>
-        </div>
-
-        {/* Energy */}
-        <div
-          className={`col-span-1 row-span-2 flex flex-col justify-end rounded-lg p-3 ${getColor(
-            sectors[2].positive,
-            sectors[2].change
-          )}`}
-        >
-          <span className="text-sm font-semibold text-foreground">
-            {sectors[2].name}
-          </span>
-          <span className="font-mono text-xs text-foreground/80">
-            {sectors[2].change}
-          </span>
-        </div>
-
-        {/* Communication */}
-        <div
-          className={`col-span-3 row-span-1 flex flex-col justify-end rounded-lg p-3 ${getColor(
-            sectors[3].positive,
-            sectors[3].change
-          )}`}
-        >
-          <span className="text-sm font-semibold text-foreground">
-            {sectors[3].name}
-          </span>
-          <span className="font-mono text-xs text-foreground/80">
-            {sectors[3].change}
-          </span>
-        </div>
-
-        {/* Health */}
-        <div
-          className={`col-span-1 row-span-1 flex flex-col justify-end rounded-lg p-3 ${getColor(
-            sectors[4].positive,
-            sectors[4].change
-          )}`}
-        >
-          <span className="text-sm font-semibold text-foreground">
-            {sectors[4].name}
-          </span>
-          <span className="font-mono text-xs text-foreground/80">
-            {sectors[4].change}
-          </span>
-        </div>
-
-        {/* Consumer */}
-        <div
-          className={`col-span-2 row-span-1 flex flex-col justify-end rounded-lg p-3 ${getColor(
-            sectors[5].positive,
-            sectors[5].change
-          )}`}
-        >
-          <span className="text-sm font-semibold text-foreground">
-            {sectors[5].name}
-          </span>
-          <span className="font-mono text-xs text-foreground/80">
-            {sectors[5].change}
-          </span>
-        </div>
+      <div
+        className={`grid grid-cols-6 grid-rows-4 gap-1.5 transition-opacity ${isPending ? "opacity-50" : ""}`}
+        style={{ minHeight: 200 }}
+      >
+        {visible.map((s, i) => (
+          <div
+            key={s.sector}
+            className={`${gridClasses[i]} flex flex-col justify-end rounded-lg p-3 ${getColor(s.averageChange)}`}
+          >
+            <span className="text-sm font-semibold text-foreground">
+              {s.sector}
+            </span>
+            <span className="font-mono text-xs text-foreground/80">
+              {s.averageChange >= 0 ? "+" : ""}
+              {s.averageChange.toFixed(2)}%
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
