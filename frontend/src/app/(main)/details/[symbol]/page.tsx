@@ -51,7 +51,7 @@ export default async function DetailsPage({
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href="/">HOME</Link>
+                <Link href="/dashboard">HOME</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
