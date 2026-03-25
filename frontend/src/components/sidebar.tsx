@@ -47,7 +47,7 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex items-center gap-2 px-6 py-5">
+      <Link href="/" className="flex items-center gap-2 px-6 py-5">
         <Zap className="size-5 text-primary" />
         <div>
           <h1 className="text-sm font-bold text-foreground">StockMind AI</h1>
@@ -55,7 +55,7 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
             Research Suite
           </p>
         </div>
-      </div>
+      </Link>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 pt-2">
         {navItems.map((item) => {

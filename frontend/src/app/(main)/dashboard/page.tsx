@@ -5,14 +5,18 @@ import { AIAdvisorFeed } from "@/components/dashboard/ai-advisor-feed"
 import { SectorHeatmap } from "@/components/dashboard/sector-heatmap"
 import { NewsFeed } from "@/components/dashboard/news-feed"
 import { getSectorPerformance } from "@/services/sector-service"
+import { getIndexQuotes } from "@/services/index-service"
 
 export default async function DashboardPage() {
-  const sectorData = await getSectorPerformance("1D")
+  const [sectorData, indexQuotes] = await Promise.all([
+    getSectorPerformance("1D"),
+    getIndexQuotes(),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
       {/* Market Overview Ticker Strip */}
-      <MarketOverviewBar />
+      <MarketOverviewBar data={indexQuotes} />
 
       {/* KPI Cards */}
       <KPICards />
