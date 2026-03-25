@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import type { SectorPerformance } from "@/services/sector-service"
+import type { SectorPerformance } from "@/services/dashboard/sector-service"
 import { fetchSectorPerformance } from "@/actions/sectors"
 
 const gridClasses = [

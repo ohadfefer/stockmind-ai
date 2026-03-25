@@ -1,5 +1,3 @@
-"use client"
-
 const news = [
   {
     sentiment: "BULLISH",

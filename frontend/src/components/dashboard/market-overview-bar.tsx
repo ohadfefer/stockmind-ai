@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import type { IndexQuote } from "@/services/index-service"
+import type { IndexQuote } from "@/services/dashboard/index-service"
 
 interface MarketOverviewBarProps {
   data: IndexQuote[]

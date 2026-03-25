@@ -4,13 +4,15 @@ import { WatchlistQuickView } from "@/components/dashboard/watchlist-quick-view"
 import { AIAdvisorFeed } from "@/components/dashboard/ai-advisor-feed"
 import { SectorHeatmap } from "@/components/dashboard/sector-heatmap"
 import { NewsFeed } from "@/components/dashboard/news-feed"
-import { getSectorPerformance } from "@/services/sector-service"
-import { getIndexQuotes } from "@/services/index-service"
+import { getSectorPerformance } from "@/services/dashboard/sector-service"
+import { getIndexQuotes } from "@/services/dashboard/index-service"
+import { getDashboardWatchlistStocks } from "@/services/dashboard/dashboard-watchlist-service"
 
 export default async function DashboardPage() {
-  const [sectorData, indexQuotes] = await Promise.all([
+  const [sectorData, indexQuotes, watchlistStocks] = await Promise.all([
     getSectorPerformance("1D"),
     getIndexQuotes(),
+    getDashboardWatchlistStocks(8),
   ])
 
   return (
@@ -23,7 +25,7 @@ export default async function DashboardPage() {
 
       {/* Watchlist + AI Advisor Feed */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
-        <WatchlistQuickView />
+        <WatchlistQuickView stocks={watchlistStocks} />
         <AIAdvisorFeed />
       </div>
 

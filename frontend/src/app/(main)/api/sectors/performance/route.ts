@@ -1,6 +1,6 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
-import { getSectorPerformance } from "@/services/sector-service"
+import { getSectorPerformance } from "@/services/dashboard/sector-service"
 
 export async function GET(request: Request) {
   const session = await auth0.getSession()

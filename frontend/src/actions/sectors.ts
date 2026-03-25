@@ -1,4 +1,4 @@
-import type { SectorPerformance } from "@/services/sector-service"
+import type { SectorPerformance } from "@/services/dashboard/sector-service"
 
 export async function fetchSectorPerformance(
   period: "1D" | "1W"

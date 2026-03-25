@@ -1,35 +1,13 @@
-"use client"
-
-import { Wallet, TrendingUp, Zap } from "lucide-react"
+import { TrendingUp, TrendingDown, Activity } from "lucide-react"
 
 export function KPICards() {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      {/* Portfolio Value */}
+      {/* AI Bullish Stock Pick */}
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">
-            Portfolio Value
-          </span>
-          <Wallet className="size-5 text-primary" />
-        </div>
-        <p className="font-mono text-3xl font-bold text-foreground tracking-tight">
-          $84,320.00
-        </p>
-        <div className="flex items-center gap-1.5">
-          <TrendingUp className="size-3.5 text-[#10B981]" />
-          <span className="font-mono text-sm font-semibold text-[#10B981]">
-            +2.4%
-          </span>
-          <span className="text-sm text-muted-foreground">today</span>
-        </div>
-      </div>
-
-      {/* Top Gainer */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-muted-foreground">
-            Top Gainer
+            AI Bullish Pick
           </span>
           <TrendingUp className="size-5 text-[#10B981]" />
         </div>
@@ -38,29 +16,47 @@ export function KPICards() {
         </p>
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-sm font-semibold text-[#10B981]">
-            + 6.8%
+            +6.8%
           </span>
-          <span className="text-sm text-muted-foreground">($924.50)</span>
+          <span className="text-sm text-muted-foreground">Strong Buy signal</span>
         </div>
       </div>
 
-      {/* AI Advisor Alerts */}
+      {/* AI Bearish Stock Pick */}
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">
-            AI Advisor Alerts
+            AI Bearish Pick
           </span>
-          <Zap className="size-5 text-[#F59E0B]" />
+          <TrendingDown className="size-5 text-[#EF4444]" />
         </div>
         <p className="font-mono text-3xl font-bold text-foreground tracking-tight">
-          4 <span className="text-lg font-semibold text-muted-foreground">Active</span>
+          INTC
         </p>
         <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-full border-2 border-[#10B981]" />
-          <span className="font-mono text-sm font-semibold text-[#10B981]">
-            2 Strong Buy
+          <span className="font-mono text-sm font-semibold text-[#EF4444]">
+            -3.2%
           </span>
-          <span className="text-sm text-muted-foreground">signals</span>
+          <span className="text-sm text-muted-foreground">Strong Sell signal</span>
+        </div>
+      </div>
+
+      {/* Market Sentiment */}
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-muted-foreground">
+            Market Sentiment
+          </span>
+          <Activity className="size-5 text-[#F59E0B]" />
+        </div>
+        <p className="font-mono text-3xl font-bold text-foreground tracking-tight">
+          Bullish
+        </p>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-sm font-semibold text-[#10B981]">
+            68%
+          </span>
+          <span className="text-sm text-muted-foreground">Fear & Greed Index</span>
         </div>
       </div>
     </div>
