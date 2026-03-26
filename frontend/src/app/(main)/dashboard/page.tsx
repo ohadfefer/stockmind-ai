@@ -8,17 +8,46 @@ import { getSectorPerformance } from "@/services/dashboard/sector-service"
 import { getIndexQuotes } from "@/services/dashboard/index-service"
 import { getDashboardWatchlistStocks } from "@/services/dashboard/dashboard-watchlist-service"
 
+// FMP api calls causing bugs
+// export default async function DashboardPage() {
+//   const [sectorData, indexQuotes, watchlistStocks] = await Promise.all([
+//     getSectorPerformance("1D"),
+//     getIndexQuotes(),
+//     getDashboardWatchlistStocks(8),
+//   ])
+
+//   return (
+//     <div className="flex flex-col gap-6">
+//       {/* Market Overview Ticker Strip */}
+//       <MarketOverviewBar data={indexQuotes} />
+
+//       {/* KPI Cards */}
+//       <KPICards />
+
+//       {/* Watchlist + AI Advisor Feed */}
+//       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+//         <WatchlistQuickView stocks={watchlistStocks} />
+//         <AIAdvisorFeed />
+//       </div>
+
+//       {/* Sector Heatmap + News */}
+//       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
+//         <SectorHeatmap initialData={sectorData} />
+//         <NewsFeed />
+//       </div>
+//     </div>
+//   )
+// }
+
 export default async function DashboardPage() {
-  const [sectorData, indexQuotes, watchlistStocks] = await Promise.all([
-    getSectorPerformance("1D"),
-    getIndexQuotes(),
+  const [watchlistStocks] = await Promise.all([
     getDashboardWatchlistStocks(8),
   ])
 
   return (
     <div className="flex flex-col gap-6">
       {/* Market Overview Ticker Strip */}
-      <MarketOverviewBar data={indexQuotes} />
+      {/* <MarketOverviewBar  /> */}
 
       {/* KPI Cards */}
       <KPICards />
@@ -31,7 +60,7 @@ export default async function DashboardPage() {
 
       {/* Sector Heatmap + News */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        <SectorHeatmap initialData={sectorData} />
+        {/* <SectorHeatmap /> */}
         <NewsFeed />
       </div>
     </div>
