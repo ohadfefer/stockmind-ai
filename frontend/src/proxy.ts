@@ -17,6 +17,11 @@ export async function proxy(request: NextRequest) {
     return authRes
   }
 
+  // Allow cron job routes (secured by CRON_SECRET in the route handler)
+  if (request.nextUrl.pathname.startsWith("/api/jobs/")) {
+    return authRes
+  }
+
   // Protect all other routes
   const session = await auth0.getSession(request)
 
