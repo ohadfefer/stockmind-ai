@@ -5,7 +5,7 @@ import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { createExecution } from "@/services/execution-service"
 import { markOrderFilled } from "@/services/order-service"
 import { recordTradeSettlement } from "@/services/cash-ledger-service"
-import { updatePosition } from "@/services/position-service"
+import { updatePosition } from "@/services/position/position-service"
 import { finnhubFetch } from "@/lib/finnhub"
 
 export async function POST(request: Request) {

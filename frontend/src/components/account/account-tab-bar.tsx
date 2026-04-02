@@ -1,12 +1,13 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { Wallet, History, ArrowLeftRight } from "lucide-react"
+import { Wallet, History, ArrowLeftRight, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const tabs = [
   { key: "balances", label: "Account Balances", icon: Wallet },
   { key: "history", label: "Account History", icon: History },
+  { key: "performance", label: "Performance", icon: TrendingUp },
   { key: "transfer", label: "Transfer", icon: ArrowLeftRight },
 ] as const
 

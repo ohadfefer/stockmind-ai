@@ -1,6 +1,41 @@
 import { getDb } from "@/lib/db"
 import { finnhubFetch } from "@/lib/finnhub"
 
+export interface PositionHistoryEntry {
+  id: number
+  account_id: number
+  symbol: string
+  date: string
+  quantity: number
+  market_price: number
+  market_value: number
+  cost_basis: number
+  unrealized_pnl: number
+}
+
+export async function getPositionHistory(accountId: number): Promise<PositionHistoryEntry[]> {
+  const sql = getDb()
+
+  const rows = await sql`
+    SELECT id, account_id, symbol, date, quantity, market_price, market_value, cost_basis, unrealized_pnl
+    FROM position_history
+    WHERE account_id = ${accountId}
+    ORDER BY date DESC, symbol
+  `
+
+  return rows.map((r) => ({
+    id: r.id as number,
+    account_id: r.account_id as number,
+    symbol: r.symbol as string,
+    date: (r.date as Date).toISOString().slice(0, 10),
+    quantity: Number(r.quantity),
+    market_price: Number(r.market_price),
+    market_value: Number(r.market_value),
+    cost_basis: Number(r.cost_basis),
+    unrealized_pnl: Number(r.unrealized_pnl),
+  }))
+}
+
 interface PositionRow {
   account_id: number
   symbol: string

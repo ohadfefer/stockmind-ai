@@ -1,4 +1,4 @@
-import { snapshotAllPositions } from "@/services/position-history-service"
+import { snapshotAllPositions } from "@/services/position/position-history-service"
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
