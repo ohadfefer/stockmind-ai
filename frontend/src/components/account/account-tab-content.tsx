@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation"
 import { AccountBalances } from "./account-balances"
 import { AccountHistory } from "./account-history"
 import { AccountTransfer } from "./account-transfer"
+import { AccountPerformance } from "./account-performance"
 import type { AccountTab } from "./account-tab-bar"
 import type { AccountDetails, HistoryEntry } from "@/services/account-service"
 import type { PositionHistoryEntry } from "@/services/position/position-history-service"
@@ -23,7 +24,7 @@ export function AccountTabContent({ account, history, positionHistory }: Account
   }
 
   if (activeTab === "performance") {
-    return <div>Performance tab — {positionHistory.length} snapshots loaded</div>
+    return <AccountPerformance entries={positionHistory} />
   }
 
   if (activeTab === "transfer") {
