@@ -18,6 +18,7 @@ import { NewsFeed } from "@/components/details/news-feed"
 import { AboutSection } from "@/components/details/about-section"
 import { LivePrice } from "@/components/details/live-price"
 import { FollowButton } from "@/components/details/follow-button"
+import { CreateAlertDialog } from "@/components/alerts/create-alert-dialog"
 import { getStockData } from "@/services/stock-service"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { isFollowing } from "@/services/watchlist-items-service"
@@ -78,6 +79,7 @@ export default async function DetailsPage({
           </div>
           <div className="flex items-center gap-2">
             <FollowButton symbol={upperSymbol} initialFollowing={initialFollowing} />
+            <CreateAlertDialog symbol={upperSymbol} />
             <Button variant="outline" size="sm">
               <Bot className="size-4" />
               Analyze

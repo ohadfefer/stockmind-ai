@@ -10,7 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, X, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
+import { ConfirmDelete } from "@/components/ui/confirm-delete"
 import { deleteStock } from "@/actions/watchlist"
 
 import type { WatchlistStockData } from "@/types/watchlist"
@@ -98,11 +99,6 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
   }
 
   async function handleDelete(ticker: string) {
-    if (confirmingTicker !== ticker) {
-      setConfirmingTicker(ticker)
-      return
-    }
-    setConfirmingTicker(null)
     setRemovedTickers((prev) => new Set(prev).add(ticker))
     try {
       await deleteStock(ticker, watchlistId)
@@ -270,46 +266,12 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                   )}
                 </TableCell>
                 <TableCell className="pr-5">
-                  <div className={`grid w-[60px] grid-cols-[28px_28px] items-center justify-end gap-1 ml-auto transition-opacity ${confirmingTicker === stock.ticker ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-                    {confirmingTicker === stock.ticker ? (
-                      <>
-                        <button
-                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setConfirmingTicker(null)
-                          }}
-                        >
-                          <X className="size-4" />
-                          <span className="sr-only">Cancel</span>
-                        </button>
-                        <button
-                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(stock.ticker)
-                          }}
-                        >
-                          <Check className="size-4" />
-                          <span className="sr-only">Confirm remove</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span />
-                        <button
-                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(stock.ticker)
-                          }}
-                        >
-                          <Trash2 className="size-4" />
-                          <span className="sr-only">Remove</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  <ConfirmDelete
+                    onDelete={() => handleDelete(stock.ticker)}
+                    confirming={confirmingTicker === stock.ticker}
+                    onConfirmingChange={(v) => setConfirmingTicker(v ? stock.ticker : null)}
+                    className="opacity-0 group-hover:opacity-100"
+                  />
                 </TableCell>
               </TableRow>
             )

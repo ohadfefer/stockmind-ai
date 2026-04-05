@@ -9,7 +9,7 @@ import {
   Clock,
 } from "lucide-react"
 import { PortfolioTab } from "@/components/portfolio/portfolio-tab"
-import { AlertsTab } from "@/components/portfolio/alerts-tab"
+import { AlertsTab } from "@/components/alerts/alerts-tab"
 import { PortfolioTabsBar } from "@/components/portfolio/portfolio-tabs-bar"
 
 export default async function PortfolioPage() {
