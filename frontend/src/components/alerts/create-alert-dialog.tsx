@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Bell, TrendingUp, TrendingDown, Sparkles, CalendarDays } from "lucide-react"
+import { useState, useTransition } from "react"
+import { Bell, TrendingUp, TrendingDown, Sparkles, CalendarDays, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { createAlert } from "@/actions/alerts"
 
 type AlertCondition = "price_above" | "price_below" | "earnings" | "ai_signal"
 
@@ -32,6 +33,7 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   const [open, setOpen] = useState(false)
   const [condition, setCondition] = useState<AlertCondition | null>(null)
   const [targetValue, setTargetValue] = useState("")
+  const [isPending, startTransition] = useTransition()
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -48,7 +50,15 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
     }
   }
 
-  const canSubmit = condition && targetValue && Number(targetValue) > 0
+  const canSubmit = condition && targetValue && Number(targetValue) > 0 && !isPending
+
+  function handleSubmit() {
+    if (!condition || !targetValue) return
+    startTransition(async () => {
+      await createAlert(symbol, condition, Number(targetValue))
+      handleOpenChange(false)
+    })
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -119,9 +129,10 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
         <DialogFooter>
           <Button
             disabled={!canSubmit}
-            onClick={() => handleOpenChange(false)}
+            onClick={handleSubmit}
             className="w-full sm:w-auto"
           >
+            {isPending && <Loader2 className="size-4 animate-spin" />}
             Create Alert
           </Button>
         </DialogFooter>

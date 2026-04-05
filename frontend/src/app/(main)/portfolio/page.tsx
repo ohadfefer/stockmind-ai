@@ -2,6 +2,7 @@ import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getAccountDetails } from "@/services/account-service"
 import { getPortfolioSummary, type PortfolioSummary } from "@/services/portfolio-service"
+import { getAlerts, type StockAlert } from "@/services/alerts/alerts-service"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import {
   FileDown,
@@ -22,6 +23,7 @@ export default async function PortfolioPage() {
     todayPLPercent: 0,
     holdings: [],
   }
+  let alerts: StockAlert[] = []
 
   const session = await auth0.getSession()
   if (session) {
@@ -29,7 +31,10 @@ export default async function PortfolioPage() {
     if (userId) {
       const account = await getAccountDetails(userId)
       if (account) {
-        summary = await getPortfolioSummary(account.id, account.running_balance)
+        ;[summary, alerts] = await Promise.all([
+          getPortfolioSummary(account.id, account.running_balance),
+          getAlerts(account.id),
+        ])
       }
     }
   }
@@ -79,7 +84,7 @@ export default async function PortfolioPage() {
         </TabsContent>
 
         <TabsContent value="alerts">
-          <AlertsTab />
+          <AlertsTab alerts={alerts} />
         </TabsContent>
       </Tabs>
     </div>
