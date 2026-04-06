@@ -1,12 +1,14 @@
 "use client"
 
-import { Bell } from "lucide-react"
+import { Bell, BellOff, BellRing } from "lucide-react"
 import { useState, useEffect } from "react"
 import clsx from "clsx"
 import { SymbolSearch } from "@/components/symbol-search"
+import { useNotifications } from "@/hooks/use-notifications"
 
 export function Header() {
   const [marketOpen, setMarketOpen] = useState<boolean | null>(null)
+  const { status: notifStatus, subscribe } = useNotifications()
 
   useEffect(() => {
     async function fetchMarketStatus() {
@@ -51,9 +53,33 @@ export function Header() {
             {marketOpen === null ? "Loading..." : marketOpen ? "Market Open" : "Market Closed"}
           </span>
         </div>
-        <button className="relative rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-          <Bell className="size-[18px]" />
-          <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
+        <button
+          onClick={notifStatus === "prompt" ? subscribe : undefined}
+          title={
+            notifStatus === "subscribed" ? "Notifications enabled" :
+            notifStatus === "denied" ? "Notifications blocked — enable in browser settings" :
+            notifStatus === "prompt" ? "Enable notifications" :
+            "Notifications"
+          }
+          className={clsx(
+            "relative rounded-lg p-2 transition-colors",
+            notifStatus === "subscribed"
+              ? "text-primary hover:bg-secondary"
+              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            notifStatus === "prompt" && "cursor-pointer",
+            notifStatus === "denied" && "cursor-not-allowed opacity-50",
+          )}
+        >
+          {notifStatus === "denied" ? (
+            <BellOff className="size-[18px]" />
+          ) : notifStatus === "subscribed" ? (
+            <BellRing className="size-[18px]" />
+          ) : (
+            <Bell className="size-[18px]" />
+          )}
+          {notifStatus === "prompt" && (
+            <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
+          )}
         </button>
       </div>
     </header>
