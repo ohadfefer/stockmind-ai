@@ -22,6 +22,11 @@ export async function proxy(request: NextRequest) {
     return authRes
   }
 
+  // Allow QStash webhook routes (secured by signature verification in the route handler)
+  if (request.nextUrl.pathname === "/api/alerts/check") {
+    return authRes
+  }
+
   // Protect all other routes
   const session = await auth0.getSession(request)
 
