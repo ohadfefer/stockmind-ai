@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/db"
 import { finnhubFetch } from "@/lib/finnhub"
-import { getSubscriptionsByUserIds } from "@/services/push-subscription-service"
+import { getSubscriptionsByUserIds, deleteSubscriptionById } from "@/services/push-subscription-service"
 import { sendPushNotification } from "@/services/notification-service"
 
 type ActiveAlert = {
@@ -24,19 +24,23 @@ export async function checkAlerts() {
       AND sa.target_value IS NOT NULL
   `
   const alerts = rows as unknown as ActiveAlert[]
-  if (alerts.length === 0) return { checked: 0, triggered: 0 }
+  if (alerts.length === 0) return { checked: 0, triggered: 0, failed: 0 }
 
   // Get unique symbols and fetch their current prices
   const symbols = [...new Set(alerts.map((a) => a.symbol))]
   const prices = new Map<string, number>()
+  let quoteFailed = 0
 
   await Promise.all(
     symbols.map(async (symbol) => {
       try {
         const quote = await finnhubFetch("/quote", { symbol })
-        if (quote.c > 0) prices.set(symbol, quote.c)
-      } catch {
-        // skip symbol if quote fails
+        if (typeof quote.c === "number" && quote.c > 0) {
+          prices.set(symbol, quote.c)
+        }
+      } catch (err) {
+        quoteFailed++
+        console.error(`[alert-checker] Failed to fetch quote for ${symbol}:`, err)
       }
     }),
   )
@@ -54,23 +58,35 @@ export async function checkAlerts() {
     if (hit) triggered.push(alert)
   }
 
-  if (triggered.length === 0) return { checked: alerts.length, triggered: 0 }
+  if (triggered.length === 0) {
+    return { checked: alerts.length, triggered: 0, failed: 0, quoteFailed }
+  }
 
-  // Mark triggered alerts
+  // Atomically claim triggered alerts to prevent duplicate processing (W2)
   const triggeredIds = triggered.map((a) => a.id)
-  await sql`
+  const claimed = await sql`
     UPDATE stock_alerts
     SET status = 'triggered', triggered_at = NOW()
-    WHERE id = ANY(${triggeredIds})
+    WHERE id = ANY(${triggeredIds}) AND status = 'active'
+    RETURNING id
   `
+  const claimedIds = new Set(claimed.map((r) => r.id as number))
+  const claimedAlerts = triggered.filter((a) => claimedIds.has(a.id))
 
-  // Send push notifications
-  const userIds = [...new Set(triggered.map((a) => a.user_id))]
+  if (claimedAlerts.length === 0) {
+    return { checked: alerts.length, triggered: 0, failed: 0, quoteFailed }
+  }
+
+  // Send push notifications (track failures per alert)
+  const userIds = [...new Set(claimedAlerts.map((a) => a.user_id))]
   const subscriptions = await getSubscriptionsByUserIds(userIds)
+  const failedAlertIds: number[] = []
 
   await Promise.all(
-    triggered.map(async (alert) => {
+    claimedAlerts.map(async (alert) => {
       const userSubs = subscriptions.filter((s) => s.user_id === alert.user_id)
+      if (userSubs.length === 0) return
+
       const price = prices.get(alert.symbol)!
       const direction = alert.condition === "price_above" ? "above" : "below"
       const payload = {
@@ -79,11 +95,39 @@ export async function checkAlerts() {
         url: `/details/${alert.symbol.toLowerCase()}`,
       }
 
-      await Promise.all(
-        userSubs.map((sub) => sendPushNotification(sub, payload).catch(() => {})),
+      const results = await Promise.all(
+        userSubs.map(async (sub) => {
+          const result = await sendPushNotification(sub, payload)
+          if (!result.ok) {
+            console.error(`[alert-checker] Push failed for subscription ${sub.id}:`, result.error)
+            if (result.gone) {
+              await deleteSubscriptionById(sub.id).catch(() => {})
+            }
+          }
+          return result.ok
+        }),
       )
+
+      // If every subscription failed, mark this alert as failed
+      if (results.every((r) => !r)) {
+        failedAlertIds.push(alert.id)
+      }
     }),
   )
 
-  return { checked: alerts.length, triggered: triggered.length }
+  // Revert alerts where ALL notification attempts failed
+  if (failedAlertIds.length > 0) {
+    await sql`
+      UPDATE stock_alerts
+      SET status = 'active', triggered_at = NULL
+      WHERE id = ANY(${failedAlertIds})
+    `
+  }
+
+  return {
+    checked: alerts.length,
+    triggered: claimedAlerts.length - failedAlertIds.length,
+    failed: failedAlertIds.length,
+    quoteFailed,
+  }
 }

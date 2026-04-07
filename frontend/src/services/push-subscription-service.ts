@@ -31,6 +31,11 @@ export async function deleteSubscription(userId: number, endpoint: string) {
   `
 }
 
+export async function deleteSubscriptionById(id: number) {
+  const sql = getDb()
+  await sql`DELETE FROM push_subscriptions WHERE id = ${id}`
+}
+
 export async function getSubscriptionsForUser(userId: number): Promise<PushSubscriptionRecord[]> {
   const sql = getDb()
   const rows = await sql`

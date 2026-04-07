@@ -27,7 +27,11 @@ export async function POST() {
   }
 
   await Promise.all(
-    subscriptions.map((sub) => sendPushNotification(sub, payload).catch(() => {})),
+    subscriptions.map((sub) =>
+      sendPushNotification(sub, payload).catch((err) => {
+        console.error(`[test-notification] Push failed for subscription ${sub.id}:`, err)
+      }),
+    ),
   )
 
   return NextResponse.json({ sent: subscriptions.length })

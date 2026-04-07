@@ -3,6 +3,25 @@ import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { saveSubscription, deleteSubscription } from "@/services/push-subscription-service"
 
+const ALLOWED_PUSH_HOSTS = [
+  "fcm.googleapis.com",
+  ".push.services.mozilla.com",
+  ".notify.windows.com",
+  ".push.apple.com",
+]
+
+function isValidPushEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint)
+    if (url.protocol !== "https:") return false
+    return ALLOWED_PUSH_HOSTS.some((host) =>
+      host.startsWith(".") ? url.hostname.endsWith(host) : url.hostname === host,
+    )
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request: Request) {
   const session = await auth0.getSession()
   if (!session) {
@@ -12,6 +31,10 @@ export async function POST(request: Request) {
   const { endpoint, p256dh, auth } = await request.json()
   if (!endpoint || !p256dh || !auth) {
     return NextResponse.json({ error: "Missing subscription fields" }, { status: 400 })
+  }
+
+  if (!isValidPushEndpoint(endpoint)) {
+    return NextResponse.json({ error: "Invalid push endpoint" }, { status: 400 })
   }
 
   const userId = await getUserIdByAuth0Id(session.user.sub)
