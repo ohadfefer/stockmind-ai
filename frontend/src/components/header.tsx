@@ -8,7 +8,7 @@ import { useNotifications } from "@/hooks/use-notifications"
 
 export function Header() {
   const [marketOpen, setMarketOpen] = useState<boolean | null>(null)
-  const { status: notifStatus, subscribe } = useNotifications()
+  const { status: notifStatus } = useNotifications()
 
   useEffect(() => {
     async function fetchMarketStatus() {
@@ -53,21 +53,19 @@ export function Header() {
             {marketOpen === null ? "Loading..." : marketOpen ? "Market Open" : "Market Closed"}
           </span>
         </div>
-        <button
-          onClick={notifStatus === "prompt" ? subscribe : undefined}
+        <div
           title={
             notifStatus === "subscribed" ? "Notifications enabled" :
             notifStatus === "denied" ? "Notifications blocked — enable in browser settings" :
-            notifStatus === "prompt" ? "Enable notifications" :
             "Notifications"
           }
           className={clsx(
-            "relative rounded-lg p-2 transition-colors",
+            "rounded-lg p-2",
             notifStatus === "subscribed"
-              ? "text-primary hover:bg-secondary"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-            notifStatus === "prompt" && "cursor-pointer",
-            notifStatus === "denied" && "cursor-not-allowed opacity-50",
+              ? "text-primary"
+              : notifStatus === "denied"
+                ? "text-muted-foreground opacity-50"
+                : "text-muted-foreground",
           )}
         >
           {notifStatus === "denied" ? (
@@ -77,10 +75,7 @@ export function Header() {
           ) : (
             <Bell className="size-[18px]" />
           )}
-          {notifStatus === "prompt" && (
-            <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
-          )}
-        </button>
+        </div>
       </div>
     </header>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { subscribePush } from "@/actions/push-subscription"
+import { subscribePush, unsubscribePush } from "@/actions/push-subscription"
 
 type NotificationStatus = "loading" | "unsupported" | "denied" | "prompt" | "subscribed"
 
@@ -55,5 +55,19 @@ export function useNotifications() {
     }
   }
 
-  return { status, subscribe }
+  async function unsubscribe() {
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        await unsubscribePush(subscription.endpoint)
+        await subscription.unsubscribe()
+      }
+      setStatus("prompt")
+    } catch {
+      // already unsubscribed
+    }
+  }
+
+  return { status, subscribe, unsubscribe }
 }

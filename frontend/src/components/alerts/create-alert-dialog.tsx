@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { createAlert } from "@/actions/alerts"
+import { useNotifications } from "@/hooks/use-notifications"
 
 type AlertCondition = "price_above" | "price_below" | "earnings" | "ai_signal"
 
@@ -34,6 +35,7 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   const [condition, setCondition] = useState<AlertCondition | null>(null)
   const [targetValue, setTargetValue] = useState("")
   const [isPending, startTransition] = useTransition()
+  const { status: notifStatus, subscribe } = useNotifications()
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -55,6 +57,12 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   function handleSubmit() {
     if (!condition || !targetValue) return
     startTransition(async () => {
+      if (notifStatus !== "subscribed") {
+        await subscribe()
+        // After subscribe(), if permission was denied the status stays non-subscribed.
+        // We check Notification.permission directly since hook state may not have updated yet.
+        if (Notification.permission !== "granted") return
+      }
       await createAlert(symbol, condition, Number(targetValue))
       handleOpenChange(false)
     })

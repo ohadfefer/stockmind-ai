@@ -79,10 +79,18 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
       </nav>
 
       <div className="mt-auto border-t border-border px-3 py-3">
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+        <Link
+          href="/settings"
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+            pathname === "/settings"
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+          )}
+        >
           <Settings className="size-[18px]" />
           Settings
-        </button>
+        </Link>
         <div className="mt-3 flex items-center justify-between px-3 pb-1">
           <div className="flex items-center gap-3">
             {userImage ? (
