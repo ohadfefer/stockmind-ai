@@ -1,4 +1,5 @@
 import type { StockAlert } from "@/services/alerts/alerts-service"
+import type { MissedAlert } from "@/services/alerts/missed-alerts-service"
 
 export async function fetchAlerts(): Promise<StockAlert[]> {
   const res = await fetch("/api/alerts")
@@ -28,4 +29,16 @@ export async function deleteAlertAction(alertId: number): Promise<void> {
     body: JSON.stringify({ alertId }),
   })
   if (!res.ok) throw new Error("Failed to delete alert")
+}
+
+export async function fetchMissedAlerts(): Promise<MissedAlert[]> {
+  const res = await fetch("/api/alerts/missed")
+  if (!res.ok) throw new Error("Failed to fetch missed alerts")
+  const data = await res.json()
+  return data.alerts
+}
+
+export async function dismissMissedAlerts(): Promise<void> {
+  const res = await fetch("/api/alerts/missed", { method: "DELETE" })
+  if (!res.ok) throw new Error("Failed to dismiss missed alerts")
 }

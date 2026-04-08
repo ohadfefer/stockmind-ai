@@ -24,11 +24,11 @@ const alertTypes: {
   icon: React.ReactNode
   disabled: boolean
 }[] = [
-  { value: "price_above", label: "Price Above", icon: <TrendingUp className="size-4" />, disabled: false },
-  { value: "price_below", label: "Price Below", icon: <TrendingDown className="size-4" />, disabled: false },
-  { value: "earnings", label: "Earnings", icon: <CalendarDays className="size-4" />, disabled: true },
-  { value: "ai_signal", label: "AI Signal", icon: <Sparkles className="size-4" />, disabled: true },
-]
+    { value: "price_above", label: "Price Above", icon: <TrendingUp className="size-4" />, disabled: false },
+    { value: "price_below", label: "Price Below", icon: <TrendingDown className="size-4" />, disabled: false },
+    { value: "earnings", label: "Earnings", icon: <CalendarDays className="size-4" />, disabled: true },
+    { value: "ai_signal", label: "AI Signal", icon: <Sparkles className="size-4" />, disabled: true },
+  ]
 
 export function CreateAlertDialog({ symbol }: { symbol: string }) {
   const [open, setOpen] = useState(false)
@@ -99,11 +99,10 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
                     setCondition(type.value)
                     setTargetValue("")
                   }}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
-                    condition === type.value
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  } disabled:pointer-events-none disabled:opacity-40`}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${condition === type.value
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    } disabled:pointer-events-none disabled:opacity-40`}
                 >
                   {type.icon}
                   {type.label}
@@ -134,9 +133,15 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
           </div>
         </div>
 
+        {notifStatus === "denied" && (
+          <p className="text-sm text-destructive">
+            Enable notifications in your browser settings to receive alerts.
+          </p>
+        )}
+
         <DialogFooter>
           <Button
-            disabled={!canSubmit}
+            disabled={!canSubmit || notifStatus === "denied"}
             onClick={handleSubmit}
             className="w-full sm:w-auto"
           >

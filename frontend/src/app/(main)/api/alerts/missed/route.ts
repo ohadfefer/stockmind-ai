@@ -1,0 +1,34 @@
+import { auth0 } from "@/lib/auth0"
+import { NextResponse } from "next/server"
+import { getUserIdByAuth0Id } from "@/services/user-service"
+import { getMissedAlerts, deleteMissedAlerts } from "@/services/alerts/missed-alerts-service"
+
+export async function GET() {
+  const session = await auth0.getSession()
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const userId = await getUserIdByAuth0Id(session.user.sub)
+  if (!userId) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 })
+  }
+
+  const alerts = await getMissedAlerts(userId)
+  return NextResponse.json({ alerts })
+}
+
+export async function DELETE() {
+  const session = await auth0.getSession()
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const userId = await getUserIdByAuth0Id(session.user.sub)
+  if (!userId) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 })
+  }
+
+  await deleteMissedAlerts(userId)
+  return NextResponse.json({ deleted: true })
+}

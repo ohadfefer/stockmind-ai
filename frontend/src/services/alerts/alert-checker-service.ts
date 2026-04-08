@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db"
 import { finnhubFetch } from "@/lib/finnhub"
 import { getSubscriptionsByUserIds, deleteSubscriptionById } from "@/services/push-subscription-service"
 import { sendPushNotification } from "@/services/notification-service"
+import { insertMissedAlert } from "@/services/alerts/missed-alerts-service"
 
 type ActiveAlert = {
   id: number
@@ -62,7 +63,7 @@ export async function checkAlerts() {
     return { checked: alerts.length, triggered: 0, failed: 0, quoteFailed }
   }
 
-  // Atomically claim triggered alerts to prevent duplicate processing (W2)
+  // Atomically claim triggered alerts to prevent duplicate processing 
   const triggeredIds = triggered.map((a) => a.id)
   const claimed = await sql`
     UPDATE stock_alerts
@@ -76,6 +77,19 @@ export async function checkAlerts() {
   if (claimedAlerts.length === 0) {
     return { checked: alerts.length, triggered: 0, failed: 0, quoteFailed }
   }
+
+  // Record missed alerts so users see them in the bell dropdown
+  await Promise.all(
+    claimedAlerts.map((alert) =>
+      insertMissedAlert(
+        alert.user_id,
+        alert.symbol,
+        alert.condition,
+        alert.target_value,
+        prices.get(alert.symbol)!,
+      ),
+    ),
+  )
 
   // Send push notifications (track failures per alert)
   const userIds = [...new Set(claimedAlerts.map((a) => a.user_id))]
