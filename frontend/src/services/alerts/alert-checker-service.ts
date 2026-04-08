@@ -78,19 +78,6 @@ export async function checkAlerts() {
     return { checked: alerts.length, triggered: 0, failed: 0, quoteFailed }
   }
 
-  // Record missed alerts so users see them in the bell dropdown
-  await Promise.all(
-    claimedAlerts.map((alert) =>
-      insertMissedAlert(
-        alert.user_id,
-        alert.symbol,
-        alert.condition,
-        alert.target_value,
-        prices.get(alert.symbol)!,
-      ),
-    ),
-  )
-
   // Send push notifications (track failures per alert)
   const userIds = [...new Set(claimedAlerts.map((a) => a.user_id))]
   const subscriptions = await getSubscriptionsByUserIds(userIds)
@@ -136,6 +123,23 @@ export async function checkAlerts() {
       SET status = 'active', triggered_at = NULL
       WHERE id = ANY(${failedAlertIds})
     `
+  }
+
+  // Record missed alerts only for successfully triggered alerts
+  const failedSet = new Set(failedAlertIds)
+  const succeededAlerts = claimedAlerts.filter((a) => !failedSet.has(a.id))
+  if (succeededAlerts.length > 0) {
+    await Promise.all(
+      succeededAlerts.map((alert) =>
+        insertMissedAlert(
+          alert.user_id,
+          alert.symbol,
+          alert.condition,
+          alert.target_value,
+          prices.get(alert.symbol)!,
+        ),
+      ),
+    )
   }
 
   return {
