@@ -6,6 +6,7 @@ import { insertMissedAlert } from "@/services/alerts/missed-alerts-service"
 
 type ActiveAlert = {
   id: number
+  account_id: number
   user_id: number
   symbol: string
   condition: "price_above" | "price_below"
@@ -17,7 +18,7 @@ export async function checkAlerts() {
 
   // Fetch all active price alerts with their owner's user_id
   const rows = await sql`
-    SELECT sa.id, a.user_id, sa.symbol, sa.condition, sa.target_value
+    SELECT sa.id, sa.account_id, a.user_id, sa.symbol, sa.condition, sa.target_value
     FROM stock_alerts sa
     JOIN accounts a ON a.id = sa.account_id
     WHERE sa.status = 'active'
@@ -132,7 +133,7 @@ export async function checkAlerts() {
     await Promise.all(
       succeededAlerts.map((alert) =>
         insertMissedAlert(
-          alert.user_id,
+          alert.account_id,
           alert.symbol,
           alert.condition,
           alert.target_value,

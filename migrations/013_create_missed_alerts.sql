@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS missed_alerts (
   id              SERIAL PRIMARY KEY,
-  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id      INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   symbol          TEXT NOT NULL,
   condition       alert_condition NOT NULL,
   target_value    NUMERIC(16, 6),
@@ -11,4 +11,4 @@ CREATE TABLE IF NOT EXISTS missed_alerts (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_missed_alerts_user_id ON missed_alerts(user_id);
+CREATE INDEX idx_missed_alerts_account_id ON missed_alerts(account_id);

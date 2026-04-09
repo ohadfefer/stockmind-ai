@@ -1,6 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
+import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { getMissedAlerts, deleteMissedAlerts } from "@/services/alerts/missed-alerts-service"
 
 export async function GET() {
@@ -14,7 +15,8 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  const alerts = await getMissedAlerts(userId)
+  const accountId = await getOrCreateDefaultAccount(userId)
+  const alerts = await getMissedAlerts(accountId)
   return NextResponse.json({ alerts })
 }
 
@@ -29,6 +31,7 @@ export async function DELETE() {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  await deleteMissedAlerts(userId)
+  const accountId = await getOrCreateDefaultAccount(userId)
+  await deleteMissedAlerts(accountId)
   return NextResponse.json({ deleted: true })
 }
