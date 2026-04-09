@@ -48,16 +48,13 @@ export function Header() {
 
   async function handlePopoverChange(open: boolean) {
     setPopoverOpen(open)
-    if (open && missedAlerts.length > 0) {
-      // Dismiss on the server, then clear locally
+    if (!open && missedAlerts.length > 0) {
+      setMissedAlerts([])
       try {
         await dismissMissedAlerts()
       } catch {
         // ignore
       }
-    }
-    if (!open) {
-      setMissedAlerts([])
     }
   }
 
