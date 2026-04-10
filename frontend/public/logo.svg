@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="roundedBg">
+      <rect x="0" y="0" width="512" height="512" rx="108" ry="108"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#roundedBg)">
+    <rect width="512" height="512" fill="#0A0B0D"/>
+
+    <g fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Left horn -->
+      <path d="M 220,300 Q 200,260 170,220 Q 130,165 95,150 Q 70,140 60,160"/>
+      <!-- Right horn -->
+      <path d="M 292,300 Q 312,260 342,220 Q 382,165 417,150 Q 442,140 452,160"/>
+      <!-- Bridge -->
+      <path d="M 220,300 Q 256,315 292,300"/>
+      <!-- Nose ring -->
+      <circle cx="256" cy="355" r="40"/>
+    </g>
+  </g>
+</svg>
