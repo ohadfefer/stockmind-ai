@@ -1,3 +1,7 @@
+// No-op fetch handler — required by Chrome to consider this site installable as a PWA.
+// Without it, Android Chrome falls back to shortcut mode (letter icon) instead of "Install app".
+self.addEventListener("fetch", () => {})
+
 self.addEventListener("push", (event) => {
   const data = event.data?.json() ?? {}
 
