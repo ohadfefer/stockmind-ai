@@ -3,6 +3,7 @@
 import { BellRing } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { useNotifications } from "@/hooks/use-notifications"
+import { IosInstallHint } from "@/components/pwa/ios-install-hint"
 
 export function GeneralSettings() {
   const { status, subscribe, unsubscribe } = useNotifications()
@@ -20,7 +21,7 @@ export function GeneralSettings() {
   return (
     <div className="flex flex-col gap-1">
       <h2 className="text-sm font-semibold text-foreground">General</h2>
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BellRing className="size-4 text-muted-foreground" />
@@ -41,6 +42,7 @@ export function GeneralSettings() {
             disabled={isDenied || status === "loading"}
           />
         </div>
+        <IosInstallHint />
       </div>
     </div>
   )
