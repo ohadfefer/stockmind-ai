@@ -1,7 +1,8 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getSubscriptionsForUser } from "@/services/push-subscription-service"
+import { getOrCreateDefaultAccount } from "@/services/account-service"
+import { getSubscriptionsForAccount } from "@/services/push-subscription-service"
 import { sendPushNotification } from "@/services/notification-service"
 
 export async function POST() {
@@ -15,7 +16,8 @@ export async function POST() {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  const subscriptions = await getSubscriptionsForUser(userId)
+  const accountId = await getOrCreateDefaultAccount(userId)
+  const subscriptions = await getSubscriptionsForAccount(accountId)
   if (subscriptions.length === 0) {
     return NextResponse.json({ error: "No push subscriptions found" }, { status: 404 })
   }

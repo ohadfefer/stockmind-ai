@@ -1,13 +1,12 @@
 import { getDb } from "@/lib/db"
 import { finnhubFetch } from "@/lib/finnhub"
-import { getSubscriptionsByUserIds, deleteSubscriptionById } from "@/services/push-subscription-service"
+import { getSubscriptionsByAccountIds, deleteSubscriptionById } from "@/services/push-subscription-service"
 import { sendPushNotification } from "@/services/notification-service"
 import { insertMissedAlert } from "@/services/alerts/missed-alerts-service"
 
 type ActiveAlert = {
   id: number
   account_id: number
-  user_id: number
   symbol: string
   condition: "price_above" | "price_below"
   target_value: number
@@ -16,14 +15,13 @@ type ActiveAlert = {
 export async function checkAlerts() {
   const sql = getDb()
 
-  // Fetch all active price alerts with their owner's user_id
+  // Fetch all active price alerts
   const rows = await sql`
-    SELECT sa.id, sa.account_id, a.user_id, sa.symbol, sa.condition, sa.target_value
-    FROM stock_alerts sa
-    JOIN accounts a ON a.id = sa.account_id
-    WHERE sa.status = 'active'
-      AND sa.condition IN ('price_above', 'price_below')
-      AND sa.target_value IS NOT NULL
+    SELECT id, account_id, symbol, condition, target_value
+    FROM stock_alerts
+    WHERE status = 'active'
+      AND condition IN ('price_above', 'price_below')
+      AND target_value IS NOT NULL
   `
   const alerts = rows as unknown as ActiveAlert[]
   if (alerts.length === 0) return { checked: 0, triggered: 0, failed: 0 }
@@ -80,14 +78,14 @@ export async function checkAlerts() {
   }
 
   // Send push notifications (track failures per alert)
-  const userIds = [...new Set(claimedAlerts.map((a) => a.user_id))]
-  const subscriptions = await getSubscriptionsByUserIds(userIds)
+  const accountIds = [...new Set(claimedAlerts.map((a) => a.account_id))]
+  const subscriptions = await getSubscriptionsByAccountIds(accountIds)
   const failedAlertIds: number[] = []
 
   await Promise.all(
     claimedAlerts.map(async (alert) => {
-      const userSubs = subscriptions.filter((s) => s.user_id === alert.user_id)
-      if (userSubs.length === 0) return
+      const accountSubs = subscriptions.filter((s) => s.account_id === alert.account_id)
+      if (accountSubs.length === 0) return
 
       const price = prices.get(alert.symbol)!
       const direction = alert.condition === "price_above" ? "above" : "below"
@@ -98,7 +96,7 @@ export async function checkAlerts() {
       }
 
       const results = await Promise.all(
-        userSubs.map(async (sub) => {
+        accountSubs.map(async (sub) => {
           const result = await sendPushNotification(sub, payload)
           if (!result.ok) {
             console.error(`[alert-checker] Push failed for subscription ${sub.id}:`, result.error)

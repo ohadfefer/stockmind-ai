@@ -1,6 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
+import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { saveSubscription, deleteSubscription } from "@/services/push-subscription-service"
 
 const ALLOWED_PUSH_HOSTS = [
@@ -42,7 +43,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  await saveSubscription(userId, endpoint, p256dh, auth)
+  const accountId = await getOrCreateDefaultAccount(userId)
+  await saveSubscription(accountId, endpoint, p256dh, auth)
   return NextResponse.json({ saved: true })
 }
 
@@ -62,6 +64,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  await deleteSubscription(userId, endpoint)
+  const accountId = await getOrCreateDefaultAccount(userId)
+  await deleteSubscription(accountId, endpoint)
   return NextResponse.json({ deleted: true })
 }
