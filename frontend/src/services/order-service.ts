@@ -59,9 +59,11 @@ export async function markOrderFilled(orderId: number, accountId: number, fillPr
   `
 }
 
-export async function deleteOrder(orderId: number, accountId: number): Promise<void> {
+export async function cancelOrder(orderId: number, accountId: number): Promise<void> {
   const sql = getDb()
   await sql`
-    DELETE FROM orders WHERE id = ${orderId} AND account_id = ${accountId}
+    UPDATE orders
+    SET status = 'cancelled', cancelled_at = NOW()
+    WHERE id = ${orderId} AND account_id = ${accountId} AND status = 'pending'
   `
 }

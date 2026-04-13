@@ -26,9 +26,9 @@ export interface ExecuteOrderParams {
 
 export async function cancelOrder(orderId: number): Promise<void> {
   const res = await fetch("/api/orders", {
-    method: "DELETE",
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orderId }),
+    body: JSON.stringify({ orderId, status: "cancelled" }),
   })
   if (!res.ok) throw new Error("Failed to cancel order")
 }

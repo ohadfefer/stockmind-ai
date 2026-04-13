@@ -2,7 +2,7 @@ import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
-import { createOrder, deleteOrder } from "@/services/order-service"
+import { createOrder, cancelOrder } from "@/services/order-service"
 
 export async function POST(request: Request) {
   const session = await auth0.getSession()
@@ -37,15 +37,18 @@ export async function POST(request: Request) {
   return NextResponse.json({ orderId })
 }
 
-export async function DELETE(request: Request) {
+export async function PATCH(request: Request) {
   const session = await auth0.getSession()
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { orderId } = await request.json()
+  const { orderId, status } = await request.json()
   if (!orderId) {
     return NextResponse.json({ error: "orderId is required" }, { status: 400 })
+  }
+  if (status !== "cancelled") {
+    return NextResponse.json({ error: "Unsupported status update" }, { status: 400 })
   }
 
   const userId = await getUserIdByAuth0Id(session.user.sub)
@@ -54,7 +57,7 @@ export async function DELETE(request: Request) {
   }
 
   const accountId = await getOrCreateDefaultAccount(userId)
-  await deleteOrder(Number(orderId), accountId)
+  await cancelOrder(Number(orderId), accountId)
 
   return NextResponse.json({ success: true })
 }
