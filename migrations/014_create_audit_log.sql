@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   account_id  INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
   action      TEXT NOT NULL
                 CHECK (action IN (
-                  'login', 'logout', 'signup',
+                  'login', 'auto_login', 'logout', 'signup',
                   'order_placed', 'order_cancelled', 'order_executed',
                   'deposit_initiated', 'deposit_completed',
                   'withdrawal_initiated', 'withdrawal_completed',

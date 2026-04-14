@@ -116,6 +116,19 @@ export async function getAccountDetails(userId: number): Promise<AccountDetails>
 }
 
 
+export async function getDefaultAccountId(userId: number): Promise<number | null> {
+  const sql = getDb()
+  try {
+    const rows = await sql`
+      SELECT id FROM accounts WHERE user_id = ${userId} AND status = 'active'
+      ORDER BY opened_at LIMIT 1
+    `
+    return rows[0]?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Returns the user's default account id, creating the account
  * and "General" watchlist if they don't exist yet.
