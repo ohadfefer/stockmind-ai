@@ -21,6 +21,15 @@ function formatCurrency(value: number): string {
   })
 }
 
+function addOneDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const next = new Date(y, m - 1, d + 1)
+  const yy = next.getFullYear()
+  const mm = String(next.getMonth() + 1).padStart(2, "0")
+  const dd = String(next.getDate()).padStart(2, "0")
+  return `${yy}-${mm}-${dd}`
+}
+
 function getReturnColor(returnPct: number | null): string {
   if (returnPct === null) return "#1A1D25" // muted — no data
   if (returnPct < -2) return "#EF4444" // red-500
@@ -184,7 +193,7 @@ export function PortfolioHeatmapGrid({ entries }: PortfolioHeatmapGridProps) {
                         </TooltipTrigger>
                         <TooltipContent side="top" className="bg-card text-card-foreground border-border">
                           <div className="text-xs">
-                            <p className="font-medium">{day.date}</p>
+                            <p className="font-medium">{addOneDay(day.date)}</p>
                             {day.hasData ? (
                               <>
                                 <p

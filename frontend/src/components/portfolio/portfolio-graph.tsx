@@ -24,11 +24,20 @@ function formatCurrency(value: number): string {
   })
 }
 
+function addOneDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const next = new Date(y, m - 1, d + 1)
+  const yy = next.getFullYear()
+  const mm = String(next.getMonth() + 1).padStart(2, "0")
+  const dd = String(next.getDate()).padStart(2, "0")
+  return `${yy}-${mm}-${dd}`
+}
+
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
   if (active && payload && payload.length) {
     return (
       <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg">
-        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="text-sm text-muted-foreground">{label ? addOneDay(label) : ""}</p>
         <p className="font-mono text-sm font-semibold text-foreground">
           ${formatCurrency(payload[0].value)}
         </p>
