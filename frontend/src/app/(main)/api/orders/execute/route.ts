@@ -7,6 +7,8 @@ import { markOrderFilled } from "@/services/order-service"
 import { recordTradeSettlement } from "@/services/cash-ledger-service"
 import { updatePosition } from "@/services/position/position-service"
 import { finnhubFetch } from "@/lib/finnhub"
+import { logAudit } from "@/services/audit-log-service"
+import { getClientIp } from "@/lib/request-ip"
 
 export async function POST(request: Request) {
   const session = await auth0.getSession()
@@ -66,6 +68,21 @@ export async function POST(request: Request) {
   })
 
   await markOrderFilled(Number(orderId), accountId, quote.c)
+
+  await logAudit({
+    userId,
+    accountId,
+    action: "order_executed",
+    details: {
+      orderId: Number(orderId),
+      executionId,
+      symbol,
+      side,
+      quantity: Number(quantity),
+      fillPrice: quote.c,
+    },
+    ipAddress: getClientIp(request),
+  })
 
   return NextResponse.json({ executionId })
 }

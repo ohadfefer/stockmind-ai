@@ -1,6 +1,9 @@
 import { auth0 } from "@/lib/auth0"
-import { getDb } from "@/lib/db"
 import { NextResponse } from "next/server"
+import { insertUser } from "@/services/user-service"
+import { createDefaultAccount } from "@/services/account-service"
+import { logAudit } from "@/services/audit-log-service"
+import { getClientIp } from "@/lib/request-ip"
 
 export async function POST(request: Request) {
   const session = await auth0.getSession()
@@ -15,16 +18,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Full name is required" }, { status: 400 })
   }
 
+  const trimmedName = fullName.trim()
+  if (trimmedName.length > 50) {
+    return NextResponse.json({ error: "Full name must be 50 characters or fewer" }, { status: 400 })
+  }
+
   const { sub: auth0Id, email, picture } = session.user
-  const sql = getDb()
+  if (!email) {
+    return NextResponse.json({ error: "Session missing email" }, { status: 400 })
+  }
 
   try {
-    await sql`
-      INSERT INTO users (auth0_id, email, full_name, image_url)
-      VALUES (${auth0Id}, ${email}, ${fullName.trim()}, ${picture ?? null})
-      ON CONFLICT (auth0_id) DO UPDATE
-      SET full_name = ${fullName.trim()}, updated_at = NOW()
-    `
+    const { userId, wasCreated } = await insertUser({
+      auth0Id,
+      email,
+      fullName: trimmedName,
+      imageUrl: picture ?? null,
+    })
+
+    if (wasCreated) {
+      let accountId: number | null = null
+      try {
+        accountId = await createDefaultAccount(userId)
+      } catch (err) {
+        // Non-fatal: getOrCreateDefaultAccount will lazily create it on first action.
+        console.error("Failed to create default account for user", userId, err)
+      }
+
+      await logAudit({
+        userId,
+        accountId,
+        action: "signup",
+        details: { fullName: trimmedName },
+        ipAddress: getClientIp(request),
+      })
+    }
+
     return NextResponse.json({ status: "saved" })
   } catch (error) {
     console.error("Failed to save user:", error)

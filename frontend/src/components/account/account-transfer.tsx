@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { submitTransfer } from "@/actions/transfers"
 
@@ -31,9 +38,25 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
   const [method, setMethod] = useState<TransferMethod>("bank_transfer")
   const [description, setDescription] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  const [isPending, setIsPending] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const symbol = currency === "USD" ? "$" : currency
+
+  // Warn before tab close / refresh while a transfer is being processed.
+  useEffect(() => {
+    if (!isPending) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [isPending])
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
 
   async function handleSubmit() {
     const parsed = parseFloat(amount)
@@ -42,11 +65,13 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
     setSubmitting(true)
     try {
       await submitTransfer({ direction, amount: parsed, method, description: description || undefined })
-      setSubmitted(true)
       setAmount("")
       setDescription("")
-      // Refresh page data after the 10s resolve window
-      setTimeout(() => router.refresh(), 11_000)
+      setIsPending(true)
+      timerRef.current = setTimeout(() => {
+        setIsPending(false)
+        router.refresh()
+      }, 11_000)
     } catch {
       // TODO: toast error
     } finally {
@@ -69,7 +94,7 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
           <Label>Transfer Type</Label>
           <RadioGroup
             value={direction}
-            onValueChange={(v) => { setDirection(v as TransferDirection); setSubmitted(false) }}
+            onValueChange={(v) => setDirection(v as TransferDirection)}
             className="grid grid-cols-2 gap-3"
           >
             <label
@@ -113,7 +138,7 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
               step="0.01"
               placeholder="0.00"
               value={amount}
-              onChange={(e) => { setAmount(e.target.value); setSubmitted(false) }}
+              onChange={(e) => setAmount(e.target.value)}
               className="pl-7 font-mono"
             />
           </div>
@@ -156,12 +181,22 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
           {direction === "deposit" ? "Deposit" : "Withdraw"} Funds
         </Button>
 
-        {submitted && (
-          <p className="text-sm text-center text-muted-foreground">
-            Transfer initiated — it will be processed in a few seconds.
-          </p>
-        )}
       </div>
+
+      <AlertDialog open={isPending}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Loader2 className="size-5 animate-spin" />
+              Processing {direction}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Your {direction} is being processed. Please stay on this page — it
+              will complete in a few seconds.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

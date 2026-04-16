@@ -116,6 +116,24 @@ export async function getAccountDetails(userId: number): Promise<AccountDetails>
 }
 
 
+export async function createDefaultAccount(userId: number): Promise<number> {
+  const sql = getDb()
+  const accountNumber = `SIM-${String(userId).padStart(5, "0")}`
+  const created = await sql`
+    INSERT INTO accounts (user_id, account_number)
+    VALUES (${userId}, ${accountNumber})
+    RETURNING id
+  `
+  const accountId = created[0].id as number
+
+  await sql`
+    INSERT INTO watchlists (account_id, name)
+    VALUES (${accountId}, 'General')
+  `
+
+  return accountId
+}
+
 export async function getDefaultAccountId(userId: number): Promise<number | null> {
   const sql = getDb()
   try {

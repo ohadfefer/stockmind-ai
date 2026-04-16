@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { saveSubscription, deleteSubscription } from "@/services/push-subscription-service"
+import { logAudit } from "@/services/audit-log-service"
+import { getClientIp } from "@/lib/request-ip"
 
 const ALLOWED_PUSH_HOSTS = [
   "fcm.googleapis.com",
@@ -45,6 +47,19 @@ export async function POST(request: Request) {
 
   const accountId = await getOrCreateDefaultAccount(userId)
   await saveSubscription(accountId, endpoint, p256dh, auth)
+
+  await logAudit({
+    userId,
+    accountId,
+    action: "settings_changed",
+    details: {
+      setting: "push_notifications",
+      enabled: true,
+      endpoint,
+    },
+    ipAddress: getClientIp(request),
+  })
+
   return NextResponse.json({ saved: true })
 }
 
@@ -66,5 +81,18 @@ export async function DELETE(request: Request) {
 
   const accountId = await getOrCreateDefaultAccount(userId)
   await deleteSubscription(accountId, endpoint)
+
+  await logAudit({
+    userId,
+    accountId,
+    action: "settings_changed",
+    details: {
+      setting: "push_notifications",
+      enabled: false,
+      endpoint,
+    },
+    ipAddress: getClientIp(request),
+  })
+
   return NextResponse.json({ deleted: true })
 }

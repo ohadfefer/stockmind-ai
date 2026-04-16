@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Zap } from "lucide-react"
+import { insertUser } from "@/actions/users"
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -23,16 +24,7 @@ export default function OnboardingPage() {
     setError("")
 
     try {
-      const res = await fetch("/api/auth/insert-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: trimmed }),
-      })
-
-      if (!res.ok) {
-        throw new Error("Failed to save name")
-      }
-
+      await insertUser(trimmed)
       router.push("/dashboard")
     } catch {
       setError("Something went wrong. Please try again.")
@@ -76,6 +68,7 @@ export default function OnboardingPage() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="John Doe"
+              maxLength={50}
               autoFocus
               className="flex w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />

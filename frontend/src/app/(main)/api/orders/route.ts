@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { createOrder, cancelOrder } from "@/services/order-service"
+import { logAudit } from "@/services/audit-log-service"
+import { getClientIp } from "@/lib/request-ip"
 
 export async function POST(request: Request) {
   const session = await auth0.getSession()
@@ -34,6 +36,21 @@ export async function POST(request: Request) {
     filledAt,
   })
 
+  await logAudit({
+    userId,
+    accountId,
+    action: "order_placed",
+    details: {
+      orderId,
+      symbol,
+      side,
+      orderType,
+      quantity: Number(quantity),
+      averageFillPrice: Number(averageFillPrice),
+    },
+    ipAddress: getClientIp(request),
+  })
+
   return NextResponse.json({ orderId })
 }
 
@@ -58,6 +75,14 @@ export async function PATCH(request: Request) {
 
   const accountId = await getOrCreateDefaultAccount(userId)
   await cancelOrder(Number(orderId), accountId)
+
+  await logAudit({
+    userId,
+    accountId,
+    action: "order_cancelled",
+    details: { orderId: Number(orderId) },
+    ipAddress: getClientIp(request),
+  })
 
   return NextResponse.json({ success: true })
 }

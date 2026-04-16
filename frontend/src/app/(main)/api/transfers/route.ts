@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { createTransfer, resolveTransfer } from "@/services/transfer-service"
+import { logAudit } from "@/services/audit-log-service"
+import { getClientIp } from "@/lib/request-ip"
 
 export async function POST(request: Request) {
   const session = await auth0.getSession()
@@ -36,10 +38,30 @@ export async function POST(request: Request) {
     description: description || undefined,
   })
 
+  const ipAddress = getClientIp(request)
+  const initiatedAction = direction === "deposit" ? "deposit_initiated" : "withdrawal_initiated"
+  const completedAction = direction === "deposit" ? "deposit_completed" : "withdrawal_completed"
+  const auditDetails = { transferId, amount: Number(amount), method, description: description || null }
+
+  await logAudit({
+    userId,
+    accountId,
+    action: initiatedAction,
+    details: auditDetails,
+    ipAddress,
+  })
+
   // Resolve after 10 seconds (simulate processing)
   setTimeout(async () => {
     try {
       await resolveTransfer(transferId)
+      await logAudit({
+        userId,
+        accountId,
+        action: completedAction,
+        details: auditDetails,
+        ipAddress,
+      })
     } catch (err) {
       console.error("Failed to resolve transfer", transferId, err)
     }
