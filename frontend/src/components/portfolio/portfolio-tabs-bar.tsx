@@ -1,33 +1,57 @@
-import { TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, ClipboardList } from "lucide-react"
+"use client"
+
+import { useRouter, useSearchParams } from "next/navigation"
+import { Sparkles, BarChart3, Bell, Plus, ClipboardList } from "lucide-react"
+import { cn } from "@/lib/utils"
 import Link from "next/link"
 
+const tabs = [
+  { key: "portfolio", label: "Portfolio", icon: BarChart3 },
+  { key: "analyze", label: "Analyze", icon: Sparkles },
+  { key: "alerts", label: "Alerts", icon: Bell },
+] as const
+
+export type PortfolioTabKey = (typeof tabs)[number]["key"]
+
 export function PortfolioTabsBar() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const activeTab = (searchParams.get("tab") as PortfolioTabKey) || "portfolio"
+
   return (
-    <div className="flex items-center justify-between">
-      <TabsList className="h-10 bg-secondary">
-        <TabsTrigger value="analyze" className="h-8 px-4 text-sm">
-          Analyze
-        </TabsTrigger>
-        <TabsTrigger value="portfolio" className="h-8 px-4 text-sm">
-          Portfolio
-        </TabsTrigger>
-        <TabsTrigger value="alerts" className="h-8 px-4 text-sm">
-          Alerts
-        </TabsTrigger>
-      </TabsList>
+    <div className="flex items-center justify-between border-b">
+      <div className="flex items-center gap-1">
+        {tabs.map((tab) => {
+          const isActive = tab.key === activeTab
+          return (
+            <button
+              key={tab.key}
+              onClick={() => router.push(`/portfolio?tab=${tab.key}`)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+                isActive
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <tab.icon className="size-4" />
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
 
       <div className="flex items-center gap-3">
         <Link
           href="/portfolio/orders"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
+          className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground/70"
         >
           <ClipboardList className="size-4" />
           Orders
         </Link>
         <Link
           href="/portfolio/trade"
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          className="flex items-center gap-2 text-sm font-semibold text-primary brightness-125 transition-colors hover:brightness-100"
         >
           <Plus className="size-4" />
           Trade
