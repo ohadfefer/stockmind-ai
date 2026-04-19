@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { Suspense, use, useState, useEffect, useMemo } from "react"
+import Link from "next/link"
 import {
   Table,
   TableBody,
@@ -25,13 +26,15 @@ import {
 } from "lucide-react"
 import { fetchPortfolioSummary } from "@/actions/portfolio"
 import type { PortfolioSummary } from "@/services/portfolio-service"
+import type { PortfolioReview } from "@/services/ai/portfolio-review-service"
 
 const SECTOR_COLORS = ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316"]
 interface PortfolioTabProps {
   summary: PortfolioSummary
+  reviewPromise: Promise<PortfolioReview>
 }
 
-export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
+export function PortfolioTab({ summary: initialSummary, reviewPromise }: PortfolioTabProps) {
   const [summary, setSummary] = useState(initialSummary)
 
   useEffect(() => {
@@ -169,22 +172,9 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
         </div>
 
         {/* AI Strategy Insight */}
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2">
-            <Sparkles className="size-5 text-primary" />
-            <h3 className="text-base font-semibold text-primary">
-              AI Strategy Insight
-            </h3>
-          </div>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Your portfolio is heavily weighted in Tech. AI suggests balancing
-            with defensive stocks in Energy or Utilities to reduce volatility
-            (Beta: 1.42).
-          </p>
-          <button className="mt-auto rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-border">
-            Review Rebalance Plan
-          </button>
-        </div>
+        <Suspense fallback={<AiInsightCardSkeleton />}>
+          <AiInsightCard reviewPromise={reviewPromise} />
+        </Suspense>
       </div>
 
       {/* Holdings Table */}
@@ -319,6 +309,46 @@ export function PortfolioTab({ summary: initialSummary }: PortfolioTabProps) {
           </Table>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AiInsightCard({ reviewPromise }: { reviewPromise: Promise<PortfolioReview> }) {
+  const review = use(reviewPromise)
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2">
+        <Sparkles className="size-5 text-primary" />
+        <h3 className="text-base font-semibold text-primary">
+          AI Strategy Insight
+        </h3>
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {review.short || "No insight available. Add holdings to your portfolio."}
+      </p>
+      <Link
+        href="/portfolio?tab=analyze"
+        className="mt-auto rounded-lg border border-border bg-secondary px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:bg-border"
+      >
+        View Full Analysis
+      </Link>
+    </div>
+  )
+}
+
+function AiInsightCardSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col gap-4 rounded-xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2">
+        <Sparkles className="size-5 text-primary/40" />
+        <div className="h-4 w-40 rounded bg-secondary" />
+      </div>
+      <div className="space-y-2">
+        <div className="h-3 w-full rounded bg-secondary" />
+        <div className="h-3 w-11/12 rounded bg-secondary" />
+        <div className="h-3 w-9/12 rounded bg-secondary" />
+      </div>
+      <div className="mt-auto h-10 rounded-lg bg-secondary" />
     </div>
   )
 }
