@@ -1,25 +1,42 @@
 import { createHash } from "node:crypto"
-import { generateObject } from "ai"
+import { Output, generateText } from "ai"
 import { xai } from "@ai-sdk/xai"
 import { z } from "zod"
 import { getDb } from "@/lib/db"
 import type { PortfolioSummary } from "@/services/portfolio-service"
+
+export interface PortfolioReviewUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  costUsd: number
+}
 
 export interface PortfolioReview {
   short: string
   full: string
   model: string
   createdAt: Date
+  usage: PortfolioReviewUsage | null
 }
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000
 const MODEL_ID = "grok-4-1-fast-reasoning"
+
+// xAI pricing for grok-4-1-fast (reasoning/non-reasoning), USD per 1M tokens.
+// Source: https://docs.x.ai/docs/models
+const PRICE_PER_MTOK = {
+  input: 0.2,
+  cachedInput: 0.05,
+  output: 0.5,
+} as const
 
 const EMPTY_REVIEW: PortfolioReview = {
   short: "Your portfolio is empty. Buy your first stock to unlock AI insights.",
   full: "Your portfolio is empty. Buy your first stock to unlock AI insights.",
   model: "n/a",
   createdAt: new Date(),
+  usage: null,
 }
 
 export async function getPortfolioReview(
@@ -72,7 +89,8 @@ async function readLatestReview(
 ): Promise<PortfolioReview | null> {
   const sql = getDb()
   const rows = await sql`
-    SELECT short_review, full_review, model, created_at
+    SELECT short_review, full_review, model, created_at,
+           prompt_tokens, completion_tokens, total_tokens, cost_usd
     FROM portfolio_reviews
     WHERE account_id = ${accountId} AND portfolio_hash = ${portfolioHash}
     ORDER BY created_at DESC
@@ -80,11 +98,21 @@ async function readLatestReview(
   `
   if (rows.length === 0) return null
   const row = rows[0]
+  const usage: PortfolioReviewUsage | null =
+    row.total_tokens != null
+      ? {
+          promptTokens: row.prompt_tokens ?? 0,
+          completionTokens: row.completion_tokens ?? 0,
+          totalTokens: row.total_tokens,
+          costUsd: row.cost_usd != null ? Number(row.cost_usd) : 0,
+        }
+      : null
   return {
     short: row.short_review,
     full: row.full_review,
     model: row.model,
     createdAt: new Date(row.created_at),
+    usage,
   }
 }
 
@@ -94,9 +122,17 @@ async function writeReview(
   review: PortfolioReview,
 ): Promise<void> {
   const sql = getDb()
+  const u = review.usage
   await sql`
-    INSERT INTO portfolio_reviews (account_id, portfolio_hash, short_review, full_review, model)
-    VALUES (${accountId}, ${portfolioHash}, ${review.short}, ${review.full}, ${review.model})
+    INSERT INTO portfolio_reviews (
+      account_id, portfolio_hash, short_review, full_review, model,
+      prompt_tokens, completion_tokens, total_tokens, cost_usd
+    )
+    VALUES (
+      ${accountId}, ${portfolioHash}, ${review.short}, ${review.full}, ${review.model},
+      ${u?.promptTokens ?? null}, ${u?.completionTokens ?? null},
+      ${u?.totalTokens ?? null}, ${u?.costUsd ?? null}
+    )
   `
 }
 
@@ -112,18 +148,67 @@ const reviewSchema = z.object({
 async function generateReview(summary: PortfolioSummary): Promise<PortfolioReview> {
   const prompt = buildPrompt(summary)
 
-  const { object } = await generateObject({
+  const { output, usage, response } = await generateText({
     model: xai(MODEL_ID),
-    schema: reviewSchema,
+    output: Output.object({ schema: reviewSchema }),
     prompt,
   })
 
   return {
-    short: object.short,
-    full: object.full,
+    short: output.short,
+    full: output.full,
     model: MODEL_ID,
     createdAt: new Date(),
+    usage: buildUsage(usage, response.body),
   }
+}
+
+// xAI returns `usage.cost_in_usd_ticks` in the raw response body, where
+// 1 tick = 1/1e10 USD. This is the authoritative, per-request billed cost.
+// See: https://docs.x.ai/developers/rate-limits#checking-token-consumption
+function extractXaiCostUsd(body: unknown): number | null {
+  if (typeof body !== "object" || body === null) return null
+  const usage = (body as { usage?: unknown }).usage
+  if (typeof usage !== "object" || usage === null) return null
+  const ticks = (usage as { cost_in_usd_ticks?: unknown }).cost_in_usd_ticks
+  return typeof ticks === "number" ? ticks / 1e10 : null
+}
+
+function buildUsage(
+  usage: {
+    inputTokens: number | undefined
+    outputTokens: number | undefined
+    totalTokens: number | undefined
+    inputTokenDetails?: { cacheReadTokens?: number | undefined }
+  },
+  responseBody: unknown,
+): PortfolioReviewUsage | null {
+  const promptTokens = usage.inputTokens
+  const completionTokens = usage.outputTokens
+  if (promptTokens == null || completionTokens == null) return null
+
+  const xaiCostUsd = extractXaiCostUsd(responseBody)
+  if (xaiCostUsd == null) {
+    console.warn("portfolio_reviews: xAI cost_in_usd_ticks missing; using fallback pricing")
+  }
+  const costUsd = xaiCostUsd ?? computeFallbackCostUsd(promptTokens, completionTokens, usage.inputTokenDetails?.cacheReadTokens ?? 0)
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: usage.totalTokens ?? promptTokens + completionTokens,
+    costUsd: Number(costUsd.toFixed(8)),
+  }
+}
+
+function computeFallbackCostUsd(promptTokens: number, completionTokens: number, cachedInput: number): number {
+  const nonCachedInput = Math.max(promptTokens - cachedInput, 0)
+  return (
+    (nonCachedInput * PRICE_PER_MTOK.input +
+      cachedInput * PRICE_PER_MTOK.cachedInput +
+      completionTokens * PRICE_PER_MTOK.output) /
+    1_000_000
+  )
 }
 
 function buildPrompt(summary: PortfolioSummary): string {

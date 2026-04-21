@@ -23,6 +23,7 @@ export default async function PortfolioPage() {
     full: "",
     model: "",
     createdAt: new Date(),
+    usage: null,
   })
 
   const session = await auth0.getSession()
