@@ -20,7 +20,7 @@ export interface PortfolioReview {
   usage: PortfolioReviewUsage | null
 }
 
-const STALE_AFTER_MS = 48 * 60 * 60 * 1000
+const STALE_AFTER_MS = 168 * 60 * 60 * 1000
 const MODEL_ID = "grok-4-1-fast-reasoning"
 
 // xAI pricing for grok-4-1-fast (reasoning/non-reasoning), USD per 1M tokens.
@@ -38,6 +38,12 @@ const EMPTY_REVIEW: PortfolioReview = {
   createdAt: new Date(),
   usage: null,
 }
+
+// Dedupes concurrent generations for the same (accountId, portfolioHash).
+// The map is module-scoped, so an in-flight generation outlives the request
+// that started it: navigating between pages reuses the same promise instead
+// of kicking off another xAI call and writing a duplicate row.
+const inflightReviews = new Map<string, Promise<PortfolioReview>>()
 
 export async function getPortfolioReview(
   accountId: number,
@@ -58,15 +64,36 @@ export async function getPortfolioReview(
     return cached
   }
 
+  const key = `${accountId}:${portfolioHash}`
+  const existing = inflightReviews.get(key)
+  if (existing) return existing
+
+  const task = runFreshReview(accountId, portfolioHash, summary, cached)
+  inflightReviews.set(key, task)
+  task.finally(() => inflightReviews.delete(key))
+  return task
+}
+
+async function runFreshReview(
+  accountId: number,
+  portfolioHash: string,
+  summary: PortfolioSummary,
+  cachedFallback: PortfolioReview | null,
+): Promise<PortfolioReview> {
   try {
     const fresh = await generateReview(summary)
-    writeReview(accountId, portfolioHash, fresh).catch((err) => {
+    // Await the write inside the shared task so concurrent callers that arrive
+    // between "generation done" and "row committed" still hit the in-flight
+    // entry instead of missing cache and triggering another generation.
+    try {
+      await writeReview(accountId, portfolioHash, fresh)
+    } catch (err) {
       console.error("portfolio_reviews write failed:", err)
-    })
+    }
     return fresh
   } catch (err) {
     console.error("portfolio review generation failed:", err)
-    return cached ?? EMPTY_REVIEW
+    return cachedFallback ?? EMPTY_REVIEW
   }
 }
 
@@ -101,11 +128,11 @@ async function readLatestReview(
   const usage: PortfolioReviewUsage | null =
     row.total_tokens != null
       ? {
-          promptTokens: row.prompt_tokens ?? 0,
-          completionTokens: row.completion_tokens ?? 0,
-          totalTokens: row.total_tokens,
-          costUsd: row.cost_usd != null ? Number(row.cost_usd) : 0,
-        }
+        promptTokens: row.prompt_tokens ?? 0,
+        completionTokens: row.completion_tokens ?? 0,
+        totalTokens: row.total_tokens,
+        costUsd: row.cost_usd != null ? Number(row.cost_usd) : 0,
+      }
       : null
   return {
     short: row.short_review,
@@ -139,10 +166,10 @@ async function writeReview(
 const reviewSchema = z.object({
   short: z
     .string()
-    .describe("A concise 2-3 sentence insight about the portfolio's composition or risk. No markdown."),
+    .describe("A concise 2-3 sentence insight about the portfolio's composition or risk. Plain text, no markdown."),
   full: z
     .string()
-    .describe("A detailed multi-paragraph analysis covering allocation, sector exposure, risk profile, and rebalance suggestions. Plain text with line breaks; no markdown."),
+    .describe("A detailed analysis in GitHub-flavored markdown. Use `##` for section headings, `###` for sub-headings, `**bold**` for emphasis, and `-` for bullet lists."),
 })
 
 async function generateReview(summary: PortfolioSummary): Promise<PortfolioReview> {
@@ -215,21 +242,49 @@ function buildPrompt(summary: PortfolioSummary): string {
   const holdingsLines = summary.holdings
     .map(
       (h) =>
-        `- ${h.ticker} (${h.company}, ${h.sector}): ${h.shares} shares, avg cost $${h.avgBuy.toFixed(2)}, current $${h.currentPrice.toFixed(2)}, value $${h.totalValue.toFixed(2)}, P&L ${h.plPercent.toFixed(1)}%, weight ${h.portfolioWeight.toFixed(1)}%`,
+        `${h.ticker}|${h.sector}|${h.shares}sh|cost$${h.avgBuy.toFixed(2)}|cur$${h.currentPrice.toFixed(2)}|val$${h.totalValue.toFixed(2)}|PL${h.plPercent.toFixed(1)}%|wt${h.portfolioWeight.toFixed(1)}%`,
     )
     .join("\n")
 
   return [
-    "You are an investment analyst reviewing a user's brokerage portfolio.",
+    "You are a concise investment analyst. Return BOTH fields:",
+    "- `short`: 1-2 sentences, plain text (no markdown), naming the portfolio's biggest strength and biggest risk.",
+    "- `full`: GitHub-flavored markdown following the exact structure below — no extra text before or after.",
     "",
-    `Cash balance: $${summary.runningBalance.toFixed(2)}`,
-    `Portfolio value: $${summary.portfolioValue.toFixed(2)}`,
-    `Total P&L: $${summary.totalPL.toFixed(2)} (${summary.totalPLPercent.toFixed(1)}%)`,
-    `Today's P&L: $${summary.todayPL.toFixed(2)} (${summary.todayPLPercent.toFixed(1)}%)`,
+    "### INPUT — PORTFOLIO SNAPSHOT",
+    `Cash: $${summary.runningBalance.toFixed(2)} | Value: $${summary.portfolioValue.toFixed(2)} | Total P&L: $${summary.totalPL.toFixed(2)} (${summary.totalPLPercent.toFixed(1)}%) | Today: $${summary.todayPL.toFixed(2)} (${summary.todayPLPercent.toFixed(1)}%)`,
     "",
-    "Holdings:",
+    "### INPUT — HOLDINGS (ticker|sector|shares|avgCost|currentPrice|totalValue|P&L%|weight%)",
     holdingsLines,
     "",
-    "Return both a concise insight (2-3 sentences) and a detailed analysis. Be specific about sector concentration and diversification. Do not give personalized financial advice; frame observations as educational.",
+    "### REQUIRED MARKDOWN STRUCTURE FOR `full`",
+    "",
+    "## Summary",
+    "Write 2 sentences max: key portfolio strength and biggest risk.",
+    "",
+    "## Diversification Score: [X/100]",
+    "- **Sector spread:** [score]/25 — [one-line reason]",
+    "- **Asset class balance:** [score]/25 — [one-line reason]",
+    "- **Geographic exposure:** [score]/25 — [one-line reason]",
+    "- **Concentration risk:** [score]/25 — [one-line reason]",
+    "",
+    "## Top Observations",
+    "- [Observation 1: most overweight position and its risk]",
+    "- [Observation 2: best and worst performing holding]",
+    "- [Observation 3: sector or theme concentration]",
+    "",
+    "## Recommended Actions",
+    "- [Action 1]",
+    "- [Action 2]",
+    "- [Action 3]",
+    "",
+    "## Disclaimer",
+    "These observations are educational and algorithmic, not personalized financial advice. You retain full control of all investment decisions.",
+    "",
+    "## Explore Further",
+    "- How is my diversification score calculated?",
+    "- What is my most problematic holding?",
+    "- How can I improve my asset class balance?",
+    "- What steps can reduce my concentration risk?",
   ].join("\n")
 }
