@@ -12,10 +12,18 @@ import {
   Bot,
   Newspaper,
   Settings,
+  Sparkles,
   Zap,
   LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", active: true, href: "/dashboard" },
@@ -78,7 +86,7 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
         })}
       </nav>
 
-      <div className="mt-auto border-t border-border px-3 py-3">
+      <div className="mt-auto space-y-1 border-t border-border px-3 py-3">
         <Link
           href="/settings"
           className={cn(
@@ -91,29 +99,44 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
           <Settings className="size-[18px]" />
           Settings
         </Link>
-        <div className="mt-3 flex items-center justify-between px-3 pb-1">
-          <div className="flex items-center gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+              "text-muted-foreground hover:bg-secondary hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "data-[state=open]:bg-secondary data-[state=open]:text-foreground",
+            )}
+          >
             {userImage ? (
               <img
                 src={userImage}
                 alt={displayName}
-                className="size-8 rounded-full object-cover"
+                className="size-[18px] rounded-full object-cover"
               />
             ) : (
-              <div className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+              <div className="flex size-[18px] items-center justify-center rounded-full bg-primary/20 text-[9px] font-bold text-primary">
                 {getInitials(displayName)}
               </div>
             )}
-            <p className="text-sm font-medium text-foreground">{displayName}</p>
-          </div>
-          <a
-            href="/auth/logout"
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            title="Log out"
-          >
-            <LogOut className="size-4" />
-          </a>
-        </div>
+            <span className="truncate">{displayName}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top" className="w-52">
+            <DropdownMenuItem asChild>
+              <Link href="/settings/payments" className="cursor-pointer">
+                <Sparkles className="size-4" />
+                Upgrade Account
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <a href="/auth/logout" className="cursor-pointer">
+                <LogOut className="size-4" />
+                Log out
+              </a>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   )
