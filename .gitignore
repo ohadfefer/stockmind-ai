@@ -1,0 +1,8 @@
+# Skill bundles installed via `npx skills add`.
+# Tracked by skills-lock.json; re-install with `npx skills install`.
+.agents/skills/stripe-best-practices/
+.agents/skills/stripe-projects/
+.agents/skills/upgrade-stripe/
+.claude/skills/stripe-best-practices
+.claude/skills/stripe-projects
+.claude/skills/upgrade-stripe
