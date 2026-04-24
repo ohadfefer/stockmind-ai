@@ -1,6 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
-import { createSubscriptionCheckoutSession } from "@/services/stripe-service"
+import { createSubscriptionCheckoutSession } from "@/services/stripe/stripe-service"
+import { getStripeCustomerIdByAuth0Id } from "@/services/user-service"
 
 export async function POST() {
   const session = await auth0.getSession()
@@ -15,15 +16,16 @@ export async function POST() {
   }
 
   try {
+    const stripeCustomerId = await getStripeCustomerIdByAuth0Id(session.user.sub)
     const url = await createSubscriptionCheckoutSession({
       baseUrl,
-      customerEmail: session.user.email ?? undefined,
+      stripeCustomerId: stripeCustomerId ?? undefined,
+      customerEmail: stripeCustomerId ? undefined : (session.user.email ?? undefined),
       clientReferenceId: session.user.sub,
     })
     return NextResponse.json({ url })
   } catch (err) {
     console.error("Failed to create Stripe checkout session", err)
-    const message = err instanceof Error ? err.message : "Failed to create checkout session"
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: "Please try again." }, { status: 500 })
   }
 }

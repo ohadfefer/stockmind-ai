@@ -34,6 +34,16 @@ export async function getUserIdByAuth0Id(auth0Id: string): Promise<number | null
   }
 }
 
+export async function getStripeCustomerIdByAuth0Id(
+  auth0Id: string,
+): Promise<string | null> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT stripe_customer_id FROM users WHERE auth0_id = ${auth0Id}
+  `
+  return (rows[0]?.stripe_customer_id as string | null) ?? null
+}
+
 export async function getUserName(auth0Id: string): Promise<string | null> {
   const sql = getDb()
   try {
