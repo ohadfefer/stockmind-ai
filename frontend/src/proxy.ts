@@ -64,6 +64,11 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return authRes
   }
 
+  // Allow Stripe webhook (secured by Stripe signature verification in the route handler)
+  if (request.nextUrl.pathname === "/api/stripe/webhook") {
+    return authRes
+  }
+
   // Protect all other routes
   const session = await auth0.getSession(request)
 
