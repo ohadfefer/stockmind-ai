@@ -37,6 +37,7 @@
   --sidebar-accent-foreground: #E8EAED;
   --sidebar-border: #2A2D35;
   --sidebar-ring: #3B82F6;
+  --header-height: 3.5rem;
 }
 
 @theme inline {
