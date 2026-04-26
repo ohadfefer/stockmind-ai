@@ -17,6 +17,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - **News feed** — general market news and per-symbol company news.
 - **Account area** — balance, transfer history, and position history snapshots.
 - **Auth** — Auth0 login/signup with an onboarding step that captures the user's full name.
+- **Pro subscriptions** — Stripe-powered Checkout and Customer Portal for upgrading to StockMind Pro and managing billing (cancel, update card, view invoices); webhook-synced subscription state mirrored into Postgres.
 
 ---
 
@@ -31,6 +32,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 **Backend & Data**
 - [Neon Serverless Postgres](https://neon.tech) via `@neondatabase/serverless`
 - [Auth0](https://auth0.com) via `@auth0/nextjs-auth0` v4
+- [Stripe](https://stripe.com) for subscription billing — Checkout, Customer Portal, and webhooks (`stripe` Node SDK)
 - [Finnhub](https://finnhub.io) for live quotes, profiles, news, and market status
 - [FMP](https://financialmodelingprep.com) (currently gated behind an issue — see `src/app/(main)/dashboard/page.tsx`)
 - [Upstash Redis](https://upstash.com/redis) for caching
@@ -58,6 +60,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
   - Upstash Redis database
   - Upstash QStash (signing keys)
   - VAPID key pair for Web Push (generate with `npx web-push generate-vapid-keys`)
+  - Stripe account (test mode is sufficient for local dev) and the [Stripe CLI](https://stripe.com/docs/stripe-cli) for forwarding webhooks to localhost
   - Vercel account (for cron jobs and deployment) — optional for local dev
 
 ---
@@ -108,7 +111,8 @@ stockmind-ai/
 │   ├── 010_create_watchlists.sql
 │   ├── 011_create_stock_alerts.sql
 │   ├── 012_create_push_subscriptions.sql
-│   └── 013_create_missed_alerts.sql
+│   ├── 013_create_missed_alerts.sql
+│   └── 017_add_subscriptions.sql
 └── frontend/                 # Next.js app — all code lives here
     ├── public/
     │   ├── sw.js             # Service worker for Web Push
@@ -128,8 +132,8 @@ stockmind-ai/
         │       ├── news/              # Market & per-symbol news
         │       ├── details/[symbol]/  # Stock detail page
         │       ├── account/           # Balance, transfers, history
-        │       ├── settings/          # User preferences (notifications)
-        │       └── api/               # Route handlers (see API section)
+        │       ├── settings/          # User preferences (notifications, payments)
+        │       └── api/               # Route handlers (see API section, includes /api/stripe/{checkout,portal,webhook})
         ├── components/
         │   ├── ui/           # shadcn/ui primitives — do not manually edit
         │   ├── dashboard/    # Dashboard widgets
@@ -138,7 +142,7 @@ stockmind-ai/
         │   ├── details/      # Stock detail widgets
         │   ├── alerts/       # Alerts table + missed-alerts bell
         │   ├── account/      # Account tabs
-        │   ├── settings/     # Settings form
+        │   ├── settings/     # Settings form (notifications, payments)
         │   ├── sidebar.tsx
         │   └── header.tsx
         ├── actions/          # Client-side API call functions (named exports)
@@ -146,6 +150,7 @@ stockmind-ai/
         │   ├── alerts/       # alerts-service, alert-checker-service, missed-alerts-service
         │   ├── dashboard/    # sector, index, and watchlist aggregates
         │   ├── position/     # position-service, position-history-service
+        │   ├── stripe/       # stripe-service, webhook-service, subscription-service, customer-portal-service
         │   └── ...           # user, account, order, execution, transfer, stock, watchlist, push-subscription, notification
         ├── hooks/            # Custom React hooks (use-mobile, use-notifications, use-toast)
         ├── lib/              # auth0, db (Neon), finnhub, fmp, redis, format, utils
@@ -232,6 +237,14 @@ All variables live in `frontend/.env.local` (gitignored). Never commit real secr
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (exposed to the browser to register push subscriptions).            |
 | `VAPID_PRIVATE_KEY`            | VAPID private key (server only) used to sign push payloads via `web-push`.           |
 
+### Stripe (Subscriptions)
+
+| Variable                | Description                                                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`     | Stripe secret API key (server only). Use a test-mode `sk_test_...` for local dev.                                                                    |
+| `STRIPE_PRICE_ID`       | Price ID of the Pro plan (`price_...`) used as the line item in Checkout.                                                                            |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret used to verify `POST /api/stripe/webhook` payloads. In dev, the `whsec_...` printed by `stripe listen`; in prod, the endpoint secret. |
+
 ### Scheduled Jobs
 
 | Variable      | Description                                                                            |
@@ -255,6 +268,7 @@ High-level model:
 - **stock_alerts** — price/earnings/AI alerts (enum `alert_condition` + `alert_status`).
 - **push_subscriptions** — Web Push endpoints registered per user.
 - **missed_alerts** — triggered alerts the user hasn't acknowledged, dismissed when the bell dropdown is read.
+- **subscriptions** — Stripe-mirrored billing rows (one per Stripe subscription). `users.subscription_plan` and `users.stripe_customer_id` are denormalized for hot-path reads; the table is the audit trail synced from webhooks.
 
 <!-- TODO: Migration 009 is intentionally skipped in the filename sequence — confirm whether this is a historical gap or a pending migration and document it here. -->
 
@@ -330,6 +344,22 @@ After Auth0 signup, the onboarding page calls:
 - `POST   /api/push-subscription` — register a browser subscription.
   Body: `{ endpoint, p256dh, auth }` · Endpoint host is validated against an allowlist (FCM, Mozilla, WNS, Apple).
 - `DELETE /api/push-subscription` — remove a subscription. Body: `{ endpoint }`
+
+### Subscriptions / Billing
+
+- `POST /api/stripe/checkout` — start a Stripe Checkout session for the Pro plan. Returns `{ url }` to redirect to. Reuses the user's saved `stripe_customer_id` if present so returning subscribers don't get a duplicate Stripe Customer.
+- `POST /api/stripe/portal` — create a Stripe Customer Portal session (self-service card update / cancel / invoice history). Returns `{ url }`. Returns 400 if the user has not subscribed yet.
+- `POST /api/stripe/webhook` — **Stripe webhook** (no Auth0 session; signature-verified via `STRIPE_WEBHOOK_SECRET`, pinned to the Node runtime to read the raw body). Handles `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`; mirrors state into `subscriptions` and flips `users.subscription_plan` in a single transaction.
+
+#### Local development
+
+In a separate terminal, forward Stripe events to the dev server with the [Stripe CLI](https://stripe.com/docs/stripe-cli):
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+Copy the `whsec_...` it prints into `STRIPE_WEBHOOK_SECRET` in `frontend/.env.local`. Trigger lifecycle events with e.g. `stripe trigger checkout.session.completed` or `stripe trigger customer.subscription.deleted`.
 
 ### Scheduled Jobs
 

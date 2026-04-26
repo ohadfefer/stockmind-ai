@@ -160,3 +160,54 @@ export async function getActiveSubscriptionForUserId(
     stripeSubscriptionId: rows[0].stripe_subscription_id as string,
   }
 }
+
+export interface UserSubscriptionView {
+  plan: UserSubscriptionPlan
+  status: SubscriptionStatus | null
+  currentPeriodEnd: Date | null
+  cancelAtPeriodEnd: boolean
+  unitAmount: number | null
+  currency: string | null
+  billingInterval: BillingInterval | null
+  stripeSubscriptionId: string | null
+}
+
+// Returns the user's plan plus the active subscription's billing details in
+// a single query keyed by auth0_id. `plan` comes from users.subscription_plan
+// (the denormalized hot-path field); the LEFT JOIN supplies row-level details
+// for Pro users and yields nulls for free users. The partial unique index
+// idx_subscriptions_user_active guarantees at most one matching row per user.
+export async function getSubscriptionForAuth0Id(
+  auth0Id: string,
+): Promise<UserSubscriptionView | null> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT
+      u.subscription_plan,
+      s.status,
+      s.current_period_end,
+      s.cancel_at_period_end,
+      s.unit_amount,
+      s.currency,
+      s.billing_interval,
+      s.stripe_subscription_id
+    FROM users u
+    LEFT JOIN subscriptions s
+      ON s.user_id = u.id
+     AND s.status IN ('active', 'trialing', 'past_due')
+    WHERE u.auth0_id = ${auth0Id}
+    LIMIT 1
+  `
+  const row = rows[0]
+  if (!row) return null
+  return {
+    plan: row.subscription_plan as UserSubscriptionPlan,
+    status: (row.status as SubscriptionStatus | null) ?? null,
+    currentPeriodEnd: (row.current_period_end as Date | null) ?? null,
+    cancelAtPeriodEnd: (row.cancel_at_period_end as boolean | null) ?? false,
+    unitAmount: (row.unit_amount as number | null) ?? null,
+    currency: (row.currency as string | null) ?? null,
+    billingInterval: (row.billing_interval as BillingInterval | null) ?? null,
+    stripeSubscriptionId: (row.stripe_subscription_id as string | null) ?? null,
+  }
+}

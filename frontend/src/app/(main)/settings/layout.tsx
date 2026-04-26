@@ -15,7 +15,16 @@ export default function SettingsLayout({
         </h1>
         <SettingsNav />
       </aside>
-      <div className="min-w-0 flex-1 p-6">{children}</div>
+      <div className="min-w-0 flex-1 p-6">
+        {/* Invisible mirror of the sidebar h1 above so the right pane's
+            content starts on the same baseline as the sidebar's section
+            labels (PROFILE, SUBSCRIPTION, ...). Reuses the same classes so
+            typography changes stay in sync automatically. */}
+        <h1 aria-hidden className="invisible mb-6 px-3 text-lg font-semibold">
+          Settings
+        </h1>
+        {children}
+      </div>
     </div>
   )
 }
