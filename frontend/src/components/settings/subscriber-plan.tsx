@@ -6,24 +6,27 @@ import clsx from "clsx"
 import { Button } from "@/components/ui/button"
 import { startCustomerPortal } from "@/actions/stripe"
 import type { UserSubscriptionView } from "@/services/stripe/subscription-service"
+import type {
+  InvoiceSummary,
+  PaymentMethodSummary,
+} from "@/services/stripe/billing-service"
 import type { StatusMessage } from "./free-plan"
 
 interface SubscriberPlanProps {
   subscription: UserSubscriptionView
+  paymentMethod: PaymentMethodSummary | null
+  invoices: InvoiceSummary[]
   urlStatus: StatusMessage
 }
 
-const MOCK_CARD_BRAND = "Visa"
-const MOCK_CARD_LAST4 = "1234"
-
-const MOCK_INVOICES = [
-  { id: "inv_1", date: "Apr 26, 2026", total: "$20.00", status: "Paid" },
-  { id: "inv_2", date: "Mar 26, 2026", total: "$20.00", status: "Paid" },
-  { id: "inv_3", date: "Feb 26, 2026", total: "$20.00", status: "Paid" },
-]
-
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "long",
+  day: "numeric",
+  year: "numeric",
+})
+
+const invoiceDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
   day: "numeric",
   year: "numeric",
 })
@@ -43,7 +46,35 @@ function formatInterval(interval: UserSubscriptionView["billingInterval"]): stri
   }
 }
 
-export function SubscriberPlan({ subscription, urlStatus }: SubscriberPlanProps) {
+// Stripe brand values are snake_case identifiers, not display labels —
+// e.g. "american_express", "union_pay", "visa", "unknown". Title-case each
+// underscore-separated segment, and treat catch-all values as generic.
+function formatCardBrand(brand: string): string {
+  if (!brand || brand === "unknown" || brand === "other") return "Card"
+  return brand
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
+function formatInvoiceTotal(totalInCents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(totalInCents / 100)
+}
+
+function formatInvoiceStatus(status: InvoiceSummary["status"]): string {
+  if (!status) return "—"
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+export function SubscriberPlan({
+  subscription,
+  paymentMethod,
+  invoices,
+  urlStatus,
+}: SubscriberPlanProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -97,9 +128,13 @@ export function SubscriberPlan({ subscription, urlStatus }: SubscriberPlanProps)
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 text-sm text-foreground">
             <CreditCard className="size-5 text-muted-foreground" />
-            <span>
-              {MOCK_CARD_BRAND} •••• {MOCK_CARD_LAST4}
-            </span>
+            {paymentMethod ? (
+              <span>
+                {formatCardBrand(paymentMethod.brand)} •••• {paymentMethod.last4}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">No card on file</span>
+            )}
           </div>
           <Button variant="outline" onClick={openPortal} disabled={isLoading}>
             Update
@@ -109,27 +144,41 @@ export function SubscriberPlan({ subscription, urlStatus }: SubscriberPlanProps)
 
       <div className="flex flex-col gap-4 border-t border-border pt-6">
         <h3 className="text-base font-semibold text-foreground">Invoices</h3>
-        <div className="grid grid-cols-[1.5fr_1fr_1fr_auto] items-center gap-x-6 gap-y-3 text-sm">
-          <div className="text-muted-foreground">Date</div>
-          <div className="text-muted-foreground">Total</div>
-          <div className="text-muted-foreground">Status</div>
-          <div className="text-muted-foreground">Actions</div>
-          {MOCK_INVOICES.map((invoice) => (
-            <Fragment key={invoice.id}>
-              <div className="text-foreground">{invoice.date}</div>
-              <div className="text-foreground">{invoice.total}</div>
-              <div className="text-foreground">{invoice.status}</div>
-              <button
-                type="button"
-                onClick={openPortal}
-                disabled={isLoading}
-                className="justify-self-start text-foreground underline underline-offset-4 transition-opacity hover:opacity-80 disabled:opacity-50"
-              >
-                View
-              </button>
-            </Fragment>
-          ))}
-        </div>
+        {invoices.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No invoices yet.</p>
+        ) : (
+          <div className="grid grid-cols-[1.5fr_1fr_1fr_auto] items-center gap-x-6 gap-y-3 text-sm">
+            <div className="text-muted-foreground">Date</div>
+            <div className="text-muted-foreground">Total</div>
+            <div className="text-muted-foreground">Status</div>
+            <div className="text-muted-foreground">Actions</div>
+            {invoices.map((invoice) => (
+              <Fragment key={invoice.id}>
+                <div className="text-foreground">
+                  {invoiceDateFormatter.format(invoice.created)}
+                </div>
+                <div className="text-foreground">
+                  {formatInvoiceTotal(invoice.total, invoice.currency)}
+                </div>
+                <div className="text-foreground">
+                  {formatInvoiceStatus(invoice.status)}
+                </div>
+                {invoice.hostedUrl ? (
+                  <a
+                    href={invoice.hostedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="justify-self-start text-foreground underline underline-offset-4 transition-opacity hover:opacity-80"
+                  >
+                    View
+                  </a>
+                ) : (
+                  <span className="justify-self-start text-muted-foreground">—</span>
+                )}
+              </Fragment>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 border-t border-border pt-6">

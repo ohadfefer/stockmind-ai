@@ -170,6 +170,7 @@ export interface UserSubscriptionView {
   currency: string | null
   billingInterval: BillingInterval | null
   stripeSubscriptionId: string | null
+  stripeCustomerId: string | null
 }
 
 // Returns the user's plan plus the active subscription's billing details in
@@ -184,6 +185,7 @@ export async function getSubscriptionForAuth0Id(
   const rows = await sql`
     SELECT
       u.subscription_plan,
+      u.stripe_customer_id,
       s.status,
       s.current_period_end,
       s.cancel_at_period_end,
@@ -209,5 +211,6 @@ export async function getSubscriptionForAuth0Id(
     currency: (row.currency as string | null) ?? null,
     billingInterval: (row.billing_interval as BillingInterval | null) ?? null,
     stripeSubscriptionId: (row.stripe_subscription_id as string | null) ?? null,
+    stripeCustomerId: (row.stripe_customer_id as string | null) ?? null,
   }
 }

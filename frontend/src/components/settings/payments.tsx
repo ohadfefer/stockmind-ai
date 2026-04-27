@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { UserSubscriptionView } from "@/services/stripe/subscription-service"
+import type {
+  InvoiceSummary,
+  PaymentMethodSummary,
+} from "@/services/stripe/billing-service"
 import { FreePlan, type StatusMessage } from "./free-plan"
 import { SubscriberPlan } from "./subscriber-plan"
 
@@ -18,9 +22,15 @@ function initialStatusFromUrl(result: string | null): StatusMessage {
 
 interface PaymentsSettingsProps {
   subscription: UserSubscriptionView | null
+  paymentMethod: PaymentMethodSummary | null
+  invoices: InvoiceSummary[]
 }
 
-export function PaymentsSettings({ subscription }: PaymentsSettingsProps) {
+export function PaymentsSettings({
+  subscription,
+  paymentMethod,
+  invoices,
+}: PaymentsSettingsProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [urlStatus] = useState<StatusMessage>(() =>
@@ -38,7 +48,12 @@ export function PaymentsSettings({ subscription }: PaymentsSettingsProps) {
   return (
     <div className="flex flex-col gap-1">
       {isPro && subscription ? (
-        <SubscriberPlan subscription={subscription} urlStatus={urlStatus} />
+        <SubscriberPlan
+          subscription={subscription}
+          paymentMethod={paymentMethod}
+          invoices={invoices}
+          urlStatus={urlStatus}
+        />
       ) : (
         <FreePlan urlStatus={urlStatus} />
       )}
