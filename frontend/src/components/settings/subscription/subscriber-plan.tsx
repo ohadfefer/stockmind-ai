@@ -10,6 +10,8 @@ import type {
   InvoiceSummary,
   PaymentMethodSummary,
 } from "@/services/stripe/billing-service"
+import { CancelSubscriptionButton } from "./cancel-subscription-button"
+import { longDateFormatter, shortDateFormatter } from "./formatters"
 import type { StatusMessage } from "./free-plan"
 
 interface SubscriberPlanProps {
@@ -18,18 +20,6 @@ interface SubscriberPlanProps {
   invoices: InvoiceSummary[]
   urlStatus: StatusMessage
 }
-
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "long",
-  day: "numeric",
-  year: "numeric",
-})
-
-const invoiceDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-})
 
 function formatInterval(interval: UserSubscriptionView["billingInterval"]): string {
   switch (interval) {
@@ -96,7 +86,7 @@ export function SubscriberPlan({
   const renewalText = (() => {
     const end = subscription.currentPeriodEnd
     if (!end) return null
-    const formatted = dateFormatter.format(new Date(end))
+    const formatted = longDateFormatter.format(new Date(end))
     return subscription.cancelAtPeriodEnd
       ? `Your subscription will end on ${formatted}.`
       : `Your subscription will auto renew on ${formatted}.`
@@ -155,7 +145,7 @@ export function SubscriberPlan({
             {invoices.map((invoice) => (
               <Fragment key={invoice.id}>
                 <div className="text-foreground">
-                  {invoiceDateFormatter.format(invoice.created)}
+                  {shortDateFormatter.format(invoice.created)}
                 </div>
                 <div className="text-foreground">
                   {formatInvoiceTotal(invoice.total, invoice.currency)}
@@ -185,9 +175,11 @@ export function SubscriberPlan({
         <h3 className="text-base font-semibold text-foreground">Cancellation</h3>
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm text-foreground">Cancel plan</p>
-          <Button variant="destructive" onClick={openPortal} disabled={isLoading}>
-            Cancel
-          </Button>
+          <CancelSubscriptionButton
+            currentPeriodEnd={subscription.currentPeriodEnd}
+            onConfirm={openPortal}
+            disabled={isLoading}
+          />
         </div>
       </div>
 
