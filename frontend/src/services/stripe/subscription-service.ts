@@ -108,6 +108,23 @@ export async function setUserSubscriptionPlan(
   `
 }
 
+// Targeted UPDATE for the cancel-at-period-end flow. The webhook
+// (customer.subscription.updated) will re-sync the same fields when Stripe
+// echoes the change, so this is idempotent and safe under the race.
+export async function markSubscriptionCancelAtPeriodEnd(
+  stripeSubscriptionId: string,
+  canceledAt: Date,
+): Promise<void> {
+  const sql = getDb()
+  await sql`
+    UPDATE subscriptions
+    SET cancel_at_period_end = TRUE,
+        canceled_at = ${canceledAt},
+        updated_at = NOW()
+    WHERE stripe_subscription_id = ${stripeSubscriptionId}
+  `
+}
+
 export async function setUserStripeCustomerId(
   userId: number,
   stripeCustomerId: string,
@@ -137,6 +154,25 @@ export interface ActiveSubscriptionRow {
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd: boolean
   stripeSubscriptionId: string
+}
+
+// Cheap server-side guard for /api/stripe/checkout so we reject a duplicate
+// subscribe attempt BEFORE creating a Checkout Session — the partial unique
+// index idx_subscriptions_user_active would catch it eventually, but only
+// after Stripe has already charged the card.
+export async function hasActiveSubscriptionForAuth0Id(
+  auth0Id: string,
+): Promise<boolean> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT 1
+    FROM subscriptions s
+    JOIN users u ON u.id = s.user_id
+    WHERE u.auth0_id = ${auth0Id}
+      AND s.status IN ('active', 'trialing', 'past_due')
+    LIMIT 1
+  `
+  return rows.length > 0
 }
 
 export async function getActiveSubscriptionForUserId(

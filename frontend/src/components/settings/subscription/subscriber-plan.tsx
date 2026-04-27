@@ -1,10 +1,11 @@
 "use client"
 
 import { Fragment, useState } from "react"
+import { useRouter } from "next/navigation"
 import { CreditCard } from "lucide-react"
 import clsx from "clsx"
 import { Button } from "@/components/ui/button"
-import { startCustomerPortal } from "@/actions/stripe"
+import { cancelSubscriptionAtPeriodEnd, startCustomerPortal } from "@/actions/stripe"
 import type { UserSubscriptionView } from "@/services/stripe/subscription-service"
 import type {
   InvoiceSummary,
@@ -65,6 +66,7 @@ export function SubscriberPlan({
   invoices,
   urlStatus,
 }: SubscriberPlanProps) {
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -73,11 +75,31 @@ export function SubscriberPlan({
       setIsLoading(true)
       setActionError(null)
       const { url } = await startCustomerPortal()
-      window.location.href = url
+      window.open(url, "_blank", "noopener,noreferrer")
     } catch (err) {
       console.error(err)
       const detail = err instanceof Error ? err.message : "Please try again."
       setActionError(`Could not open billing portal: ${detail}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // We don't rethrow — letting the dialog auto-close lets the status banner
+  // below render the message. The page is then refreshed so the server
+  // component re-fetches subscription state and re-renders the renewal copy
+  // ("Your subscription will end on …").
+  async function handleCancelSubscription() {
+    try {
+      setIsLoading(true)
+      setActionError(null)
+      await cancelSubscriptionAtPeriodEnd()
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+      const detail = err instanceof Error ? err.message : "Please try again."
+      setActionError(`Could not cancel subscription: ${detail}`)
+    } finally {
       setIsLoading(false)
     }
   }
@@ -177,8 +199,8 @@ export function SubscriberPlan({
           <p className="text-sm text-foreground">Cancel plan</p>
           <CancelSubscriptionButton
             currentPeriodEnd={subscription.currentPeriodEnd}
-            onConfirm={openPortal}
-            disabled={isLoading}
+            onConfirm={handleCancelSubscription}
+            disabled={isLoading || subscription.cancelAtPeriodEnd}
           />
         </div>
       </div>

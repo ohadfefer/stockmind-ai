@@ -21,3 +21,14 @@ export async function startCustomerPortal(): Promise<{ url: string }> {
   }
   return res.json()
 }
+
+export async function cancelSubscriptionAtPeriodEnd(): Promise<void> {
+  const res = await fetch("/api/stripe/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error ?? `Cancel request failed (${res.status})`)
+  }
+}
