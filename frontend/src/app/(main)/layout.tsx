@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { auth0 } from "@/lib/auth0"
 import { getUserName } from "@/services/user-service"
+import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 
 export default async function MainLayout({
   children,
@@ -11,13 +12,19 @@ export default async function MainLayout({
   const session = await auth0.getSession()
   const user = session?.user ?? null
 
-  const displayName = user ? await getUserName(user.sub) : undefined
+  const [displayName, subscription] = user
+    ? await Promise.all([
+        getUserName(user.sub),
+        getSubscriptionForAuth0Id(user.sub),
+      ])
+    : [undefined, null]
 
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         userName={displayName ?? undefined}
         userImage={user?.picture ?? undefined}
+        userPlan={subscription?.plan}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />

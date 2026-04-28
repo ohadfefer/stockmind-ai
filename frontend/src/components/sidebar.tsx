@@ -38,6 +38,7 @@ const navItems = [
 interface SidebarProps {
   userName?: string
   userImage?: string
+  userPlan?: "free" | "pro"
 }
 
 function getInitials(name: string): string {
@@ -49,9 +50,11 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-export function Sidebar({ userName, userImage }: SidebarProps) {
+export function Sidebar({ userName, userImage, userPlan }: SidebarProps) {
   const pathname = usePathname()
   const displayName = userName ?? "User"
+  const planLabel =
+    userPlan === "pro" ? "Pro plan" : userPlan === "free" ? "Free plan" : null
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card">
@@ -86,25 +89,13 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
         })}
       </nav>
 
-      <div className="mt-auto space-y-1 border-t border-border px-3 py-3">
-        <Link
-          href="/settings/general"
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-            pathname.startsWith("/settings")
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-          )}
-        >
-          <Settings className="size-[18px]" />
-          Settings
-        </Link>
+      <div className="mt-auto border-t border-border px-3 py-3">
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
               "text-muted-foreground hover:bg-secondary hover:text-foreground",
-              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "outline-none focus:outline-none focus-visible:outline-none",
               "data-[state=open]:bg-secondary data-[state=open]:text-foreground",
             )}
           >
@@ -112,16 +103,29 @@ export function Sidebar({ userName, userImage }: SidebarProps) {
               <img
                 src={userImage}
                 alt={displayName}
-                className="size-[18px] rounded-full object-cover"
+                className="size-7 rounded-full object-cover"
               />
             ) : (
-              <div className="flex size-[18px] items-center justify-center rounded-full bg-primary/20 text-[9px] font-bold text-primary">
+              <div className="flex size-7 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
                 {getInitials(displayName)}
               </div>
             )}
-            <span className="truncate">{displayName}</span>
+            <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+              <span className="w-full truncate">{displayName}</span>
+              {planLabel && (
+                <span className="text-xs font-normal text-muted-foreground/80">
+                  {planLabel}
+                </span>
+              )}
+            </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-52">
+            <DropdownMenuItem asChild>
+              <Link href="/settings/general" className="cursor-pointer">
+                <Settings className="size-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/settings/payments" className="cursor-pointer">
                 <Sparkles className="size-4" />

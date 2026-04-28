@@ -3,6 +3,7 @@ import { getStripeClient } from "./stripe-service"
 import { getUserIdByAuth0Id } from "../user-service"
 import {
   getUserIdByStripeCustomerId,
+  revalidateSubscriptionByUserId,
   setUserStripeCustomerId,
   SUBSCRIPTION_STATUSES,
   upsertSubscription,
@@ -131,6 +132,10 @@ async function syncSubscription(args: SyncArgs): Promise<void> {
     trialEnd: toDate(subscription.trial_end),
     checkoutSessionId,
   })
+
+  // Drop the cached UserSubscriptionView for this user so the next request
+  // (sidebar plan label, /settings/payments page) reads the fresh row.
+  await revalidateSubscriptionByUserId(userId)
 }
 
 function resolveId(ref: string | { id: string } | null | undefined): string | null {

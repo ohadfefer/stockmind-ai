@@ -1,8 +1,10 @@
+import { revalidateTag } from "next/cache"
 import { NextResponse } from "next/server"
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import {
   getActiveSubscriptionForUserId,
+  getSubscriptionCacheTag,
   markSubscriptionCancelAtPeriodEnd,
 } from "@/services/stripe/subscription-service"
 import { scheduleSubscriptionCancellation } from "@/services/stripe/cancellation-service"
@@ -41,6 +43,11 @@ export async function POST() {
       sub.stripeSubscriptionId,
     )
     await markSubscriptionCancelAtPeriodEnd(sub.stripeSubscriptionId, canceledAt)
+
+    // Local DB write happened ahead of the Stripe webhook echo — invalidate
+    // the cached view so the settings page re-renders with the new "ends on"
+    // copy on the very next request, not after the webhook round-trip.
+    revalidateTag(getSubscriptionCacheTag(session.user.sub), "default")
 
     return NextResponse.json({ ok: true })
   } catch (err) {

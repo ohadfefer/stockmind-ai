@@ -1,4 +1,13 @@
+import { revalidateTag, unstable_cache } from "next/cache"
 import { getDb } from "@/lib/db"
+
+// Cache tag for the per-user subscription view. Anything that mutates the
+// `users.subscription_plan` or `subscriptions` row for a user must call
+// revalidateTag(getSubscriptionCacheTag(auth0Id)) so the next request reads
+// fresh data instead of the stale Next.js Data Cache entry.
+export function getSubscriptionCacheTag(auth0Id: string): string {
+  return `subscription:${auth0Id}`
+}
 
 export type SubscriptionType = "one_off" | "recurring"
 export type PricingModel = "flat_rate" | "per_unit" | "tiered" | "usage_based"
@@ -214,39 +223,69 @@ export interface UserSubscriptionView {
 // (the denormalized hot-path field); the LEFT JOIN supplies row-level details
 // for Pro users and yields nulls for free users. The partial unique index
 // idx_subscriptions_user_active guarantees at most one matching row per user.
+//
+// Wrapped in unstable_cache so the (main) layout doesn't pay a DB round-trip
+// on every navigation. Invalidation is tag-driven via getSubscriptionCacheTag —
+// the Stripe webhook and the cancel API call revalidateTag whenever the row
+// changes, so the cached view stays in lock-step with truth.
 export async function getSubscriptionForAuth0Id(
   auth0Id: string,
 ): Promise<UserSubscriptionView | null> {
+  return unstable_cache(
+    async (): Promise<UserSubscriptionView | null> => {
+      const sql = getDb()
+      const rows = await sql`
+        SELECT
+          u.subscription_plan,
+          u.stripe_customer_id,
+          s.status,
+          s.current_period_end,
+          s.cancel_at_period_end,
+          s.unit_amount,
+          s.currency,
+          s.billing_interval,
+          s.stripe_subscription_id
+        FROM users u
+        LEFT JOIN subscriptions s
+          ON s.user_id = u.id
+         AND s.status IN ('active', 'trialing', 'past_due')
+        WHERE u.auth0_id = ${auth0Id}
+        LIMIT 1
+      `
+      const row = rows[0]
+      if (!row) return null
+      return {
+        plan: row.subscription_plan as UserSubscriptionPlan,
+        status: (row.status as SubscriptionStatus | null) ?? null,
+        currentPeriodEnd: (row.current_period_end as Date | null) ?? null,
+        cancelAtPeriodEnd: (row.cancel_at_period_end as boolean | null) ?? false,
+        unitAmount: (row.unit_amount as number | null) ?? null,
+        currency: (row.currency as string | null) ?? null,
+        billingInterval: (row.billing_interval as BillingInterval | null) ?? null,
+        stripeSubscriptionId: (row.stripe_subscription_id as string | null) ?? null,
+        stripeCustomerId: (row.stripe_customer_id as string | null) ?? null,
+      }
+    },
+    ["subscription-by-auth0-id", auth0Id],
+    // 60s ceiling on staleness if tag revalidation ever misses (failed
+    // webhook delivery, transient revalidateTag throw). Plan changes are
+    // rare so the extra DB hits are negligible; the TTL is just a safety
+    // net behind the primary tag-based invalidation.
+    { tags: [getSubscriptionCacheTag(auth0Id)], revalidate: 60 },
+  )()
+}
+
+// Plan changes in the webhook only have a userId in scope. Resolve the
+// auth0_id and revalidate the corresponding cache tag so the next read
+// re-runs the query against the freshly-written row.
+export async function revalidateSubscriptionByUserId(
+  userId: number,
+): Promise<void> {
   const sql = getDb()
-  const rows = await sql`
-    SELECT
-      u.subscription_plan,
-      u.stripe_customer_id,
-      s.status,
-      s.current_period_end,
-      s.cancel_at_period_end,
-      s.unit_amount,
-      s.currency,
-      s.billing_interval,
-      s.stripe_subscription_id
-    FROM users u
-    LEFT JOIN subscriptions s
-      ON s.user_id = u.id
-     AND s.status IN ('active', 'trialing', 'past_due')
-    WHERE u.auth0_id = ${auth0Id}
-    LIMIT 1
-  `
-  const row = rows[0]
-  if (!row) return null
-  return {
-    plan: row.subscription_plan as UserSubscriptionPlan,
-    status: (row.status as SubscriptionStatus | null) ?? null,
-    currentPeriodEnd: (row.current_period_end as Date | null) ?? null,
-    cancelAtPeriodEnd: (row.cancel_at_period_end as boolean | null) ?? false,
-    unitAmount: (row.unit_amount as number | null) ?? null,
-    currency: (row.currency as string | null) ?? null,
-    billingInterval: (row.billing_interval as BillingInterval | null) ?? null,
-    stripeSubscriptionId: (row.stripe_subscription_id as string | null) ?? null,
-    stripeCustomerId: (row.stripe_customer_id as string | null) ?? null,
+  const rows = await sql`SELECT auth0_id FROM users WHERE id = ${userId}`
+  const auth0Id = rows[0]?.auth0_id as string | undefined
+  if (auth0Id) {
+    // Next.js 16 requires a cache-life profile alongside the tag.
+    revalidateTag(getSubscriptionCacheTag(auth0Id), "default")
   }
 }
