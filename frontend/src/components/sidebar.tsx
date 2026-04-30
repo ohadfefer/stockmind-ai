@@ -30,7 +30,7 @@ const navItems = [
   { icon: Briefcase, label: "Portfolio", active: false, href: "/portfolio" },
   { icon: Eye, label: "Watchlist", active: false, href: "/watchlist" },
   { icon: ScanSearch, label: "Scanner", active: false, href: "#" },
-  { icon: Bot, label: "AI Advisor", active: false, href: "#" },
+  { icon: Bot, label: "AI Advisor", active: false, href: "/conversation" },
   { icon: Newspaper, label: "News", active: false, href: "/news" },
   { icon: CircleUserRound, label: "My Account", active: false, href: "/account" },
 ]

@@ -43,7 +43,7 @@ export default async function PortfolioPage() {
           getPortfolioSummary(account.id, account.running_balance),
           getAlerts(account.id),
         ])
-        const fullReviewPromise = getPortfolioReview(account.id, summary)
+        const fullReviewPromise = getPortfolioReview(userId, account.id, summary)
         // Free users still get review.short for the Portfolio-tab teaser
         // (AiInsightCard), but review.full is stripped server-side so the
         // locked content never lands in the RSC payload.

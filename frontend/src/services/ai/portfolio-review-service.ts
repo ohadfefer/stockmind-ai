@@ -4,10 +4,13 @@ import { xai } from "@ai-sdk/xai"
 import { z } from "zod"
 import { getDb } from "@/lib/db"
 import type { PortfolioSummary } from "@/services/portfolio-service"
+import { buildXaiUsage, type NormalizedUsage } from "@/services/ai/xai-cost"
+import { recordAiUsage } from "@/services/ai/budget-service"
 
 export interface PortfolioReviewUsage {
   promptTokens: number
   completionTokens: number
+  cachedInputTokens: number
   totalTokens: number
   costUsd: number
 }
@@ -22,14 +25,6 @@ export interface PortfolioReview {
 
 const STALE_AFTER_MS = 168 * 60 * 60 * 1000
 const MODEL_ID = "grok-4-1-fast-reasoning"
-
-// xAI pricing for grok-4-1-fast (reasoning/non-reasoning), USD per 1M tokens.
-// Source: https://docs.x.ai/docs/models
-const PRICE_PER_MTOK = {
-  input: 0.2,
-  cachedInput: 0.05,
-  output: 0.5,
-} as const
 
 const EMPTY_REVIEW: PortfolioReview = {
   short: "Your portfolio is empty. Buy your first stock to unlock AI insights.",
@@ -46,6 +41,7 @@ const EMPTY_REVIEW: PortfolioReview = {
 const inflightReviews = new Map<string, Promise<PortfolioReview>>()
 
 export async function getPortfolioReview(
+  userId: number,
   accountId: number,
   summary: PortfolioSummary,
 ): Promise<PortfolioReview> {
@@ -68,13 +64,14 @@ export async function getPortfolioReview(
   const existing = inflightReviews.get(key)
   if (existing) return existing
 
-  const task = runFreshReview(accountId, portfolioHash, summary, cached)
+  const task = runFreshReview(userId, accountId, portfolioHash, summary, cached)
   inflightReviews.set(key, task)
   task.finally(() => inflightReviews.delete(key))
   return task
 }
 
 async function runFreshReview(
+  userId: number,
   accountId: number,
   portfolioHash: string,
   summary: PortfolioSummary,
@@ -82,11 +79,8 @@ async function runFreshReview(
 ): Promise<PortfolioReview> {
   try {
     const fresh = await generateReview(summary)
-    // Await the write inside the shared task so concurrent callers that arrive
-    // between "generation done" and "row committed" still hit the in-flight
-    // entry instead of missing cache and triggering another generation.
     try {
-      await writeReview(accountId, portfolioHash, fresh)
+      await persistReviewAndUsage(userId, accountId, portfolioHash, fresh)
     } catch (err) {
       console.error("portfolio_reviews write failed:", err)
     }
@@ -130,6 +124,7 @@ async function readLatestReview(
       ? {
         promptTokens: row.prompt_tokens ?? 0,
         completionTokens: row.completion_tokens ?? 0,
+        cachedInputTokens: 0,
         totalTokens: row.total_tokens,
         costUsd: row.cost_usd != null ? Number(row.cost_usd) : 0,
       }
@@ -143,14 +138,15 @@ async function readLatestReview(
   }
 }
 
-async function writeReview(
+async function persistReviewAndUsage(
+  userId: number,
   accountId: number,
   portfolioHash: string,
   review: PortfolioReview,
 ): Promise<void> {
   const sql = getDb()
   const u = review.usage
-  await sql`
+  const inserted = await sql`
     INSERT INTO portfolio_reviews (
       account_id, portfolio_hash, short_review, full_review, model,
       prompt_tokens, completion_tokens, total_tokens, cost_usd
@@ -160,7 +156,23 @@ async function writeReview(
       ${u?.promptTokens ?? null}, ${u?.completionTokens ?? null},
       ${u?.totalTokens ?? null}, ${u?.costUsd ?? null}
     )
+    RETURNING id
   `
+  const reviewId = inserted[0]?.id as number | undefined
+  if (u && reviewId) {
+    await recordAiUsage({
+      userId,
+      feature: "portfolio_review",
+      model: review.model,
+      promptTokens: u.promptTokens,
+      completionTokens: u.completionTokens,
+      cachedInputTokens: u.cachedInputTokens,
+      totalTokens: u.totalTokens,
+      costUsd: u.costUsd,
+      sourceTable: "portfolio_reviews",
+      sourceId: reviewId,
+    })
+  }
 }
 
 const reviewSchema = z.object({
@@ -181,61 +193,18 @@ async function generateReview(summary: PortfolioSummary): Promise<PortfolioRevie
     prompt,
   })
 
+  const normalized: NormalizedUsage | null = buildXaiUsage({
+    usage,
+    responseBody: response.body,
+  })
+
   return {
     short: output.short,
     full: output.full,
     model: MODEL_ID,
     createdAt: new Date(),
-    usage: buildUsage(usage, response.body),
+    usage: normalized,
   }
-}
-
-// xAI returns `usage.cost_in_usd_ticks` in the raw response body, where
-// 1 tick = 1/1e10 USD. This is the authoritative, per-request billed cost.
-// See: https://docs.x.ai/developers/rate-limits#checking-token-consumption
-function extractXaiCostUsd(body: unknown): number | null {
-  if (typeof body !== "object" || body === null) return null
-  const usage = (body as { usage?: unknown }).usage
-  if (typeof usage !== "object" || usage === null) return null
-  const ticks = (usage as { cost_in_usd_ticks?: unknown }).cost_in_usd_ticks
-  return typeof ticks === "number" ? ticks / 1e10 : null
-}
-
-function buildUsage(
-  usage: {
-    inputTokens: number | undefined
-    outputTokens: number | undefined
-    totalTokens: number | undefined
-    inputTokenDetails?: { cacheReadTokens?: number | undefined }
-  },
-  responseBody: unknown,
-): PortfolioReviewUsage | null {
-  const promptTokens = usage.inputTokens
-  const completionTokens = usage.outputTokens
-  if (promptTokens == null || completionTokens == null) return null
-
-  const xaiCostUsd = extractXaiCostUsd(responseBody)
-  if (xaiCostUsd == null) {
-    console.warn("portfolio_reviews: xAI cost_in_usd_ticks missing; using fallback pricing")
-  }
-  const costUsd = xaiCostUsd ?? computeFallbackCostUsd(promptTokens, completionTokens, usage.inputTokenDetails?.cacheReadTokens ?? 0)
-
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens: usage.totalTokens ?? promptTokens + completionTokens,
-    costUsd: Number(costUsd.toFixed(8)),
-  }
-}
-
-function computeFallbackCostUsd(promptTokens: number, completionTokens: number, cachedInput: number): number {
-  const nonCachedInput = Math.max(promptTokens - cachedInput, 0)
-  return (
-    (nonCachedInput * PRICE_PER_MTOK.input +
-      cachedInput * PRICE_PER_MTOK.cachedInput +
-      completionTokens * PRICE_PER_MTOK.output) /
-    1_000_000
-  )
 }
 
 function buildPrompt(summary: PortfolioSummary): string {

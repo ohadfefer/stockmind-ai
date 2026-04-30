@@ -28,7 +28,13 @@ export function CancelSubscriptionButton({
   const [open, setOpen] = useState(false)
   const [isPending, setIsPending] = useState(false)
 
-  const accessUntil = currentPeriodEnd ? longDateFormatter.format(currentPeriodEnd) : null
+  // currentPeriodEnd is typed as Date but arrives as an ISO string at runtime
+  // (Neon TIMESTAMPTZ → string, plus unstable_cache JSON round-trip in
+  // getSubscriptionForAuth0Id). Wrap in new Date() the same way the parent
+  // does at subscriber-plan.tsx:111 so Intl.DateTimeFormat accepts it.
+  const accessUntil = currentPeriodEnd
+    ? longDateFormatter.format(new Date(currentPeriodEnd))
+    : null
 
   // Keep the dialog open while onConfirm is pending so a slow API call has a
   // visible spinner and a thrown error has somewhere to surface. Closing
