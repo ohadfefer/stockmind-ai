@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Bot, RefreshCw, Send, Sparkles, User } from "lucide-react"
+import { RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownMessage } from "@/components/ai/markdown-message"
 import { cn } from "@/lib/utils"
@@ -190,12 +190,12 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
         {messages.length === 0 ? (
           <EmptyState onPick={(p) => void send(p)} disabled={isStreaming} />
         ) : (
-          <div className="mx-auto flex max-w-3xl flex-col gap-4">
+          <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
             {messages.map((m) => (
               <MessageBubble key={m.key} message={m} />
             ))}
             {isStreaming && messages[messages.length - 1]?.content === "" && (
-              <div className="flex items-center gap-2 pl-10 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="size-2 animate-pulse rounded-full bg-primary" />
                 Thinking…
               </div>
@@ -206,14 +206,14 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
 
       {error?.kind === "budget" && <BudgetCard error={error} />}
       {error?.kind === "generic" && (
-        <div className="mx-auto mb-3 w-full max-w-3xl rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+        <div className="mx-auto mb-3 w-full max-w-[880px] rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
           {error.message}
         </div>
       )}
 
       <form
         onSubmit={handleSubmit}
-        className="mx-auto flex w-full max-w-3xl items-end gap-2 border-t border-border pt-3"
+        className="mx-auto flex w-full max-w-[880px] items-end gap-2 pt-3"
       >
         <textarea
           value={input}
@@ -229,15 +229,6 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
           disabled={isStreaming || error?.kind === "budget"}
           className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
         />
-        <Button
-          type="submit"
-          disabled={
-            !input.trim() || isStreaming || error?.kind === "budget"
-          }
-        >
-          <Send className="size-4" />
-          Send
-        </Button>
       </form>
     </div>
   )
@@ -245,31 +236,20 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
 
 function MessageBubble({ message }: { message: DisplayMessage }) {
   const isUser = message.role === "user"
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] rounded-2xl bg-primary/10 px-4 py-2.5 text-base leading-relaxed whitespace-pre-wrap text-foreground">
+          {message.content}
+        </div>
+      </div>
+    )
+  }
   return (
-    <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
-      <div
-        className={cn(
-          "flex size-7 shrink-0 items-center justify-center rounded-full",
-          isUser ? "bg-primary/15 text-primary" : "bg-secondary text-foreground",
-        )}
-      >
-        {isUser ? <User className="size-4" /> : <Bot className="size-4" />}
-      </div>
-      <div
-        className={cn(
-          "max-w-[80%] rounded-2xl px-4 py-2.5",
-          isUser
-            ? "bg-primary/10 text-foreground"
-            : "border border-border bg-card",
-        )}
-      >
-        {isUser ? (
-          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-        ) : (
-          <MarkdownMessage content={message.content || " "} />
-        )}
-      </div>
-    </div>
+    <MarkdownMessage
+      content={message.content || " "}
+      className="text-base"
+    />
   )
 }
 
