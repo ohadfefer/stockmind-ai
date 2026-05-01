@@ -17,7 +17,10 @@ export const BUDGET_USD: Record<UserSubscriptionPlan, number> = {
 // blocks new sends while one is streaming.
 export const MIN_TURN_RESERVE_USD = 0.0008
 
-export type AiFeature = "portfolio_review" | "conversation"
+export type AiFeature =
+  | "portfolio_review"
+  | "conversation"
+  | "conversation_title"
 
 export class BudgetExceededError extends Error {
   readonly spent: number

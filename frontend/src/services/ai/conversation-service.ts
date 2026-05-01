@@ -10,6 +10,14 @@ export interface ConversationRow {
   updatedAt: Date
 }
 
+export interface ConversationListItem {
+  id: number
+  title: string
+  updatedAt: Date
+  preview: string | null
+  messageCount: number
+}
+
 export type ConversationRole = "user" | "assistant"
 
 export interface ConversationMessage {
@@ -70,6 +78,68 @@ export async function getOrCreateActiveConversation(
   const existing = await getLatestActiveConversation(accountId)
   if (existing) return { id: existing.id }
   return createConversation(accountId)
+}
+
+export async function getConversationOwner(
+  conversationId: number,
+): Promise<{ accountId: number } | null> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT account_id FROM conversations WHERE id = ${conversationId} LIMIT 1
+  `
+  const r = rows[0]
+  if (!r) return null
+  return { accountId: r.account_id as number }
+}
+
+// History list: most-recent-first, with a snippet from the first user message
+// so rows still look meaningful when the title is still the default.
+export async function listConversationsForAccount(
+  accountId: number,
+  limit = 50,
+): Promise<ConversationListItem[]> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT
+      c.id,
+      c.title,
+      c.updated_at,
+      (
+        SELECT m.content
+        FROM conversation_messages m
+        WHERE m.conversation_id = c.id AND m.role = 'user'
+        ORDER BY m.created_at ASC, m.id ASC
+        LIMIT 1
+      ) AS preview,
+      (
+        SELECT COUNT(*)
+        FROM conversation_messages m
+        WHERE m.conversation_id = c.id
+      ) AS message_count
+    FROM conversations c
+    WHERE c.account_id = ${accountId}
+    ORDER BY c.updated_at DESC
+    LIMIT ${limit}
+  `
+  return rows.map((r) => ({
+    id: r.id as number,
+    title: r.title as string,
+    updatedAt: new Date(r.updated_at),
+    preview: (r.preview as string | null) ?? null,
+    messageCount: Number(r.message_count ?? 0),
+  }))
+}
+
+export async function setConversationTitle(
+  conversationId: number,
+  title: string,
+): Promise<void> {
+  const sql = getDb()
+  await sql`
+    UPDATE conversations
+    SET title = ${title}
+    WHERE id = ${conversationId}
+  `
 }
 
 // Returns the most recent `limit` messages in chronological order.

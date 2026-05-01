@@ -8,6 +8,7 @@ import { getPortfolioSummary } from "@/services/portfolio-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 import {
   appendUserMessage,
+  getConversationOwner,
   getOrCreateActiveConversation,
   loadModelMessages,
   persistAssistantMessage,
@@ -17,6 +18,7 @@ import {
   BudgetExceededError,
 } from "@/services/ai/budget-service"
 import { buildXaiUsage } from "@/services/ai/xai-cost"
+import { maybeAutoTitleConversation } from "@/services/ai/conversation-title-service"
 
 const MODEL_ID = "grok-4-1-fast-reasoning"
 const HISTORY_LIMIT = 10
@@ -41,6 +43,7 @@ const SYSTEM_PROMPT = [
 
 interface PostBody {
   content?: unknown
+  conversationId?: unknown
 }
 
 export async function POST(req: Request) {
@@ -57,6 +60,13 @@ export async function POST(req: Request) {
   if (content.length > 4000) {
     return NextResponse.json({ error: "Message too long" }, { status: 400 })
   }
+
+  const requestedConversationId =
+    typeof body.conversationId === "number" &&
+    Number.isInteger(body.conversationId) &&
+    body.conversationId > 0
+      ? body.conversationId
+      : null
 
   const [subscription, userId] = await Promise.all([
     getSubscriptionForAuth0Id(session.user.sub),
@@ -88,8 +98,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 })
   }
 
+  // Resolve target conversation. If the client passed an id, use it but only
+  // after verifying it belongs to this account — without that check, anyone
+  // could write into anyone else's thread by guessing an integer. Collapse
+  // missing-vs-not-yours into one 404 so the endpoint isn't an existence oracle.
+  let conversationId: number
+  if (requestedConversationId != null) {
+    const owner = await getConversationOwner(requestedConversationId)
+    if (!owner || owner.accountId !== account.id) {
+      return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+    }
+    conversationId = requestedConversationId
+  } else {
+    conversationId = (await getOrCreateActiveConversation(account.id)).id
+  }
+
   // Persist user message before streaming so it survives a disconnect.
-  const { id: conversationId } = await getOrCreateActiveConversation(account.id)
   await appendUserMessage(conversationId, content)
 
   // Fetch portfolio snapshot in parallel with loading message history.
@@ -131,6 +155,13 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("conversation onFinish persistence failed:", err)
       }
+      // Best-effort: title only flips from default on the first turn. Errors
+      // are swallowed inside the helper so they can't break the stream.
+      await maybeAutoTitleConversation({
+        userId,
+        conversationId,
+        firstUserMessage: content,
+      })
     },
   })
 

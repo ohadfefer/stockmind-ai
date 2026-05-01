@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownMessage } from "@/components/ai/markdown-message"
@@ -9,6 +10,7 @@ import { cn } from "@/lib/utils"
 import type { ConversationMessage } from "@/services/ai/conversation-service"
 
 interface ChatPanelProps {
+  conversationId: number | null
   initialMessages: ConversationMessage[]
 }
 
@@ -36,7 +38,8 @@ const SEED_PROMPTS = [
   "Compare AAPL and MSFT as long-term holdings.",
 ]
 
-export function ChatPanel({ initialMessages }: ChatPanelProps) {
+export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
+  const router = useRouter()
   const [messages, setMessages] = useState<DisplayMessage[]>(() =>
     initialMessages.map((m) => ({
       role: m.role,
@@ -48,6 +51,17 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<ChatError | null>(null)
   const [isResetting, setIsResetting] = useState(false)
+  // Mirror the prop in local state so reset() can flip the active id
+  // synchronously, before the RSC navigation finishes propagating new props.
+  // Without this, a fast send right after "New chat" lands in the old thread.
+  const [activeConversationId, setActiveConversationId] = useState<number | null>(
+    conversationId,
+  )
+  // Track prop changes from RSC navigation (e.g. clicking a different
+  // conversation in /conversation/history) so the input id stays in sync.
+  useEffect(() => {
+    setActiveConversationId(conversationId)
+  }, [conversationId])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // Auto-scroll only when the user is already pinned to (or near) the bottom.
   // If they've scrolled up to read history mid-stream, don't yank them down.
@@ -69,7 +83,7 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
   }, [messages, isStreaming])
 
   async function send(content: string) {
-    if (!content.trim() || isStreaming) return
+    if (!content.trim() || isStreaming || isResetting) return
     setError(null)
     setInput("")
     const userKey = `u-${Date.now()}`
@@ -88,7 +102,11 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
       const res = await fetch("/api/conversation/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(
+          activeConversationId != null
+            ? { content, conversationId: activeConversationId }
+            : { content },
+        ),
       })
 
       if (res.status === 402) {
@@ -149,8 +167,17 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
     try {
       const res = await fetch("/api/conversation", { method: "POST" })
       if (!res.ok) throw new Error("reset failed")
+      const data = (await res.json().catch(() => ({}))) as {
+        conversationId?: number
+      }
       setMessages([])
       setError(null)
+      // Flip the active id locally before navigating so a send fired between
+      // here and the RSC commit still hits the new thread.
+      if (typeof data.conversationId === "number") {
+        setActiveConversationId(data.conversationId)
+        router.replace(`/conversation?id=${data.conversationId}`)
+      }
     } catch (err) {
       console.error(err)
       setError({ kind: "generic", message: "Could not start a new chat." })
@@ -188,7 +215,10 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
         className="flex-1 overflow-y-auto py-4"
       >
         {messages.length === 0 ? (
-          <EmptyState onPick={(p) => void send(p)} disabled={isStreaming} />
+          <EmptyState
+            onPick={(p) => void send(p)}
+            disabled={isStreaming || isResetting}
+          />
         ) : (
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
             {messages.map((m) => (
@@ -226,7 +256,7 @@ export function ChatPanel({ initialMessages }: ChatPanelProps) {
           }}
           placeholder="Ask about stocks, ETFs, your portfolio…"
           rows={2}
-          disabled={isStreaming || error?.kind === "budget"}
+          disabled={isStreaming || isResetting || error?.kind === "budget"}
           className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
         />
       </form>
