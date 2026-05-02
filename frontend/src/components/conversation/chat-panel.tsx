@@ -2,16 +2,15 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownMessage } from "@/components/ai/markdown-message"
-import { cn } from "@/lib/utils"
 import type { ConversationMessage } from "@/services/ai/conversation-service"
 
 interface ChatPanelProps {
   conversationId: number | null
   initialMessages: ConversationMessage[]
+  isPro: boolean
 }
 
 type DisplayMessage = {
@@ -38,8 +37,29 @@ const SEED_PROMPTS = [
   "Compare AAPL and MSFT as long-term holdings.",
 ]
 
-export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
-  const router = useRouter()
+export function ChatPanel({
+  conversationId,
+  initialMessages,
+  isPro,
+}: ChatPanelProps) {
+  if (!isPro) {
+    return <UpgradeGate />
+  }
+  return (
+    <ProChatPanel
+      conversationId={conversationId}
+      initialMessages={initialMessages}
+    />
+  )
+}
+
+function ProChatPanel({
+  conversationId,
+  initialMessages,
+}: {
+  conversationId: number | null
+  initialMessages: ConversationMessage[]
+}) {
   const [messages, setMessages] = useState<DisplayMessage[]>(() =>
     initialMessages.map((m) => ({
       role: m.role,
@@ -50,7 +70,6 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
   const [input, setInput] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<ChatError | null>(null)
-  const [isResetting, setIsResetting] = useState(false)
   // Mirror the prop in local state so reset() can flip the active id
   // synchronously, before the RSC navigation finishes propagating new props.
   // Without this, a fast send right after "New chat" lands in the old thread.
@@ -83,7 +102,7 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
   }, [messages, isStreaming])
 
   async function send(content: string) {
-    if (!content.trim() || isStreaming || isResetting) return
+    if (!content.trim() || isStreaming) return
     setError(null)
     setInput("")
     const userKey = `u-${Date.now()}`
@@ -131,6 +150,20 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
         return
       }
 
+      // First send of a new chat: server lazily created the row and echoes
+      // the id back. Adopt it so subsequent sends reuse the same thread, and
+      // sync the URL so a refresh keeps the user in this conversation.
+      // Use history.replaceState (not router.replace) so we don't trigger an
+      // RSC refetch of this same page while the response is still streaming.
+      if (activeConversationId == null) {
+        const idHeader = res.headers.get("X-Conversation-Id")
+        const newId = idHeader != null ? Number(idHeader) : NaN
+        if (Number.isInteger(newId) && newId > 0) {
+          setActiveConversationId(newId)
+          window.history.replaceState(null, "", `/conversation?id=${newId}`)
+        }
+      }
+
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let acc = ""
@@ -161,29 +194,17 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
     }
   }
 
-  async function reset() {
-    if (isResetting || isStreaming) return
-    setIsResetting(true)
-    try {
-      const res = await fetch("/api/conversation", { method: "POST" })
-      if (!res.ok) throw new Error("reset failed")
-      const data = (await res.json().catch(() => ({}))) as {
-        conversationId?: number
-      }
-      setMessages([])
-      setError(null)
-      // Flip the active id locally before navigating so a send fired between
-      // here and the RSC commit still hits the new thread.
-      if (typeof data.conversationId === "number") {
-        setActiveConversationId(data.conversationId)
-        router.replace(`/conversation?id=${data.conversationId}`)
-      }
-    } catch (err) {
-      console.error(err)
-      setError({ kind: "generic", message: "Could not start a new chat." })
-    } finally {
-      setIsResetting(false)
-    }
+  function reset() {
+    if (isStreaming) return
+    // Pure UI clear: drop messages, forget the active id, strip ?id= from
+    // the URL. No DB write — the next send will lazily create the row.
+    // history.replaceState (not router.replace) so we just update the URL
+    // without re-running the RSC: the local state is already in the desired
+    // empty shape, so a refetch would only be wasted work.
+    setMessages([])
+    setError(null)
+    setActiveConversationId(null)
+    window.history.replaceState(null, "", "/conversation")
   }
 
   function handleSubmit(e: React.SyntheticEvent) {
@@ -202,9 +223,9 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
           variant="outline"
           size="sm"
           onClick={reset}
-          disabled={isResetting || isStreaming || messages.length === 0}
+          disabled={isStreaming || messages.length === 0}
         >
-          <RefreshCw className={cn("size-4", isResetting && "animate-spin")} />
+          <RefreshCw className="size-4" />
           New chat
         </Button>
       </div>
@@ -217,7 +238,7 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
         {messages.length === 0 ? (
           <EmptyState
             onPick={(p) => void send(p)}
-            disabled={isStreaming || isResetting}
+            disabled={isStreaming}
           />
         ) : (
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
@@ -256,7 +277,7 @@ export function ChatPanel({ conversationId, initialMessages }: ChatPanelProps) {
           }}
           placeholder="Ask about stocks, ETFs, your portfolio…"
           rows={2}
-          disabled={isStreaming || isResetting || error?.kind === "budget"}
+          disabled={isStreaming || error?.kind === "budget"}
           className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
         />
       </form>
@@ -316,6 +337,46 @@ function EmptyState({
             {p}
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function UpgradeGate() {
+  return (
+    <div className="flex h-[calc(100vh-7rem)] flex-col">
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <Sparkles className="size-5 text-primary" />
+        <h1 className="text-lg font-semibold text-foreground">AI Advisor</h1>
+      </div>
+
+      <div className="flex flex-1 items-center justify-center px-4 py-6">
+        <div className="flex max-w-md flex-col items-center gap-4 rounded-xl border border-border bg-card p-8 text-center shadow-lg">
+          <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
+            <Sparkles className="size-6 text-primary" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-lg font-semibold text-foreground">
+              Upgrade to chat with the AI Advisor
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              StockMind Pro lets you ask the AI Advisor about your holdings,
+              market trends, and investing concepts.
+            </p>
+          </div>
+          <Button asChild className="w-full">
+            <Link href="/settings/payments">Upgrade to Pro</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-[880px] items-end gap-2 pt-3">
+        <textarea
+          rows={2}
+          disabled
+          placeholder="Ask about stocks, ETFs, your portfolio…"
+          className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        />
       </div>
     </div>
   )

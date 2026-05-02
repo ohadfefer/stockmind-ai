@@ -3,13 +3,6 @@ import type { ModelMessage } from "ai"
 import { recordAiUsage } from "@/services/ai/budget-service"
 import type { NormalizedUsage } from "@/services/ai/xai-cost"
 
-export interface ConversationRow {
-  id: number
-  accountId: number
-  createdAt: Date
-  updatedAt: Date
-}
-
 export interface ConversationListItem {
   id: number
   title: string
@@ -27,39 +20,6 @@ export interface ConversationMessage {
   createdAt: Date
 }
 
-export async function getLatestActiveConversation(
-  accountId: number,
-): Promise<ConversationRow | null> {
-  const sql = getDb()
-  const rows = await sql`
-    SELECT id, account_id, created_at, updated_at
-    FROM conversations
-    WHERE account_id = ${accountId}
-    ORDER BY updated_at DESC
-    LIMIT 1
-  `
-  const r = rows[0]
-  if (!r) return null
-  return {
-    id: r.id,
-    accountId: r.account_id,
-    createdAt: new Date(r.created_at),
-    updatedAt: new Date(r.updated_at),
-  }
-}
-
-export async function conversationHasMessages(
-  conversationId: number,
-): Promise<boolean> {
-  const sql = getDb()
-  const rows = await sql`
-    SELECT 1 AS one FROM conversation_messages
-    WHERE conversation_id = ${conversationId}
-    LIMIT 1
-  `
-  return rows.length > 0
-}
-
 export async function createConversation(
   accountId: number,
 ): Promise<{ id: number }> {
@@ -70,14 +30,6 @@ export async function createConversation(
     RETURNING id
   `
   return { id: rows[0].id as number }
-}
-
-export async function getOrCreateActiveConversation(
-  accountId: number,
-): Promise<{ id: number }> {
-  const existing = await getLatestActiveConversation(accountId)
-  if (existing) return { id: existing.id }
-  return createConversation(accountId)
 }
 
 export async function getConversationOwner(
@@ -118,6 +70,9 @@ export async function listConversationsForAccount(
       ) AS message_count
     FROM conversations c
     WHERE c.account_id = ${accountId}
+      AND EXISTS (
+        SELECT 1 FROM conversation_messages m WHERE m.conversation_id = c.id
+      )
     ORDER BY c.updated_at DESC
     LIMIT ${limit}
   `

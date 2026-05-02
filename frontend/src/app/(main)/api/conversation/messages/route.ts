@@ -8,8 +8,8 @@ import { getPortfolioSummary } from "@/services/portfolio-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 import {
   appendUserMessage,
+  createConversation,
   getConversationOwner,
-  getOrCreateActiveConversation,
   loadModelMessages,
   persistAssistantMessage,
 } from "@/services/ai/conversation-service"
@@ -76,6 +76,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
   const plan = subscription?.plan ?? "free"
+  if (plan !== "pro") {
+    return NextResponse.json({ error: "Pro plan required" }, { status: 403 })
+  }
 
   try {
     await assertCanStartTurn(userId, plan)
@@ -102,6 +105,8 @@ export async function POST(req: Request) {
   // after verifying it belongs to this account — without that check, anyone
   // could write into anyone else's thread by guessing an integer. Collapse
   // missing-vs-not-yours into one 404 so the endpoint isn't an existence oracle.
+  // No id → first send of a brand-new chat. Create the row lazily here so
+  // a bare /conversation visit never leaves an empty conversation behind.
   let conversationId: number
   if (requestedConversationId != null) {
     const owner = await getConversationOwner(requestedConversationId)
@@ -110,7 +115,7 @@ export async function POST(req: Request) {
     }
     conversationId = requestedConversationId
   } else {
-    conversationId = (await getOrCreateActiveConversation(account.id)).id
+    conversationId = (await createConversation(account.id)).id
   }
 
   // Persist user message before streaming so it survives a disconnect.
@@ -165,7 +170,11 @@ export async function POST(req: Request) {
     },
   })
 
-  return result.toTextStreamResponse()
+  return result.toTextStreamResponse({
+    // Always echo the id so the client can adopt it after a lazy first-send
+    // create (and keep its activeConversationId in sync on re-sends).
+    headers: { "X-Conversation-Id": String(conversationId) },
+  })
 }
 
 async function buildPortfolioSnapshotMessage(
