@@ -76,9 +76,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
   const plan = subscription?.plan ?? "free"
-  if (plan !== "pro") {
-    return NextResponse.json({ error: "Pro plan required" }, { status: 403 })
-  }
 
   try {
     await assertCanStartTurn(userId, plan)

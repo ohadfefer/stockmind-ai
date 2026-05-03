@@ -5,7 +5,12 @@ import { z } from "zod"
 import { getDb } from "@/lib/db"
 import type { PortfolioSummary } from "@/services/portfolio-service"
 import { buildXaiUsage, type NormalizedUsage } from "@/services/ai/xai-cost"
-import { recordAiUsage } from "@/services/ai/budget-service"
+import {
+  assertCanStartTurn,
+  BudgetExceededError,
+  recordAiUsage,
+} from "@/services/ai/budget-service"
+import type { UserSubscriptionPlan } from "@/services/stripe/subscription-service"
 
 export interface PortfolioReviewUsage {
   promptTokens: number
@@ -21,6 +26,9 @@ export interface PortfolioReview {
   model: string
   createdAt: Date
   usage: PortfolioReviewUsage | null
+  // Set when the user has spent their lifetime AI budget and we declined to
+  // generate a fresh review. Surfaces an upgrade prompt in the Analyze tab.
+  budgetExceeded?: boolean
 }
 
 const STALE_AFTER_MS = 168 * 60 * 60 * 1000
@@ -43,6 +51,7 @@ const inflightReviews = new Map<string, Promise<PortfolioReview>>()
 export async function getPortfolioReview(
   userId: number,
   accountId: number,
+  plan: UserSubscriptionPlan,
   summary: PortfolioSummary,
 ): Promise<PortfolioReview> {
   if (summary.holdings.length === 0) return EMPTY_REVIEW
@@ -56,11 +65,39 @@ export async function getPortfolioReview(
     console.error("portfolio_reviews read failed:", err)
   }
 
-  if (cached && !isStale(cached.createdAt)) {
+  let budgetExceeded = false
+  try {
+    await assertCanStartTurn(userId, plan)
+  } catch (err) {
+    if (err instanceof BudgetExceededError) budgetExceeded = true
+    else throw err
+  }
+
+  // Over budget: every user still gets a short for the AiInsightCard teaser,
+  // but the full review is blanked so the locked content never rides in the
+  // RSC payload. The Analyze tab swaps in an upgrade gate on budgetExceeded.
+  // Reuse a cached short if we have one; otherwise spend a cheap short-only
+  // call so the teaser has copy on first visit.
+  if (budgetExceeded) {
+    if (cached?.short) {
+      return { ...cached, full: "", model: "n/a", budgetExceeded: true }
+    }
+    const shortKey = `short:${accountId}:${portfolioHash}`
+    const existingShort = inflightReviews.get(shortKey)
+    if (existingShort) return existingShort
+    const shortTask = runShortOnlyReview(userId, accountId, portfolioHash, summary)
+    inflightReviews.set(shortKey, shortTask)
+    shortTask.finally(() => inflightReviews.delete(shortKey))
+    return shortTask
+  }
+
+  // Under-budget path. Treat a cached row missing .full (a prior short-only
+  // entry written while over budget) as needing a fresh combined generation.
+  if (cached && !isStale(cached.createdAt) && cached.full) {
     return cached
   }
 
-  const key = `${accountId}:${portfolioHash}`
+  const key = `full:${accountId}:${portfolioHash}`
   const existing = inflightReviews.get(key)
   if (existing) return existing
 
@@ -68,6 +105,33 @@ export async function getPortfolioReview(
   inflightReviews.set(key, task)
   task.finally(() => inflightReviews.delete(key))
   return task
+}
+
+async function runShortOnlyReview(
+  userId: number,
+  accountId: number,
+  portfolioHash: string,
+  summary: PortfolioSummary,
+): Promise<PortfolioReview> {
+  try {
+    const fresh = await generateShortReview(summary)
+    try {
+      await persistReviewAndUsage(userId, accountId, portfolioHash, fresh)
+    } catch (err) {
+      console.error("portfolio_reviews short-only write failed:", err)
+    }
+    return { ...fresh, model: "n/a", budgetExceeded: true }
+  } catch (err) {
+    console.error("portfolio short-only generation failed:", err)
+    return {
+      short: "",
+      full: "",
+      model: "n/a",
+      createdAt: new Date(),
+      usage: null,
+      budgetExceeded: true,
+    }
+  }
 }
 
 async function runFreshReview(
@@ -183,6 +247,57 @@ const reviewSchema = z.object({
     .string()
     .describe("A detailed analysis in GitHub-flavored markdown. Use `##` for section headings, `###` for sub-headings, `**bold**` for emphasis, and `-` for bullet lists."),
 })
+
+async function generateShortReview(summary: PortfolioSummary): Promise<PortfolioReview> {
+  const prompt = buildShortPrompt(summary)
+  const { text, usage, response } = await generateText({
+    model: xai(MODEL_ID),
+    prompt,
+    // Short is naturally 1-2 sentences; cap as a safety net so a runaway
+    // completion can't push an over-budget user massively further over.
+    maxOutputTokens: 200,
+  })
+  const normalized: NormalizedUsage | null = buildXaiUsage({
+    usage,
+    responseBody: response.body,
+  })
+  // Refuse to persist a degenerate completion — the empty string would land in
+  // portfolio_reviews.short_review, then on the next visit cached?.short is
+  // falsy and we'd bill xAI again for the same empty result. Throwing here
+  // bubbles to runShortOnlyReview's catch, which returns the sentinel; the
+  // user sees the AiInsightCard fallback copy and retries don't get pinned.
+  const trimmed = text.trim()
+  if (!trimmed) {
+    throw new Error("portfolio short generation returned empty text")
+  }
+  return {
+    short: trimmed,
+    full: "",
+    model: MODEL_ID,
+    createdAt: new Date(),
+    usage: normalized,
+  }
+}
+
+function buildShortPrompt(summary: PortfolioSummary): string {
+  const holdingsLines = summary.holdings
+    .map(
+      (h) =>
+        `${h.ticker}|${h.sector}|wt${h.portfolioWeight.toFixed(1)}%|PL${h.plPercent.toFixed(1)}%`,
+    )
+    .join("\n")
+
+  return [
+    "You are a concise investment analyst.",
+    "Output 1-2 sentences of plain text (no markdown, no preamble) naming the portfolio's biggest strength and biggest risk.",
+    "",
+    "PORTFOLIO SNAPSHOT",
+    `Cash: $${summary.runningBalance.toFixed(2)} | Value: $${summary.portfolioValue.toFixed(2)} | Total P&L: $${summary.totalPL.toFixed(2)} (${summary.totalPLPercent.toFixed(1)}%)`,
+    "",
+    "HOLDINGS (ticker|sector|weight%|P&L%)",
+    holdingsLines,
+  ].join("\n")
+}
 
 async function generateReview(summary: PortfolioSummary): Promise<PortfolioReview> {
   const prompt = buildPrompt(summary)

@@ -9,19 +9,14 @@ import type { PortfolioReview } from "@/services/ai/portfolio-review-service"
 
 interface PortfolioAnalyzeProps {
   reviewPromise: Promise<PortfolioReview>
-  isPro: boolean
 }
 
-export function PortfolioAnalyze({ reviewPromise, isPro }: PortfolioAnalyzeProps) {
-  if (!isPro) {
+export function PortfolioAnalyze({ reviewPromise }: PortfolioAnalyzeProps) {
+  const review = use(reviewPromise)
+
+  if (review.budgetExceeded) {
     return <UpgradeGate />
   }
-
-  return <ProAnalysis reviewPromise={reviewPromise} />
-}
-
-function ProAnalysis({ reviewPromise }: { reviewPromise: Promise<PortfolioReview> }) {
-  const review = use(reviewPromise)
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4">

@@ -14,25 +14,20 @@ interface PortfolioTabContentProps {
   summary: PortfolioSummary
   alerts: StockAlert[]
   reviewPromise: Promise<PortfolioReview>
-  isPro: boolean
 }
 
 export function PortfolioTabContent({
   summary,
   alerts,
   reviewPromise,
-  isPro,
 }: PortfolioTabContentProps) {
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get("tab") as PortfolioTabKey) || "portfolio"
 
   if (activeTab === "analyze") {
-    if (!isPro) {
-      return <PortfolioAnalyze reviewPromise={reviewPromise} isPro={false} />
-    }
     return (
       <Suspense fallback={<PortfolioAnalyzeSkeleton />}>
-        <PortfolioAnalyze reviewPromise={reviewPromise} isPro />
+        <PortfolioAnalyze reviewPromise={reviewPromise} />
       </Suspense>
     )
   }

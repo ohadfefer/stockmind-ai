@@ -10,7 +10,6 @@ import type { ConversationMessage } from "@/services/ai/conversation-service"
 interface ChatPanelProps {
   conversationId: number | null
   initialMessages: ConversationMessage[]
-  isPro: boolean
 }
 
 type DisplayMessage = {
@@ -40,26 +39,7 @@ const SEED_PROMPTS = [
 export function ChatPanel({
   conversationId,
   initialMessages,
-  isPro,
 }: ChatPanelProps) {
-  if (!isPro) {
-    return <UpgradeGate />
-  }
-  return (
-    <ProChatPanel
-      conversationId={conversationId}
-      initialMessages={initialMessages}
-    />
-  )
-}
-
-function ProChatPanel({
-  conversationId,
-  initialMessages,
-}: {
-  conversationId: number | null
-  initialMessages: ConversationMessage[]
-}) {
   const [messages, setMessages] = useState<DisplayMessage[]>(() =>
     initialMessages.map((m) => ({
       role: m.role,
@@ -337,46 +317,6 @@ function EmptyState({
             {p}
           </button>
         ))}
-      </div>
-    </div>
-  )
-}
-
-function UpgradeGate() {
-  return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="flex items-center gap-2 border-b border-border pb-3">
-        <Sparkles className="size-5 text-primary" />
-        <h1 className="text-lg font-semibold text-foreground">AI Advisor</h1>
-      </div>
-
-      <div className="flex flex-1 items-center justify-center px-4 py-6">
-        <div className="flex max-w-md flex-col items-center gap-4 rounded-xl border border-border bg-card p-8 text-center shadow-lg">
-          <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
-            <Sparkles className="size-6 text-primary" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <h3 className="text-lg font-semibold text-foreground">
-              Upgrade to chat with the AI Advisor
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              StockMind Pro lets you ask the AI Advisor about your holdings,
-              market trends, and investing concepts.
-            </p>
-          </div>
-          <Button asChild className="w-full">
-            <Link href="/settings/payments">Upgrade to Pro</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="mx-auto flex w-full max-w-[880px] items-end gap-2 pt-3">
-        <textarea
-          rows={2}
-          disabled
-          placeholder="Ask about stocks, ETFs, your portfolio…"
-          className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
-        />
       </div>
     </div>
   )

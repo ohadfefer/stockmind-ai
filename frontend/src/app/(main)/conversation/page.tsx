@@ -7,7 +7,6 @@ import {
   getMessages,
   type ConversationMessage,
 } from "@/services/ai/conversation-service"
-import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 import { ChatPanel } from "@/components/conversation/chat-panel"
 
 interface ConversationPageProps {
@@ -21,26 +20,13 @@ export default async function ConversationPage({
 
   let initialMessages: ConversationMessage[] = []
   let conversationId: number | null = null
-  let isPro = false
 
   const requested = parseConversationId(idParam)
 
   const session = await auth0.getSession()
   if (session) {
-    const [subscription, userId] = await Promise.all([
-      getSubscriptionForAuth0Id(session.user.sub),
-      getUserIdByAuth0Id(session.user.sub),
-    ])
-    isPro = subscription?.plan === "pro"
-
-    // Strip ?id= for non-pro callers up front so an unvalidated id never
-    // reaches the renderer (or any future code that consumes idParam outside
-    // the pro-gated branch). Free users only ever see a clean URL.
-    if (!isPro && requested != null) {
-      redirect("/conversation")
-    }
-
-    if (isPro && userId) {
+    const userId = await getUserIdByAuth0Id(session.user.sub)
+    if (userId) {
       const accountId = await getDefaultAccountId(userId)
       if (accountId && requested != null) {
         const owner = await getConversationOwner(requested)
@@ -61,7 +47,6 @@ export default async function ConversationPage({
     <ChatPanel
       conversationId={conversationId}
       initialMessages={initialMessages}
-      isPro={isPro}
     />
   )
 }

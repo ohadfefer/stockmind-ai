@@ -4,7 +4,10 @@ import { getAccountDetails } from "@/services/account-service"
 import { getPortfolioSummary, type PortfolioSummary } from "@/services/portfolio-service"
 import { getAlerts, type StockAlert } from "@/services/alerts/alerts-service"
 import { getPortfolioReview, type PortfolioReview } from "@/services/ai/portfolio-review-service"
-import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
+import {
+  getSubscriptionForAuth0Id,
+  type UserSubscriptionPlan,
+} from "@/services/stripe/subscription-service"
 import { PortfolioTabsBar } from "@/components/portfolio/portfolio-tabs-bar"
 import { PortfolioTabContent } from "@/components/portfolio/portfolio-tab-content"
 
@@ -27,14 +30,13 @@ export default async function PortfolioPage() {
     usage: null,
   })
 
-  let isPro = false
   const session = await auth0.getSession()
   if (session) {
     const [subscription, userId] = await Promise.all([
       getSubscriptionForAuth0Id(session.user.sub),
       getUserIdByAuth0Id(session.user.sub),
     ])
-    isPro = subscription?.plan === "pro"
+    const plan: UserSubscriptionPlan = subscription?.plan ?? "free"
 
     if (userId) {
       const account = await getAccountDetails(userId)
@@ -43,13 +45,7 @@ export default async function PortfolioPage() {
           getPortfolioSummary(account.id, account.running_balance),
           getAlerts(account.id),
         ])
-        const fullReviewPromise = getPortfolioReview(userId, account.id, summary)
-        // Free users still get review.short for the Portfolio-tab teaser
-        // (AiInsightCard), but review.full is stripped server-side so the
-        // locked content never lands in the RSC payload.
-        reviewPromise = isPro
-          ? fullReviewPromise
-          : fullReviewPromise.then((r) => ({ ...r, full: "" }))
+        reviewPromise = getPortfolioReview(userId, account.id, plan, summary)
       }
     }
   }
@@ -61,7 +57,6 @@ export default async function PortfolioPage() {
         summary={summary}
         alerts={alerts}
         reviewPromise={reviewPromise}
-        isPro={isPro}
       />
     </div>
   )
