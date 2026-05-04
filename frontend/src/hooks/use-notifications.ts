@@ -1,7 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { subscribePush, unsubscribePush } from "@/actions/push-subscription"
+import {
+  hasPushSubscription,
+  subscribePush,
+  unsubscribePush,
+} from "@/actions/push-subscription"
 
 type NotificationStatus = "loading" | "unsupported" | "denied" | "prompt" | "subscribed"
 
@@ -24,11 +28,27 @@ export function useNotifications() {
       return
     }
 
-    // Permission is "granted" — check if we have an active subscription
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.pushManager.getSubscription().then((sub) => {
-        setStatus(sub ? "subscribed" : "prompt")
-      })
+    navigator.serviceWorker.ready.then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription()
+      if (!sub) {
+        setStatus("prompt")
+        return
+      }
+
+      const registered = await hasPushSubscription(sub.endpoint)
+      if (registered === false) {
+        try {
+          await sub.unsubscribe()
+        } catch {
+          // best-effort cleanup
+        }
+        setStatus("prompt")
+        return
+      }
+
+      // "unknown" (transient fetch/auth failure) preserves the local sub and shows subscribed;
+      // re-verifies on next mount rather than destroying a possibly-valid subscription.
+      setStatus("subscribed")
     })
   }, [])
 

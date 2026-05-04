@@ -15,6 +15,21 @@ export async function subscribePush(subscription: PushSubscription) {
   if (!res.ok) throw new Error("Failed to save push subscription")
 }
 
+export async function hasPushSubscription(
+  endpoint: string,
+): Promise<boolean | "unknown"> {
+  try {
+    const res = await fetch(
+      `/api/push-subscription?endpoint=${encodeURIComponent(endpoint)}`,
+    )
+    if (!res.ok) return "unknown"
+    const { exists } = (await res.json()) as { exists?: boolean }
+    return Boolean(exists)
+  } catch {
+    return "unknown"
+  }
+}
+
 export async function unsubscribePush(endpoint: string) {
   const res = await fetch("/api/push-subscription", {
     method: "DELETE",

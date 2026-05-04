@@ -1,8 +1,12 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account-service"
-import { saveSubscription, deleteSubscription } from "@/services/push-subscription-service"
+import { getDefaultAccountId, getOrCreateDefaultAccount } from "@/services/account-service"
+import {
+  saveSubscription,
+  deleteSubscription,
+  getSubscriptionsForAccount,
+} from "@/services/push-subscription-service"
 import { logAudit } from "@/services/audit-log-service"
 import { getClientIp } from "@/lib/request-ip"
 
@@ -23,6 +27,32 @@ function isValidPushEndpoint(endpoint: string): boolean {
   } catch {
     return false
   }
+}
+
+export async function GET(request: Request) {
+  const session = await auth0.getSession()
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const endpoint = url.searchParams.get("endpoint")
+  if (!endpoint || !isValidPushEndpoint(endpoint)) {
+    return NextResponse.json({ error: "Invalid push endpoint" }, { status: 400 })
+  }
+
+  const userId = await getUserIdByAuth0Id(session.user.sub)
+  if (!userId) {
+    return NextResponse.json({ exists: false })
+  }
+
+  const accountId = await getDefaultAccountId(userId)
+  if (!accountId) {
+    return NextResponse.json({ exists: false })
+  }
+
+  const subs = await getSubscriptionsForAccount(accountId)
+  return NextResponse.json({ exists: subs.some((s) => s.endpoint === endpoint) })
 }
 
 export async function POST(request: Request) {
@@ -70,8 +100,8 @@ export async function DELETE(request: Request) {
   }
 
   const { endpoint } = await request.json()
-  if (!endpoint) {
-    return NextResponse.json({ error: "Missing endpoint" }, { status: 400 })
+  if (!endpoint || !isValidPushEndpoint(endpoint)) {
+    return NextResponse.json({ error: "Invalid push endpoint" }, { status: 400 })
   }
 
   const userId = await getUserIdByAuth0Id(session.user.sub)
