@@ -51,20 +51,21 @@ interface DayData {
 
 export function PortfolioHeatmapGrid({ entries }: PortfolioHeatmapGridProps) {
   const { dayData, weeks, monthLabels } = useMemo(() => {
-    // Aggregate entries by date: sum unrealized_pnl and cost_basis per day
-    const dailyReturns = new Map<string, { returnPct: number; dollarChange: number }>()
-
-    const byDate = new Map<string, { totalPnl: number; totalCostBasis: number }>()
+    // Sum portfolio market value per snapshot date
+    const valueByDate = new Map<string, number>()
     for (const entry of entries) {
-      const existing = byDate.get(entry.date) || { totalPnl: 0, totalCostBasis: 0 }
-      existing.totalPnl += entry.unrealized_pnl
-      existing.totalCostBasis += entry.cost_basis
-      byDate.set(entry.date, existing)
+      valueByDate.set(entry.date, (valueByDate.get(entry.date) ?? 0) + entry.market_value)
     }
 
-    for (const [date, { totalPnl, totalCostBasis }] of byDate) {
-      const returnPct = totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0
-      dailyReturns.set(date, { returnPct, dollarChange: totalPnl })
+    // Day-over-day change vs the previous available snapshot (skips weekends/holidays)
+    const dailyReturns = new Map<string, { returnPct: number; dollarChange: number }>()
+    const sortedDates = Array.from(valueByDate.keys()).sort()
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prevValue = valueByDate.get(sortedDates[i - 1])!
+      const currValue = valueByDate.get(sortedDates[i])!
+      const dollarChange = currValue - prevValue
+      const returnPct = prevValue > 0 ? (dollarChange / prevValue) * 100 : 0
+      dailyReturns.set(sortedDates[i], { returnPct, dollarChange })
     }
 
     // Always show full year: Jan 1 – Dec 31
@@ -95,7 +96,7 @@ export function PortfolioHeatmapGrid({ entries }: PortfolioHeatmapGridProps) {
       }
 
       const returnData = dailyReturns.get(dateStr)
-      const hasData = byDate.has(dateStr)
+      const hasData = dailyReturns.has(dateStr)
 
       allDays.push({
         date: dateStr,
@@ -191,7 +192,11 @@ export function PortfolioHeatmapGrid({ entries }: PortfolioHeatmapGridProps) {
                             style={{ backgroundColor: bgColor }}
                           />
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-card text-card-foreground border-border">
+                        <TooltipContent
+                          side="top"
+                          sideOffset={6}
+                          className="rounded-lg bg-card text-card-foreground border-border"
+                        >
                           <div className="text-xs">
                             <p className="font-medium">{addOneDay(day.date)}</p>
                             {day.hasData ? (

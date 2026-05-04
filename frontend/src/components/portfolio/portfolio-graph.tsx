@@ -48,30 +48,57 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function PortfolioGraph({ entries }: PortfolioGraphProps) {
-  const chartData = useMemo(() => {
-    // Aggregate entries by date
+  const { chartData, totalReturn, totalReturnPct } = useMemo(() => {
+    // Aggregate market value per date and accumulate latest-snapshot totals for return %
     const dateMap = new Map<string, number>()
-
+    let latestDate = ""
     for (const entry of entries) {
-      const current = dateMap.get(entry.date) || 0
-      dateMap.set(entry.date, current + entry.market_value)
+      dateMap.set(entry.date, (dateMap.get(entry.date) ?? 0) + entry.market_value)
+      if (entry.date > latestDate) latestDate = entry.date
     }
 
-    // Convert to array and sort by date
-    return Array.from(dateMap.entries())
-      .map(([date, value]) => ({ date, value }))
-      .sort((a, b) => a.date.localeCompare(b.date))
+    let totalPnl = 0
+    let totalCostBasis = 0
+    for (const entry of entries) {
+      if (entry.date === latestDate) {
+        totalPnl += entry.unrealized_pnl
+        totalCostBasis += entry.cost_basis
+      }
+    }
+
+    return {
+      chartData: Array.from(dateMap.entries())
+        .map(([date, value]) => ({ date, value }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      totalReturn: totalPnl,
+      totalReturnPct: totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0,
+    }
   }, [entries])
 
   const latestValue = chartData.length > 0 ? chartData[chartData.length - 1].value : 0
+  const hasReturn = entries.length > 0
+  const returnIsPositive = totalReturn >= 0
 
   return (
     <Card className="rounded-xl">
       <CardHeader>
         <CardTitle className="text-foreground">Portfolio Value</CardTitle>
-        <p className="font-mono text-3xl font-bold text-foreground">
-          ${formatCurrency(latestValue)}
-        </p>
+        <div className="flex flex-wrap items-baseline gap-3">
+          <p className="font-mono text-3xl font-bold text-foreground">
+            ${formatCurrency(latestValue)}
+          </p>
+          {hasReturn && (
+            <p
+              className={`font-mono text-sm font-medium ${
+                returnIsPositive ? "text-[#10B981]" : "text-[#EF4444]"
+              }`}
+            >
+              {returnIsPositive ? "+" : "-"}${formatCurrency(Math.abs(totalReturn))} (
+              {returnIsPositive ? "+" : ""}
+              {totalReturnPct.toFixed(2)}%)
+            </p>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="h-[300px] w-full">
