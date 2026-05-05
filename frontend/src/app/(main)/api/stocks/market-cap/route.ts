@@ -1,8 +1,8 @@
 import { finnhubFetch } from "@/lib/finnhub"
 import { Converter } from "easy-currencies"
 import { NextResponse } from "next/server"
-import { formatMarketCap } from "@/services/stock-service"
-import type { FinnhubProfile } from "@/services/stock-service"
+import { formatMarketCap } from "@/services/stock/stock-service"
+import type { FinnhubProfile } from "@/services/stock/stock-service"
 
 const converter = new Converter()
 

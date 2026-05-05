@@ -1,4 +1,4 @@
-import type { FinnhubQuote, FinnhubProfile } from "@/services/stock-service"
+import type { FinnhubQuote, FinnhubProfile } from "@/services/stock/stock-service"
 
 export async function fetchQuote(symbol: string): Promise<FinnhubQuote | null> {
   const res = await fetch(`/api/stocks/quote?symbol=${encodeURIComponent(symbol)}`)

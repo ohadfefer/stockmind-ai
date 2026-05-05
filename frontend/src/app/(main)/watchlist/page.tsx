@@ -4,12 +4,12 @@ import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist-items-service"
 import { getUserWatchlistsWithCounts } from "@/services/watchlist-crud-service"
-import { getStockData } from "@/services/stock-service"
-import { finnhubFetch } from "@/lib/finnhub"
+import { getStockData } from "@/services/stock/stock-service"
+import {
+  getMarketIsOpen,
+  getOrFetchPrice,
+} from "@/services/stock/stock-price-cache"
 import type { WatchlistStockData, WatchlistInfo } from "@/types/watchlist"
-
-// Cache market data per symbol (not the symbol list) so unfollows are reflected immediately
-const priceCache = new Map<string, { data: WatchlistStockData; marketWasOpen: boolean }>()
 
 export default async function WatchlistPage({
   searchParams,
@@ -31,32 +31,25 @@ export default async function WatchlistPage({
 
       if (activeWatchlistId) {
         const symbols = await getWatchlistSymbolsById(activeWatchlistId)
-        const status = await finnhubFetch("/stock/market-status", { exchange: "US" }) as { isOpen: boolean }
-        const marketIsOpen = status.isOpen
+        const marketIsOpen = await getMarketIsOpen()
 
         stocks = await Promise.all(
-          symbols.map(async (symbol) => {
-            const cached = priceCache.get(symbol)
-            if (cached && !marketIsOpen && !cached.marketWasOpen) {
-              return cached.data
-            }
-
-            const data = await getStockData(symbol, { skipMarketCap: true })
-            const entry: WatchlistStockData = {
-              ticker: symbol,
-              company: data.name,
-              price: data.price,
-              changeDollar: data.changeDollar,
-              changePercent: data.changePercent,
-              // marketCap: data.keyStats.marketCap,
-              marketCap: null,
-              dayLow: data.dayLow || null,
-              dayHigh: data.dayHigh || null,
-              aiScore: null,
-            }
-            priceCache.set(symbol, { data: entry, marketWasOpen: marketIsOpen })
-            return entry
-          })
+          symbols.map((symbol) =>
+            getOrFetchPrice(symbol, marketIsOpen, async () => {
+              const data = await getStockData(symbol, { skipMarketCap: true })
+              return {
+                ticker: symbol,
+                company: data.name,
+                price: data.price,
+                changeDollar: data.changeDollar,
+                changePercent: data.changePercent,
+                marketCap: null,
+                dayLow: data.dayLow || null,
+                dayHigh: data.dayHigh || null,
+                aiScore: null,
+              }
+            }),
+          ),
         )
       }
     }

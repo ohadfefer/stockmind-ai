@@ -15,7 +15,7 @@ import { ArrowLeft, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { fetchQuote } from "@/actions/stock-data"
 import { fetchTradingInfo } from "@/actions/portfolio"
-import type { FinnhubQuote } from "@/services/stock-service"
+import type { FinnhubQuote } from "@/services/stock/stock-service"
 import type { TradingInfo } from "@/actions/portfolio"
 
 export default function TradePage() {

@@ -1,66 +1,39 @@
-import { MarketOverviewBar } from "@/components/dashboard/market-overview-bar"
-import { KPICards } from "@/components/dashboard/kpi-cards"
-import { WatchlistQuickView } from "@/components/dashboard/watchlist-quick-view"
-import { AIAdvisorFeed } from "@/components/dashboard/ai-advisor-feed"
-import { SectorHeatmap } from "@/components/dashboard/sector-heatmap"
-import { NewsFeed } from "@/components/dashboard/news-feed"
-import { getSectorPerformance } from "@/services/dashboard/sector-service"
-import { getIndexQuotes } from "@/services/dashboard/index-service"
+import { auth0 } from "@/lib/auth0"
+import { getUserIdByAuth0Id } from "@/services/user-service"
+import { getAccountDetails } from "@/services/account-service"
+import { getPortfolioSummary, type Holding } from "@/services/portfolio-service"
 import { getDashboardWatchlistStocks } from "@/services/dashboard/dashboard-watchlist-service"
-
-// FMP api calls causing bugs
-// export default async function DashboardPage() {
-//   const [sectorData, indexQuotes, watchlistStocks] = await Promise.all([
-//     getSectorPerformance("1D"),
-//     getIndexQuotes(),
-//     getDashboardWatchlistStocks(8),
-//   ])
-
-//   return (
-//     <div className="flex flex-col gap-6">
-//       {/* Market Overview Ticker Strip */}
-//       <MarketOverviewBar data={indexQuotes} />
-
-//       {/* KPI Cards */}
-//       <KPICards />
-
-//       {/* Watchlist + AI Advisor Feed */}
-//       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
-//         <WatchlistQuickView stocks={watchlistStocks} />
-//         <AIAdvisorFeed />
-//       </div>
-
-//       {/* Sector Heatmap + News */}
-//       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-//         <SectorHeatmap initialData={sectorData} />
-//         <NewsFeed />
-//       </div>
-//     </div>
-//   )
-// }
+import { KPICards } from "@/components/dashboard/kpi-cards"
+import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
+import { NewsFeed } from "@/components/dashboard/news-feed"
 
 export default async function DashboardPage() {
-  const [watchlistStocks] = await Promise.all([
-    getDashboardWatchlistStocks(8),
-  ])
+  const watchlistPromise = getDashboardWatchlistStocks()
+
+  let holdings: Holding[] = []
+  const session = await auth0.getSession()
+  if (session) {
+    const userId = await getUserIdByAuth0Id(session.user.sub)
+    if (userId) {
+      const account = await getAccountDetails(userId)
+      if (account) {
+        const summary = await getPortfolioSummary(
+          account.id,
+          account.running_balance,
+        )
+        holdings = summary.holdings
+      }
+    }
+  }
+
+  const watchlistStocks = await watchlistPromise
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Market Overview Ticker Strip */}
-      {/* <MarketOverviewBar  /> */}
-
-      {/* KPI Cards */}
       <KPICards />
 
-      {/* Watchlist + AI Advisor Feed */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
-        <WatchlistQuickView stocks={watchlistStocks} />
-        <AIAdvisorFeed />
-      </div>
-
-      {/* Sector Heatmap + News */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        {/* <SectorHeatmap /> */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <HoldingsHeatmap holdings={holdings} watchlist={watchlistStocks} />
         <NewsFeed />
       </div>
     </div>

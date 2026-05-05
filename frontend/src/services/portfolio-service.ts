@@ -1,6 +1,6 @@
 import { finnhubFetch } from "@/lib/finnhub"
 import { getPositions } from "@/services/position/position-service"
-import type { FinnhubQuote, FinnhubProfile } from "@/services/stock-service"
+import type { FinnhubQuote, FinnhubProfile } from "@/services/stock/stock-service"
 
 export interface Holding {
   ticker: string
