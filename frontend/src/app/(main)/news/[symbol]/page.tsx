@@ -1,42 +1,34 @@
-"use client"
+import {
+  defaultCompanyNewsRange,
+  getCompanyNews,
+  isValidDateString,
+} from "@/services/news-service"
+import { CompanyNewsFeed } from "@/components/news/company-news-feed"
 
-import { useState } from "react"
-import { useParams } from "next/navigation"
-import { NewsFeed } from "@/components/details/news-feed"
-import { DateRangePicker } from "@/components/date-range-picker"
-
-function toDateString(date: Date): string {
-  return date.toISOString().split("T")[0]
-}
-
-export default function SymbolNewsPage() {
-  const { symbol } = useParams<{ symbol: string }>()
+export default async function SymbolNewsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ symbol: string }>
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
+  const { symbol } = await params
   const upperSymbol = symbol.toUpperCase()
+  const { from, to } = await searchParams
 
-  const now = new Date()
-  const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+  const range = defaultCompanyNewsRange()
+  const fromStr = isValidDateString(from) ? from : range.from
+  const toStr = isValidDateString(to) ? to : range.to
 
-  const [from, setFrom] = useState(twoDaysAgo)
-  const [to, setTo] = useState(now)
+  const initialNews = await getCompanyNews(upperSymbol, fromStr, toStr)
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <DateRangePicker
-          from={from}
-          to={to}
-          onRangeChange={(newFrom, newTo) => {
-            setFrom(newFrom)
-            setTo(newTo)
-          }}
-        />
-      </div>
-      <NewsFeed
-        symbol={upperSymbol}
-        full
-        from={toDateString(from)}
-        to={toDateString(to)}
-      />
-    </div>
+    <CompanyNewsFeed
+      key={`${fromStr}-${toStr}`}
+      symbol={upperSymbol}
+      initialNews={initialNews}
+      from={fromStr}
+      to={toStr}
+    />
   )
 }

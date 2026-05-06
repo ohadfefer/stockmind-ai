@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Suspense } from "react"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,7 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { Bot } from "lucide-react"
 import { PriceChart } from "@/components/details/price-chart"
 import { KeyStats } from "@/components/details/key-stats"
-import { NewsFeed } from "@/components/details/news-feed"
+import { NewsFeed, NewsFeedSkeleton } from "@/components/news/news-feed"
 import { AboutSection } from "@/components/details/about-section"
 import { LivePrice } from "@/components/details/live-price"
 import { FollowButton } from "@/components/details/follow-button"
@@ -114,7 +115,9 @@ export default async function DetailsPage({
           <Separator />
 
           {/* News Feed */}
-          <NewsFeed symbol={upperSymbol} />
+          <Suspense fallback={<NewsFeedSkeleton />}>
+            <NewsFeed symbol={upperSymbol} />
+          </Suspense>
         </div>
 
         {/* Sidebar */}
