@@ -95,29 +95,64 @@ export async function snapshotAllPositions(): Promise<{
     }
   }
 
-  // 3. Build and insert snapshot rows for positions that have a valid price
-  let snapshotCount = 0
+  // 3. Build per-symbol INSERT statements for positions that have a valid price.
+  const insertStatements = positions
+    .filter((pos) => priceMap.has(pos.symbol))
+    .map((pos) => {
+      const marketPrice = priceMap.get(pos.symbol)!
+      const marketValue = pos.quantity * marketPrice
+      const costBasis = pos.quantity * pos.average_cost_basis
+      const unrealizedPnl = marketValue - costBasis
+      return sql`
+        INSERT INTO position_history (account_id, symbol, date, quantity, market_price, market_value, cost_basis, unrealized_pnl)
+        VALUES (${pos.account_id}, ${pos.symbol}, ${today}, ${pos.quantity}, ${marketPrice}, ${marketValue}, ${costBasis}, ${unrealizedPnl})
+        ON CONFLICT (account_id, symbol, date) DO UPDATE SET
+          quantity = EXCLUDED.quantity,
+          market_price = EXCLUDED.market_price,
+          market_value = EXCLUDED.market_value,
+          cost_basis = EXCLUDED.cost_basis,
+          unrealized_pnl = EXCLUDED.unrealized_pnl
+      `
+    })
 
-  for (const pos of positions) {
-    const marketPrice = priceMap.get(pos.symbol)
-    if (!marketPrice) continue
-
-    const marketValue = pos.quantity * marketPrice
-    const costBasis = pos.quantity * pos.average_cost_basis
-    const unrealizedPnl = marketValue - costBasis
-
-    await sql`
-      INSERT INTO position_history (account_id, symbol, date, quantity, market_price, market_value, cost_basis, unrealized_pnl)
-      VALUES (${pos.account_id}, ${pos.symbol}, ${today}, ${pos.quantity}, ${marketPrice}, ${marketValue}, ${costBasis}, ${unrealizedPnl})
-      ON CONFLICT (account_id, symbol, date) DO UPDATE SET
-        quantity = EXCLUDED.quantity,
-        market_price = EXCLUDED.market_price,
-        market_value = EXCLUDED.market_value,
-        cost_basis = EXCLUDED.cost_basis,
-        unrealized_pnl = EXCLUDED.unrealized_pnl
-    `
-    snapshotCount++
+  const snapshotCount = insertStatements.length
+  if (snapshotCount === 0) {
+    return { snapshotCount: 0, errors }
   }
+
+  // 4. Roll up holdings + cash into portfolio_daily_value for every affected
+  //    account in a single statement. Runs in the same transaction as the
+  //    inserts above so the SELECT sees them and the two tables can never drift.
+  const rollupStatement = sql`
+    INSERT INTO portfolio_daily_value (account_id, date, market_value, cost_basis, cash_balance, net_cash_flow)
+    SELECT
+      ph.account_id,
+      ph.date,
+      SUM(ph.market_value)::numeric(16,2),
+      SUM(ph.cost_basis)::numeric(16,2),
+      COALESCE((
+        SELECT cl.running_balance FROM cash_ledger cl
+        WHERE cl.account_id = ph.account_id
+          AND cl.created_at::date <= ph.date
+        ORDER BY cl.created_at DESC LIMIT 1
+      ), 0)::numeric(16,2),
+      COALESCE((
+        SELECT SUM(cl.amount) FROM cash_ledger cl
+        WHERE cl.account_id = ph.account_id
+          AND cl.created_at::date = ph.date
+          AND cl.entry_type IN ('deposit', 'withdrawal')
+      ), 0)::numeric(16,2)
+    FROM position_history ph
+    WHERE ph.date = ${today}::date
+    GROUP BY ph.account_id, ph.date
+    ON CONFLICT (account_id, date) DO UPDATE SET
+      market_value = EXCLUDED.market_value,
+      cost_basis = EXCLUDED.cost_basis,
+      cash_balance = EXCLUDED.cash_balance,
+      net_cash_flow = EXCLUDED.net_cash_flow
+  `
+
+  await sql.transaction([...insertStatements, rollupStatement])
 
   return { snapshotCount, errors }
 }

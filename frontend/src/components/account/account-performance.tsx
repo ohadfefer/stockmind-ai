@@ -2,17 +2,17 @@
 
 import { PortfolioGraph } from "@/components/portfolio/portfolio-graph"
 import { PortfolioHeatmapGrid } from "@/components/portfolio/portfolio-heatmap-grid"
-import type { PositionHistoryEntry } from "@/services/position/position-history-service"
+import type { PortfolioDailyValue } from "@/services/position/portfolio-daily-value-service"
 
 interface AccountPerformanceProps {
-  entries: PositionHistoryEntry[]
+  dailyValues: PortfolioDailyValue[]
 }
 
-export function AccountPerformance({ entries }: AccountPerformanceProps) {
+export function AccountPerformance({ dailyValues }: AccountPerformanceProps) {
   return (
     <div className="space-y-4">
-      <PortfolioGraph entries={entries} />
-      <PortfolioHeatmapGrid entries={entries} />
+      <PortfolioGraph dailyValues={dailyValues} />
+      <PortfolioHeatmapGrid dailyValues={dailyValues} />
     </div>
   )
 }

@@ -7,15 +7,15 @@ import { AccountTransfer } from "./account-transfer"
 import { AccountPerformance } from "./account-performance"
 import type { AccountTab } from "./account-tab-bar"
 import type { AccountDetails, HistoryEntry } from "@/services/account-service"
-import type { PositionHistoryEntry } from "@/services/position/position-history-service"
+import type { PortfolioDailyValue } from "@/services/position/portfolio-daily-value-service"
 
 interface AccountTabContentProps {
   account: AccountDetails | null
   history: HistoryEntry[]
-  positionHistory: PositionHistoryEntry[]
+  dailyValues: PortfolioDailyValue[]
 }
 
-export function AccountTabContent({ account, history, positionHistory }: AccountTabContentProps) {
+export function AccountTabContent({ account, history, dailyValues }: AccountTabContentProps) {
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get("tab") as AccountTab) || "balances"
 
@@ -24,7 +24,7 @@ export function AccountTabContent({ account, history, positionHistory }: Account
   }
 
   if (activeTab === "performance") {
-    return <AccountPerformance entries={positionHistory} />
+    return <AccountPerformance dailyValues={dailyValues} />
   }
 
   if (activeTab === "transfer") {

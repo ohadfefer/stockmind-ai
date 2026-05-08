@@ -8,10 +8,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-import type { PositionHistoryEntry } from "@/services/position/position-history-service"
+import type { PortfolioDailyValue } from "@/services/position/portfolio-daily-value-service"
 
 interface PortfolioHeatmapGridProps {
-  entries: PositionHistoryEntry[]
+  dailyValues: PortfolioDailyValue[]
 }
 
 function formatCurrency(value: number): string {
@@ -49,23 +49,17 @@ interface DayData {
   month: string
 }
 
-export function PortfolioHeatmapGrid({ entries }: PortfolioHeatmapGridProps) {
+export function PortfolioHeatmapGrid({ dailyValues }: PortfolioHeatmapGridProps) {
   const { dayData, weeks, monthLabels } = useMemo(() => {
-    // Sum portfolio market value per snapshot date
-    const valueByDate = new Map<string, number>()
-    for (const entry of entries) {
-      valueByDate.set(entry.date, (valueByDate.get(entry.date) ?? 0) + entry.market_value)
-    }
-
-    // Day-over-day change vs the previous available snapshot (skips weekends/holidays)
+    // Day-over-day return on total value, backing out external cash flows
+    // (deposits/withdrawals) so they don't masquerade as gains/losses.
     const dailyReturns = new Map<string, { returnPct: number; dollarChange: number }>()
-    const sortedDates = Array.from(valueByDate.keys()).sort()
-    for (let i = 1; i < sortedDates.length; i++) {
-      const prevValue = valueByDate.get(sortedDates[i - 1])!
-      const currValue = valueByDate.get(sortedDates[i])!
-      const dollarChange = currValue - prevValue
-      const returnPct = prevValue > 0 ? (dollarChange / prevValue) * 100 : 0
-      dailyReturns.set(sortedDates[i], { returnPct, dollarChange })
+    for (let i = 1; i < dailyValues.length; i++) {
+      const prev = dailyValues[i - 1]
+      const curr = dailyValues[i]
+      const dollarChange = curr.totalValue - prev.totalValue - curr.netCashFlow
+      const returnPct = prev.totalValue > 0 ? (dollarChange / prev.totalValue) * 100 : 0
+      dailyReturns.set(curr.date, { returnPct, dollarChange })
     }
 
     // Always show full year: Jan 1 – Dec 31
@@ -124,7 +118,7 @@ export function PortfolioHeatmapGrid({ entries }: PortfolioHeatmapGridProps) {
       weeks: weekIndex + 1,
       monthLabels: Array.from(monthLabelSet.entries()).map(([week, label]) => ({ week, label })),
     }
-  }, [entries])
+  }, [dailyValues])
 
   const dayLabels = ["M", "", "W", "", "F", "", ""]
 

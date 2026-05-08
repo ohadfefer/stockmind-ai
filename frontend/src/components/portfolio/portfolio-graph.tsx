@@ -11,10 +11,10 @@ import {
 } from "recharts"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
-import type { PositionHistoryEntry } from "@/services/position/position-history-service"
+import type { PortfolioDailyValue } from "@/services/position/portfolio-daily-value-service"
 
 interface PortfolioGraphProps {
-  entries: PositionHistoryEntry[]
+  dailyValues: PortfolioDailyValue[]
 }
 
 function formatCurrency(value: number): string {
@@ -47,36 +47,21 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   return null
 }
 
-export function PortfolioGraph({ entries }: PortfolioGraphProps) {
-  const { chartData, totalReturn, totalReturnPct } = useMemo(() => {
-    // Aggregate market value per date and accumulate latest-snapshot totals for return %
-    const dateMap = new Map<string, number>()
-    let latestDate = ""
-    for (const entry of entries) {
-      dateMap.set(entry.date, (dateMap.get(entry.date) ?? 0) + entry.market_value)
-      if (entry.date > latestDate) latestDate = entry.date
-    }
-
-    let totalPnl = 0
-    let totalCostBasis = 0
-    for (const entry of entries) {
-      if (entry.date === latestDate) {
-        totalPnl += entry.unrealized_pnl
-        totalCostBasis += entry.cost_basis
-      }
-    }
-
+export function PortfolioGraph({ dailyValues }: PortfolioGraphProps) {
+  const { chartData, totalReturn, totalReturnPct, latestValue } = useMemo(() => {
+    const chartData = dailyValues.map((d) => ({ date: d.date, value: d.marketValue }))
+    const latest = dailyValues[dailyValues.length - 1]
+    const unrealized = latest ? latest.marketValue - latest.costBasis : 0
+    const pct = latest && latest.costBasis > 0 ? (unrealized / latest.costBasis) * 100 : 0
     return {
-      chartData: Array.from(dateMap.entries())
-        .map(([date, value]) => ({ date, value }))
-        .sort((a, b) => a.date.localeCompare(b.date)),
-      totalReturn: totalPnl,
-      totalReturnPct: totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0,
+      chartData,
+      totalReturn: unrealized,
+      totalReturnPct: pct,
+      latestValue: latest?.marketValue ?? 0,
     }
-  }, [entries])
+  }, [dailyValues])
 
-  const latestValue = chartData.length > 0 ? chartData[chartData.length - 1].value : 0
-  const hasReturn = entries.length > 0
+  const hasReturn = dailyValues.length > 0
   const returnIsPositive = totalReturn >= 0
 
   return (
