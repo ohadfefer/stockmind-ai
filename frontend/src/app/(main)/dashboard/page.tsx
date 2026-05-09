@@ -8,15 +8,22 @@ import {
   getPortfolioStats,
   type PortfolioStats,
 } from "@/services/position/portfolio-daily-value-service"
+import { getMarketNews } from "@/services/news-service"
+import { getMarketSentiment } from "@/services/dashboard/market-sentiment-service"
+import { getIndexQuotes } from "@/services/dashboard/index-service"
 import { KPICards } from "@/components/dashboard/kpi-cards"
 import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
 import { NewsFeed } from "@/components/dashboard/news-feed"
+import { MarketOverviewBar } from "@/components/dashboard/market-overview-bar"
 
 const BENCHMARK_ETFS = ["SPY", "QQQ", "IWM"] as const
 
 export default async function DashboardPage() {
   const watchlistPromise = getDashboardWatchlistStocks()
   const etfsPromise = Promise.all(BENCHMARK_ETFS.map((t) => getEtfQuote(t)))
+  const newsPromise = getMarketNews("general")
+  const sentimentPromise = getMarketSentiment()
+  const indexesPromise = getIndexQuotes()
 
   let holdings: Holding[] = []
   let portfolioReturnPercent = 0
@@ -38,11 +45,19 @@ export default async function DashboardPage() {
     }
   }
 
-  const [watchlistStocks, etfQuotes] = await Promise.all([watchlistPromise, etfsPromise])
+  const [watchlistStocks, etfQuotes, news, sentiment, indexes] = await Promise.all([
+    watchlistPromise,
+    etfsPromise,
+    newsPromise,
+    sentimentPromise,
+    indexesPromise,
+  ])
   const etfs = etfQuotes.filter((e): e is EtfQuote => e !== null)
 
   return (
     <div className="flex flex-col gap-6">
+      <MarketOverviewBar data={indexes} />
+
       <KPICards
         portfolioReturnPercent={portfolioReturnPercent}
         etfs={etfs}
@@ -52,7 +67,7 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <HoldingsHeatmap holdings={holdings} watchlist={watchlistStocks} />
-        <NewsFeed />
+        <NewsFeed news={news} sentiment={sentiment} />
       </div>
     </div>
   )

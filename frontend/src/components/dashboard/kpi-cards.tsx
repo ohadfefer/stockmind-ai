@@ -1,4 +1,5 @@
-import { TrendingUp, TrendingDown, LineChart, CalendarCheck } from "lucide-react"
+import Link from "next/link"
+import { TrendingUp, TrendingDown, LineChart, ArrowRight } from "lucide-react"
 import type { EtfQuote } from "@/services/dashboard/etf-quote-service"
 import type { Holding } from "@/services/portfolio-service"
 import type { PortfolioStats } from "@/services/position/portfolio-daily-value-service"
@@ -84,7 +85,13 @@ export function KPICards({
           <span className="text-sm font-medium text-muted-foreground">
             Daily Win Rate
           </span>
-          <CalendarCheck className="size-5 text-[#F59E0B]" />
+          <Link
+            href="/account?tab=performance"
+            className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Statistics
+            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          </Link>
         </div>
         {stats && stats.totalDays > 0 ? (
           <>
