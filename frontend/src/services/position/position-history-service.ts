@@ -139,8 +139,14 @@ export async function snapshotAllPositions(): Promise<{
       COALESCE((
         SELECT SUM(cl.amount) FROM cash_ledger cl
         WHERE cl.account_id = ph.account_id
-          AND cl.created_at::date = ph.date
           AND cl.entry_type IN ('deposit', 'withdrawal')
+          AND cl.created_at > COALESCE(
+            (SELECT MAX(pdv.date) + INTERVAL '1 day'
+             FROM portfolio_daily_value pdv
+             WHERE pdv.account_id = ph.account_id AND pdv.date < ph.date),
+            'epoch'::timestamptz
+          )
+          AND cl.created_at < (ph.date + INTERVAL '1 day')
       ), 0)::numeric(16,2)
     FROM position_history ph
     WHERE ph.date = ${today}::date

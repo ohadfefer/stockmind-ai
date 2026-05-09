@@ -22,13 +22,37 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
-import { submitTransfer } from "@/actions/transfers"
+import {
+  fetchTransferCooldown,
+  submitTransfer,
+  TransferCooldownError,
+} from "@/actions/transfers"
 
 type TransferDirection = "deposit" | "withdrawal"
 type TransferMethod = "bank_transfer" | "wire" | "internal"
 
 interface AccountTransferProps {
   currency: string
+}
+
+function formatCooldownRemaining(ms: number): string {
+  const totalMinutes = Math.ceil(ms / 60_000)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours <= 0) return `${minutes}m`
+  if (minutes === 0) return `${hours}h`
+  return `${hours}h ${minutes}m`
+}
+
+function formatCooldownUnlock(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
 }
 
 export function AccountTransfer({ currency }: AccountTransferProps) {
@@ -39,9 +63,14 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
   const [description, setDescription] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [isPending, setIsPending] = useState(false)
+  const [nextAllowedAt, setNextAllowedAt] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const symbol = currency === "USD" ? "$" : currency
+  const nextAllowedMs = nextAllowedAt ? new Date(nextAllowedAt).getTime() : 0
+  const cooldownActive = nextAllowedMs > now
+  const cooldownRemainingMs = cooldownActive ? nextAllowedMs - now : 0
 
   // Warn before tab close / refresh while a transfer is being processed.
   useEffect(() => {
@@ -58,6 +87,29 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
     if (timerRef.current) clearTimeout(timerRef.current)
   }, [])
 
+  // Load the cooldown state on mount so the button reflects server truth.
+  useEffect(() => {
+    let cancelled = false
+    fetchTransferCooldown()
+      .then((c) => {
+        if (!cancelled) setNextAllowedAt(c.nextAllowedAt)
+      })
+      .catch(() => {
+        // Treat fetch failure as "unknown" — leave the button enabled and let
+        // the server reject with 429 if the cooldown is actually active.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Tick a clock while the cooldown is active so the remaining label updates.
+  useEffect(() => {
+    if (!cooldownActive) return
+    const id = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [cooldownActive])
+
   async function handleSubmit() {
     const parsed = parseFloat(amount)
     if (!parsed || parsed <= 0) return
@@ -68,11 +120,20 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
       setAmount("")
       setDescription("")
       setIsPending(true)
+      // Optimistically lock the next-transfer window so the UI matches the
+      // server's 72h gate without waiting for the cooldown re-fetch.
+      setNextAllowedAt(new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString())
       timerRef.current = setTimeout(() => {
         setIsPending(false)
+        fetchTransferCooldown()
+          .then((c) => setNextAllowedAt(c.nextAllowedAt))
+          .catch(() => {})
         router.refresh()
       }, 11_000)
-    } catch {
+    } catch (err) {
+      if (err instanceof TransferCooldownError) {
+        setNextAllowedAt(err.nextAllowedAt)
+      }
       // TODO: toast error
     } finally {
       setSubmitting(false)
@@ -171,15 +232,30 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
         </div>
 
         {/* Submit */}
-        <Button
-          className="w-full"
-          size="lg"
-          disabled={submitting || !amount || parseFloat(amount) <= 0}
-          onClick={handleSubmit}
-        >
-          {submitting && <Loader2 className="size-4 animate-spin" />}
-          {direction === "deposit" ? "Deposit" : "Withdraw"} Funds
-        </Button>
+        <div className="space-y-2">
+          <Button
+            className="w-full"
+            size="lg"
+            disabled={
+              submitting ||
+              cooldownActive ||
+              !amount ||
+              parseFloat(amount) <= 0
+            }
+            onClick={handleSubmit}
+          >
+            {submitting && <Loader2 className="size-4 animate-spin" />}
+            {cooldownActive
+              ? `Available in ${formatCooldownRemaining(cooldownRemainingMs)}`
+              : `${direction === "deposit" ? "Deposit" : "Withdraw"} Funds`}
+          </Button>
+          {cooldownActive && nextAllowedAt && (
+            <p className="text-center text-xs text-muted-foreground">
+              Transfers are limited to one every 72 hours. Next transfer
+              available {formatCooldownUnlock(nextAllowedAt)}.
+            </p>
+          )}
+        </div>
 
       </div>
 

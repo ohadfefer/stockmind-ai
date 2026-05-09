@@ -3,12 +3,50 @@ import { getDb } from "@/lib/db"
 export type TransferDirection = "deposit" | "withdrawal"
 export type TransferMethod = "bank_transfer" | "wire" | "internal"
 
+export const TRANSFER_COOLDOWN_HOURS = 72
+
+export interface TransferCooldown {
+  lastInitiatedAt: string | null
+  nextAllowedAt: string | null
+  remainingMs: number
+}
+
 interface CreateTransferParams {
   accountId: number
   direction: TransferDirection
   amount: number
   method: TransferMethod
   description?: string
+}
+
+/**
+ * Returns the cooldown state for the next transfer on this account.
+ * Excludes failed/reversed transfers so a user isn't penalized for a system
+ * failure. The check is anchored to initiated_at because the ledger entry
+ * isn't written until resolveTransfer runs ~10s later.
+ */
+export async function getTransferCooldown(accountId: number): Promise<TransferCooldown> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT initiated_at
+    FROM transfers
+    WHERE account_id = ${accountId}
+      AND status IN ('pending', 'completed')
+    ORDER BY initiated_at DESC
+    LIMIT 1
+  `
+  if (rows.length === 0) {
+    return { lastInitiatedAt: null, nextAllowedAt: null, remainingMs: 0 }
+  }
+  const lastInitiatedAt = (rows[0].initiated_at as Date).toISOString()
+  const nextAllowed = new Date(rows[0].initiated_at as Date)
+  nextAllowed.setTime(nextAllowed.getTime() + TRANSFER_COOLDOWN_HOURS * 60 * 60 * 1000)
+  const remainingMs = Math.max(0, nextAllowed.getTime() - Date.now())
+  return {
+    lastInitiatedAt,
+    nextAllowedAt: nextAllowed.toISOString(),
+    remainingMs,
+  }
 }
 
 export async function createTransfer(params: CreateTransferParams): Promise<number> {

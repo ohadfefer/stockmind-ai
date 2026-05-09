@@ -2,7 +2,11 @@ import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
-import { createTransfer, resolveTransfer } from "@/services/transfer-service"
+import {
+  createTransfer,
+  getTransferCooldown,
+  resolveTransfer,
+} from "@/services/transfer-service"
 import { logAudit } from "@/services/audit-log-service"
 import { getClientIp } from "@/lib/request-ip"
 
@@ -29,6 +33,18 @@ export async function POST(request: Request) {
   }
 
   const accountId = await getOrCreateDefaultAccount(userId)
+
+  const cooldown = await getTransferCooldown(accountId)
+  if (cooldown.remainingMs > 0) {
+    return NextResponse.json(
+      {
+        error: "Transfer cooldown active",
+        nextAllowedAt: cooldown.nextAllowedAt,
+        remainingMs: cooldown.remainingMs,
+      },
+      { status: 429 },
+    )
+  }
 
   const transferId = await createTransfer({
     accountId,
