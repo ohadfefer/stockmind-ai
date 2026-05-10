@@ -1,0 +1,68 @@
+"use client"
+
+import { Zap } from "lucide-react"
+import { WizardHeader } from "./wizard-header"
+
+interface NameStepProps {
+  fullName: string
+  onChange: (value: string) => void
+  onContinue: () => void
+  onBack: () => void
+  error?: string
+}
+
+export function NameStep({ fullName, onChange, onContinue, onBack, error }: NameStepProps) {
+  return (
+    <div className="space-y-6">
+      <WizardHeader onBack={onBack} />
+
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Zap className="size-6 text-primary" />
+          <h1 className="text-xl font-bold text-foreground">StockMind AI</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">One last step to get started</p>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-8 space-y-6">
+        <div className="space-y-2 text-center">
+          <h2 className="text-lg font-semibold text-foreground">What&apos;s your name?</h2>
+          <p className="text-sm text-muted-foreground">This will be displayed in your profile</p>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            onContinue()
+          }}
+          className="space-y-4"
+        >
+          <div className="space-y-2">
+            <label htmlFor="fullName" className="text-sm font-medium text-foreground">
+              Full name
+            </label>
+            <input
+              id="fullName"
+              type="text"
+              value={fullName}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="John Doe"
+              maxLength={50}
+              autoFocus
+              className="flex w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Continue
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}

@@ -2,91 +2,184 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Zap } from "lucide-react"
-import { insertUser } from "@/actions/users"
+import { submitOnboarding } from "@/actions/onboarding"
+import type {
+  ExperienceLevel,
+  Motivation,
+  InvestorStyle,
+  EngagementCadence,
+} from "@/services/user-profile-service"
+import { WelcomeStep } from "./_components/welcome-step"
+import { NameStep } from "./_components/name-step"
+import { SingleChoiceStep } from "./_components/single-choice-step"
+import { InterestsStep } from "./_components/interests-step"
+import { SummaryStep } from "./_components/summary-step"
+import {
+  EXPERIENCE_OPTIONS,
+  MOTIVATION_OPTIONS,
+  STYLE_OPTIONS,
+  CADENCE_OPTIONS,
+} from "./_components/wizard-options"
+
+type Step =
+  | "welcome"
+  | "name"
+  | "experience"
+  | "motivation"
+  | "interests"
+  | "style"
+  | "cadence"
+  | "summary"
+
+const TOTAL_QUESTION_STEPS = 5
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const [step, setStep] = useState<Step>("welcome")
   const [fullName, setFullName] = useState("")
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null)
+  const [motivation, setMotivation] = useState<Motivation | null>(null)
+  const [interests, setInterests] = useState<string[]>([])
+  const [investorStyle, setInvestorStyle] = useState<InvestorStyle | null>(null)
+  const [engagementCadence, setEngagementCadence] = useState<EngagementCadence | null>(null)
+  const [nameError, setNameError] = useState("")
+  const [submitError, setSubmitError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-
-    const trimmed = fullName.trim()
-    if (!trimmed) {
-      setError("Please enter your full name")
+  function handleNameContinue() {
+    if (!fullName.trim()) {
+      setNameError("Please enter your full name")
       return
     }
+    setNameError("")
+    setStep("experience")
+  }
 
+  async function handleSubmit() {
+    if (
+      !experienceLevel ||
+      !motivation ||
+      !investorStyle ||
+      !engagementCadence ||
+      !fullName.trim()
+    ) {
+      setSubmitError("Please complete all steps before submitting.")
+      return
+    }
     setLoading(true)
-    setError("")
-
+    setSubmitError("")
     try {
-      await insertUser(trimmed)
-      router.push("/dashboard")
+      await submitOnboarding({
+        fullName: fullName.trim(),
+        experienceLevel,
+        motivation,
+        interests,
+        investorStyle,
+        engagementCadence,
+      })
+      router.push("/onboarding/connect")
     } catch {
-      setError("Something went wrong. Please try again.")
+      setSubmitError("Something went wrong. Please try again.")
       setLoading(false)
     }
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8">
-      <div className="flex flex-col items-center gap-2">
-        <div className="flex items-center gap-2">
-          <Zap className="size-6 text-primary" />
-          <h1 className="text-xl font-bold text-foreground">StockMind AI</h1>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          One last step to get started
-        </p>
-      </div>
+    <div className="w-full max-w-xl px-4 py-8">
+      {step === "welcome" && <WelcomeStep onContinue={() => setStep("name")} />}
 
-      <div className="rounded-xl border border-border bg-card p-8 space-y-6">
-        <div className="space-y-2 text-center">
-          <h2 className="text-lg font-semibold text-foreground">
-            What&apos;s your name?
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            This will be displayed in your profile
-          </p>
-        </div>
+      {step === "name" && (
+        <NameStep
+          fullName={fullName}
+          onChange={setFullName}
+          onBack={() => setStep("welcome")}
+          onContinue={handleNameContinue}
+          error={nameError}
+        />
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label
-              htmlFor="fullName"
-              className="text-sm font-medium text-foreground"
-            >
-              Full name
-            </label>
-            <input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="John Doe"
-              maxLength={50}
-              autoFocus
-              className="flex w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+      {step === "experience" && (
+        <SingleChoiceStep
+          step={1}
+          totalSteps={TOTAL_QUESTION_STEPS}
+          title="How experienced are you with investing?"
+          subtitle="I'll match my voice to yours."
+          options={EXPERIENCE_OPTIONS}
+          value={experienceLevel}
+          onChange={setExperienceLevel}
+          onBack={() => setStep("name")}
+          onContinue={() => setStep("motivation")}
+        />
+      )}
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+      {step === "motivation" && (
+        <SingleChoiceStep
+          step={2}
+          totalSteps={TOTAL_QUESTION_STEPS}
+          title="What motivates you to invest?"
+          subtitle="This helps me tailor insights, alerts and recommendations to your goals and investing style."
+          options={MOTIVATION_OPTIONS}
+          value={motivation}
+          onChange={setMotivation}
+          onBack={() => setStep("experience")}
+          onContinue={() => setStep("interests")}
+        />
+      )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {loading ? "Saving..." : "Continue to Dashboard"}
-          </button>
-        </form>
-      </div>
+      {step === "interests" && (
+        <InterestsStep
+          step={3}
+          totalSteps={TOTAL_QUESTION_STEPS}
+          selected={interests}
+          onChange={setInterests}
+          onBack={() => setStep("motivation")}
+          onContinue={() => setStep("style")}
+        />
+      )}
+
+      {step === "style" && (
+        <SingleChoiceStep
+          step={4}
+          totalSteps={TOTAL_QUESTION_STEPS}
+          title="What kind of investor are you?"
+          subtitle="This helps me tailor insights, alerts and recommendations to match your investing style."
+          options={STYLE_OPTIONS}
+          value={investorStyle}
+          onChange={setInvestorStyle}
+          onBack={() => setStep("interests")}
+          onContinue={() => setStep("cadence")}
+        />
+      )}
+
+      {step === "cadence" && (
+        <SingleChoiceStep
+          step={5}
+          totalSteps={TOTAL_QUESTION_STEPS}
+          title="How often do you like to stay in touch with your investments?"
+          subtitle="Everyone has a different rhythm - from daily check-ins to only hearing from me when something important happens."
+          options={CADENCE_OPTIONS}
+          value={engagementCadence}
+          onChange={setEngagementCadence}
+          onBack={() => setStep("style")}
+          onContinue={() => setStep("summary")}
+          ctaLabel="Submit & Create Profile"
+        />
+      )}
+
+      {step === "summary" && experienceLevel && motivation && investorStyle && (
+        <SummaryStep
+          fullName={fullName}
+          experienceLevel={experienceLevel}
+          motivation={motivation}
+          interests={interests}
+          investorStyle={investorStyle}
+          onBack={() => setStep("cadence")}
+          onConfirm={handleSubmit}
+          onEdit={() => setStep("experience")}
+          loading={loading}
+          error={submitError}
+        />
+      )}
     </div>
   )
 }
