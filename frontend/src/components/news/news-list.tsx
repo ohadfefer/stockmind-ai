@@ -25,22 +25,27 @@ function truncateSummary(summary: string, maxLength = 180): string {
 interface NewsListProps {
   items: FinnhubNewsItem[]
   emptyMessage?: string
+  compact?: boolean
 }
 
-export function NewsList({ items, emptyMessage = "No recent news found." }: NewsListProps) {
+export function NewsList({ items, emptyMessage = "No recent news found.", compact = false }: NewsListProps) {
   if (items.length === 0) {
     return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
   }
 
   return (
-    <div className="space-y-2">
+    <div className={compact ? "space-y-1" : "space-y-2"}>
       {items.map((item) => (
         <a
           key={item.id}
           href={item.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="group flex cursor-pointer items-start gap-4 rounded-lg p-5 transition-colors hover:bg-muted/50"
+          className={
+            compact
+              ? "group flex cursor-pointer flex-col gap-1 rounded-lg p-3 transition-colors hover:bg-muted/50"
+              : "group flex cursor-pointer items-start gap-4 rounded-lg p-5 transition-colors hover:bg-muted/50"
+          }
         >
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -51,30 +56,30 @@ export function NewsList({ items, emptyMessage = "No recent news found." }: News
             <p className="text-sm font-semibold leading-snug text-foreground group-hover:text-primary">
               {item.headline}
             </p>
-            {item.summary && (
+            {!compact && item.summary && (
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {truncateSummary(item.summary)}
               </p>
             )}
           </div>
-          <NewsImage src={item.image} />
+          {!compact && <NewsImage src={item.image} />}
         </a>
       ))}
     </div>
   )
 }
 
-export function NewsListSkeleton({ count = 3 }: { count?: number }) {
+export function NewsListSkeleton({ count = 3, compact = false }: { count?: number; compact?: boolean }) {
   return (
-    <div className="space-y-2">
+    <div className={compact ? "space-y-1" : "space-y-2"}>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex gap-4 rounded-lg p-5">
+        <div key={i} className={compact ? "flex flex-col gap-2 rounded-lg p-3" : "flex gap-4 rounded-lg p-5"}>
           <div className="flex-1 space-y-2">
             <Skeleton className="h-3 w-32" />
             <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-3 w-3/4" />
+            {!compact && <Skeleton className="h-3 w-3/4" />}
           </div>
-          <Skeleton className="size-20 shrink-0 rounded-lg" />
+          {!compact && <Skeleton className="size-20 shrink-0 rounded-lg" />}
         </div>
       ))}
     </div>

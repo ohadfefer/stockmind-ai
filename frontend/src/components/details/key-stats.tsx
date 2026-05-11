@@ -1,52 +1,72 @@
-import { Separator } from "@/components/ui/separator"
-
 export interface KeyStatsData {
-  previousClose: number | null
-  dayRange: [number | null, number | null]
-  yearRange: [number | null, number | null]
+  open: number | null
+  high: number | null
+  low: number | null
   marketCap: string | null
   avgVolume: string | null
-  peRatio: number | null
   dividendYield: number | null
-  primaryExchange: string | null
+  quarterlyDividend: number | null
+  peRatio: number | null
+  weekHigh52: number | null
+  weekLow52: number | null
+  eps: number | null
+  beta: number | null
+  sharesOutstanding: string | null
 }
 
 interface KeyStatsProps {
   data: KeyStatsData
 }
 
-function fmt(value: number | null, decimals = 2, prefix = "$"): string {
-  if (value == null || value === 0) return "-"
-  return `${prefix}${value.toFixed(decimals)}`
+function fmtPrice(value: number | null): string | null {
+  if (value == null) return null
+  return `$${value.toFixed(2)}`
 }
 
-function fmtRange(range: [number | null, number | null]): string {
-  const [low, high] = range
-  if (low == null && high == null) return "-"
-  return `${fmt(low)} – ${fmt(high)}`
+function fmtPercent(value: number | null): string | null {
+  if (value == null) return null
+  return `${value.toFixed(2)}%`
+}
+
+function fmtNumber(value: number | null, decimals = 2): string | null {
+  if (value == null) return null
+  return value.toFixed(decimals)
 }
 
 export function KeyStats({ data }: KeyStatsProps) {
-  const stats = [
-    { label: "PREVIOUS CLOSE", value: fmt(data.previousClose) },
-    { label: "DAY RANGE", value: fmtRange(data.dayRange) },
-    { label: "YEAR RANGE", value: fmtRange(data.yearRange) },
-    { label: "MARKET CAP", value: data.marketCap ?? "-" },
-    { label: "AVG VOLUME", value: data.avgVolume ?? "-" },
-    { label: "P/E RATIO", value: data.peRatio != null ? data.peRatio.toFixed(2) : "-" },
-    { label: "DIVIDEND YIELD", value: data.dividendYield != null ? `${data.dividendYield.toFixed(2)}%` : "-" },
-    { label: "PRIMARY EXCHANGE", value: data.primaryExchange ?? "-" },
+  const rows: Array<{ label: string; value: string | null }> = [
+    { label: "Open", value: fmtPrice(data.open) },
+    { label: "Dividend", value: fmtPercent(data.dividendYield) },
+    { label: "EPS", value: fmtPrice(data.eps) },
+    { label: "High", value: fmtPrice(data.high) },
+    { label: "Quarterly dividend", value: fmtPrice(data.quarterlyDividend) },
+    { label: "Beta", value: fmtNumber(data.beta) },
+    { label: "Low", value: fmtPrice(data.low) },
+    { label: "P/E ratio", value: fmtNumber(data.peRatio) },
+    { label: "Shares outstanding", value: data.sharesOutstanding },
+    { label: "Mkt. cap", value: data.marketCap },
+    { label: "52-wk high", value: fmtPrice(data.weekHigh52) },
+    { label: "Avg. vol.", value: data.avgVolume },
+    { label: "52-wk low", value: fmtPrice(data.weekLow52) },
   ]
 
+  const visible = rows.filter((row) => row.value != null)
+
+  if (visible.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">No statistics available.</p>
+    )
+  }
+
   return (
-    <div className="space-y-0">
-      {stats.map((stat, i) => (
-        <div key={stat.label}>
-          <div className="flex items-center justify-between py-3">
-            <span className="text-sm font-medium text-muted-foreground">{stat.label}</span>
-            <span className="text-sm font-semibold text-foreground">{stat.value}</span>
-          </div>
-          {i < stats.length - 1 && <Separator />}
+    <div className="grid grid-cols-1 gap-x-10 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+      {visible.map((row) => (
+        <div
+          key={row.label}
+          className="flex items-center justify-between border-b border-border/50 py-3 last:border-b-0"
+        >
+          <span className="text-sm text-muted-foreground">{row.label}</span>
+          <span className="text-sm font-medium text-foreground">{row.value}</span>
         </div>
       ))}
     </div>

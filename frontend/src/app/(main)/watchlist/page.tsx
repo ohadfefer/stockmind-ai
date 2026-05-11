@@ -4,7 +4,7 @@ import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist-items-service"
 import { getUserWatchlistsWithCounts } from "@/services/watchlist-crud-service"
-import { getStockData } from "@/services/stock/stock-service"
+import { getStockQuote } from "@/services/stock/stock-service"
 import {
   getMarketIsOpen,
   getOrFetchPrice,
@@ -36,7 +36,7 @@ export default async function WatchlistPage({
         stocks = await Promise.all(
           symbols.map((symbol) =>
             getOrFetchPrice(symbol, marketIsOpen, async () => {
-              const data = await getStockData(symbol, { skipMarketCap: true })
+              const data = await getStockQuote(symbol)
               return {
                 ticker: symbol,
                 company: data.name,

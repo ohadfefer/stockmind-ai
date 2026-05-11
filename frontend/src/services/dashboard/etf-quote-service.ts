@@ -1,4 +1,4 @@
-import { getStockData } from "@/services/stock/stock-service"
+import { getStockQuote } from "@/services/stock/stock-service"
 import {
   getMarketIsOpen,
   getOrFetchPrice,
@@ -14,7 +14,7 @@ export async function getEtfQuote(ticker: string): Promise<EtfQuote | null> {
   try {
     const marketIsOpen = await getMarketIsOpen()
     const data = await getOrFetchPrice(ticker, marketIsOpen, async () => {
-      const d = await getStockData(ticker, { skipMarketCap: true })
+      const d = await getStockQuote(ticker)
       return {
         ticker,
         company: d.name,

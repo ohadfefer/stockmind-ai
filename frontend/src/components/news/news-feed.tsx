@@ -5,9 +5,11 @@ import { NewsList, NewsListSkeleton } from "./news-list"
 
 interface NewsFeedProps {
   symbol: string
+  compact?: boolean
+  limit?: number
 }
 
-export async function NewsFeed({ symbol }: NewsFeedProps) {
+export async function NewsFeed({ symbol, compact = false, limit = 9 }: NewsFeedProps) {
   const news = await getCompanyNews(symbol)
 
   return (
@@ -19,16 +21,16 @@ export async function NewsFeed({ symbol }: NewsFeedProps) {
         Latest News
         <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
       </Link>
-      <NewsList items={news.slice(0, 5)} />
+      <NewsList items={news.slice(0, limit)} compact={compact} />
     </div>
   )
 }
 
-export function NewsFeedSkeleton() {
+export function NewsFeedSkeleton({ compact = false }: { compact?: boolean }) {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-foreground">Latest News</h3>
-      <NewsListSkeleton />
+      <NewsListSkeleton compact={compact} />
     </div>
   )
 }

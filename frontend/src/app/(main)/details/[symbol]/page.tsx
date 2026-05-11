@@ -8,7 +8,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -16,8 +15,8 @@ import { Bot } from "lucide-react"
 import { PriceChart } from "@/components/details/price-chart"
 import { KeyStats } from "@/components/details/key-stats"
 import { NewsFeed, NewsFeedSkeleton } from "@/components/news/news-feed"
-import { AboutSection } from "@/components/details/about-section"
 import { LivePrice } from "@/components/details/live-price"
+import { QuoteMeta } from "@/components/details/quote-meta"
 import { FollowButton } from "@/components/details/follow-button"
 import { CreateAlertDialog } from "@/components/alerts/create-alert-dialog"
 import { getStockData } from "@/services/stock/stock-service"
@@ -91,47 +90,24 @@ export default async function DetailsPage({
 
       <Separator />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-4">
         {/* Main content */}
         <div className="flex-1 space-y-6">
-          {/* Live Price */}
-          <LivePrice
-            symbol={upperSymbol}
-            initialPrice={stock.price}
-            initialChange={stock.changeDollar}
-            initialChangePercent={stock.changePercent}
-            previousClose={stock.previousClose}
-          />
+          <div className="space-y-2">
+            {/* Live Price */}
+            <LivePrice
+              symbol={upperSymbol}
+              initialPrice={stock.price}
+              initialChange={stock.changeDollar}
+              initialChangePercent={stock.changePercent}
+              previousClose={stock.previousClose}
+            />
 
-          {stock.price > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {stock.currency} · {stock.exchange}
-            </p>
-          )}
+            {stock.price > 0 && <QuoteMeta currency={stock.currency} />}
 
-          {/* Chart */}
-          <PriceChart symbol={upperSymbol} />
-
-          <Separator />
-
-          {/* News Feed */}
-          <Suspense fallback={<NewsFeedSkeleton />}>
-            <NewsFeed symbol={upperSymbol} />
-          </Suspense>
-        </div>
-
-        {/* Sidebar */}
-        <div className="w-full space-y-6 lg:w-80">
-          {/* Tags */}
-          <Card>
-            <CardContent className="flex flex-wrap gap-2">
-              {stock.tags.map((tag) => (
-                <Badge key={tag} variant="outline" className="text-xs">
-                  {tag}
-                </Badge>
-              ))}
-            </CardContent>
-          </Card>
+            {/* Chart */}
+            <PriceChart symbol={upperSymbol} />
+          </div>
 
           {/* Key Stats */}
           <Card>
@@ -139,9 +115,18 @@ export default async function DetailsPage({
               <KeyStats data={stock.keyStats} />
             </CardContent>
           </Card>
+        </div>
 
-          {/* About */}
-          <AboutSection companyName={stock.name} description={stock.about} />
+        <div
+          aria-hidden
+          className="hidden w-px self-stretch bg-muted-foreground/20 lg:block"
+        />
+
+        {/* Sidebar */}
+        <div className="w-full space-y-6 lg:w-[36rem]">
+          <Suspense fallback={<NewsFeedSkeleton compact />}>
+            <NewsFeed symbol={upperSymbol} compact />
+          </Suspense>
         </div>
       </div>
     </div>
