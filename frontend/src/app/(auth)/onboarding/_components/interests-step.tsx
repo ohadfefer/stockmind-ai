@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { INTEREST_OPTIONS } from "./wizard-options"
@@ -48,19 +49,29 @@ export function InterestsStep({
               type="button"
               onClick={() => toggle(opt.value)}
               className={cn(
-                "relative aspect-[4/3] rounded-xl border p-3 text-left transition-all",
+                "group relative aspect-[4/3] overflow-hidden rounded-xl border p-3 text-left transition-all",
                 "flex flex-col justify-end",
                 isSelected
-                  ? "border-primary ring-2 ring-primary/20 bg-primary/5"
-                  : "border-border bg-card hover:border-primary/50",
+                  ? "border-primary ring-2 ring-primary/30"
+                  : "border-border hover:border-primary/50",
               )}
             >
+              <Image
+                src={opt.image}
+                alt=""
+                fill
+                sizes="(min-width: 640px) 33vw, 50vw"
+                className="object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
               {isSelected && (
-                <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Check className="size-3" />
                 </span>
               )}
-              <span className="text-sm font-semibold text-foreground">{opt.label}</span>
+              <span className="relative z-10 text-sm font-semibold text-white drop-shadow-sm">
+                {opt.label}
+              </span>
             </button>
           )
         })}
