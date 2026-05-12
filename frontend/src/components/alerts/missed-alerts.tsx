@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, BellOff, TrendingUp, TrendingDown } from "lucide-react"
+import { Bell, BellOff, TrendingUp, TrendingDown, CalendarDays } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 import clsx from "clsx"
 import { useNotifications } from "@/hooks/use-notifications"
@@ -86,27 +86,36 @@ export function MissedAlerts() {
               >
                 <div className={clsx(
                   "mt-0.5 rounded-md p-1.5",
-                  alert.condition === "price_above"
-                    ? "bg-[#10B981]/10 text-[#10B981]"
-                    : "bg-[#EF4444]/10 text-[#EF4444]",
+                  alert.condition === "price_above" && "bg-[#10B981]/10 text-[#10B981]",
+                  alert.condition === "price_below" && "bg-[#EF4444]/10 text-[#EF4444]",
+                  alert.condition === "earnings" && "bg-primary/10 text-primary",
                 )}>
-                  {alert.condition === "price_above" ? (
-                    <TrendingUp className="size-3.5" />
-                  ) : (
-                    <TrendingDown className="size-3.5" />
-                  )}
+                  {alert.condition === "price_above" && <TrendingUp className="size-3.5" />}
+                  {alert.condition === "price_below" && <TrendingDown className="size-3.5" />}
+                  {alert.condition === "earnings" && <CalendarDays className="size-3.5" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">
-                    {alert.symbol}{" "}
-                    <span className="text-muted-foreground font-normal">
-                      hit ${alert.triggered_price.toFixed(2)}
-                    </span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Target: ${alert.target_value?.toFixed(2)}{" "}
-                    ({alert.condition === "price_above" ? "above" : "below"})
-                  </p>
+                  {alert.condition === "earnings" ? (
+                    <p className="text-sm font-medium">
+                      {alert.symbol}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        reports earnings today
+                      </span>
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium">
+                        {alert.symbol}{" "}
+                        <span className="text-muted-foreground font-normal">
+                          hit ${alert.triggered_price?.toFixed(2)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Target: ${alert.target_value?.toFixed(2)}{" "}
+                        ({alert.condition === "price_above" ? "above" : "below"})
+                      </p>
+                    </>
+                  )}
                 </div>
               </li>
             ))}

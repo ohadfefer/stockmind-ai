@@ -13,6 +13,7 @@ import {
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
 import { deleteAlertAction } from "@/actions/alerts"
 import type { StockAlert, AlertCondition, AlertStatus } from "@/services/alerts/alerts-service"
+import { parseIsoDateLocal } from "@/lib/utils"
 
 const conditionLabels: Record<AlertCondition, string> = {
   price_above: "Price Above",
@@ -50,6 +51,14 @@ function AlertTypeBadge({ condition }: { condition: AlertCondition }) {
   )
 }
 
+function formatDate(dateStr: string): string {
+  return parseIsoDateLocal(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
 function formatCondition(alert: StockAlert): string {
   if (alert.condition === "price_above" && alert.target_value != null) {
     return `Price > $${alert.target_value.toFixed(2)}`
@@ -57,15 +66,10 @@ function formatCondition(alert: StockAlert): string {
   if (alert.condition === "price_below" && alert.target_value != null) {
     return `Price < $${alert.target_value.toFixed(2)}`
   }
+  if (alert.condition === "earnings" && alert.earnings_date) {
+    return `Earnings on ${formatDate(alert.earnings_date)}`
+  }
   return conditionLabels[alert.condition]
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
 }
 
 interface AlertsTabProps {

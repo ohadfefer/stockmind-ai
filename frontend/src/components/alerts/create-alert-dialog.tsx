@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Bell, TrendingUp, TrendingDown, Sparkles, CalendarDays, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,8 +13,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { createAlert } from "@/actions/alerts"
+import { createAlert, fetchUpcomingEarnings } from "@/actions/alerts"
 import { useNotifications } from "@/hooks/use-notifications"
+import { describeEarningsHour, type UpcomingEarnings } from "@/services/earnings-service"
+import { parseIsoDateLocal } from "@/lib/utils"
 
 type AlertCondition = "price_above" | "price_below" | "earnings" | "ai_signal"
 
@@ -26,15 +28,27 @@ const alertTypes: {
 }[] = [
     { value: "price_above", label: "Price Above", icon: <TrendingUp className="size-4" />, disabled: false },
     { value: "price_below", label: "Price Below", icon: <TrendingDown className="size-4" />, disabled: false },
-    { value: "earnings", label: "Earnings", icon: <CalendarDays className="size-4" />, disabled: true },
+    { value: "earnings", label: "Earnings", icon: <CalendarDays className="size-4" />, disabled: false },
     { value: "ai_signal", label: "AI Signal", icon: <Sparkles className="size-4" />, disabled: true },
   ]
+
+function formatEarningsDate(iso: string): string {
+  return parseIsoDateLocal(iso).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
 
 export function CreateAlertDialog({ symbol }: { symbol: string }) {
   const [open, setOpen] = useState(false)
   const [condition, setCondition] = useState<AlertCondition | null>(null)
   const [targetValue, setTargetValue] = useState("")
   const [isPending, startTransition] = useTransition()
+  const [earnings, setEarnings] = useState<UpcomingEarnings | null>(null)
+  const [earningsLoading, setEarningsLoading] = useState(false)
+  const [earningsError, setEarningsError] = useState<string | null>(null)
   const { status: notifStatus, subscribe } = useNotifications()
 
   function handleOpenChange(next: boolean) {
@@ -42,6 +56,8 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
     if (!next) {
       setCondition(null)
       setTargetValue("")
+      setEarnings(null)
+      setEarningsError(null)
     }
   }
 
@@ -52,10 +68,39 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
     }
   }
 
-  const canSubmit = condition && targetValue && Number(targetValue) > 0 && !isPending
+  useEffect(() => {
+    if (condition !== "earnings") return
+    let cancelled = false
+    setEarningsLoading(true)
+    setEarningsError(null)
+    setEarnings(null)
+    fetchUpcomingEarnings(symbol)
+      .then((res) => {
+        if (cancelled) return
+        if (!res) setEarningsError("No upcoming earnings date found.")
+        else setEarnings(res)
+      })
+      .catch(() => {
+        if (!cancelled) setEarningsError("Couldn't load earnings date.")
+      })
+      .finally(() => {
+        if (!cancelled) setEarningsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [condition, symbol])
+
+  const canSubmit =
+    condition !== null &&
+    !isPending &&
+    (condition === "earnings"
+      ? earnings !== null && !earningsLoading
+      : targetValue !== "" && Number(targetValue) > 0)
 
   function handleSubmit() {
-    if (!condition || !targetValue) return
+    if (!condition) return
+    if (condition !== "earnings" && !targetValue) return
     startTransition(async () => {
       if (notifStatus !== "subscribed") {
         await subscribe()
@@ -63,7 +108,8 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
         // We check Notification.permission directly since hook state may not have updated yet.
         if (Notification.permission !== "granted") return
       }
-      await createAlert(symbol, condition, Number(targetValue))
+      const value = condition === "earnings" ? null : Number(targetValue)
+      await createAlert(symbol, condition, value)
       handleOpenChange(false)
     })
   }
@@ -111,26 +157,56 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
             </div>
           </div>
 
-          {/* Price input */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-foreground">
-              Target Price
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                $
-              </span>
-              <Input
-                type="text"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={targetValue}
-                onChange={handlePriceChange}
-                disabled={!condition}
-                className="pl-7 font-mono"
-              />
+          {/* Price input — hidden for earnings */}
+          {condition !== "earnings" && (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-foreground">
+                Target Price
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={targetValue}
+                  onChange={handlePriceChange}
+                  disabled={!condition}
+                  className="pl-7 font-mono"
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Earnings date preview */}
+          {condition === "earnings" && (
+            <div className="rounded-lg border border-border bg-secondary/50 px-3 py-2.5 text-sm">
+              {earningsLoading && (
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Looking up next earnings date…
+                </span>
+              )}
+              {earningsError && (
+                <span className="text-destructive">{earningsError}</span>
+              )}
+              {earnings && !earningsLoading && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-muted-foreground">We&apos;ll notify you on</span>
+                  <span className="font-medium text-foreground">
+                    {formatEarningsDate(earnings.date)}
+                    {earnings.hour && (
+                      <span className="text-muted-foreground font-normal">
+                        {" "}({describeEarningsHour(earnings.hour)})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {notifStatus === "denied" && (

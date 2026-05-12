@@ -2,7 +2,8 @@ import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
-import { getAlerts, createAlert, deleteAlert, type AlertCondition } from "@/services/alerts/alerts-service"
+import { getAlerts, createAlert, deleteAlert, isValidSymbol, type AlertCondition } from "@/services/alerts/alerts-service"
+import { getUpcomingEarnings } from "@/services/earnings-service"
 
 const validConditions: AlertCondition[] = ["price_above", "price_below", "earnings", "ai_signal"]
 
@@ -31,24 +32,37 @@ export async function POST(request: Request) {
 
   const { symbol, condition, targetValue } = await request.json()
 
-  if (!symbol || typeof symbol !== "string") {
-    return NextResponse.json({ error: "symbol is required" }, { status: 400 })
+  if (!isValidSymbol(symbol)) {
+    return NextResponse.json({ error: "Invalid symbol" }, { status: 400 })
   }
   if (!validConditions.includes(condition)) {
     return NextResponse.json({ error: "Invalid condition" }, { status: 400 })
   }
-  if (typeof targetValue !== "number" || targetValue <= 0) {
-    return NextResponse.json({ error: "targetValue must be a positive number" }, { status: 400 })
-  }
 
+  const upperSymbol = symbol.toUpperCase()
   const userId = await getUserIdByAuth0Id(session.user.sub)
   if (!userId) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
-
   const accountId = await getOrCreateDefaultAccount(userId)
-  const alert = await createAlert(accountId, symbol.toUpperCase(), condition, targetValue)
 
+  if (condition === "earnings") {
+    const upcoming = await getUpcomingEarnings(upperSymbol)
+    if (!upcoming) {
+      return NextResponse.json(
+        { error: "No upcoming earnings date found for this symbol" },
+        { status: 422 },
+      )
+    }
+    const alert = await createAlert(accountId, upperSymbol, condition, null, upcoming.date)
+    return NextResponse.json(alert, { status: 201 })
+  }
+
+  if (typeof targetValue !== "number" || targetValue <= 0) {
+    return NextResponse.json({ error: "targetValue must be a positive number" }, { status: 400 })
+  }
+
+  const alert = await createAlert(accountId, upperSymbol, condition, targetValue)
   return NextResponse.json(alert, { status: 201 })
 }
 

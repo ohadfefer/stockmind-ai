@@ -5,7 +5,7 @@ export type MissedAlert = {
   symbol: string
   condition: "price_above" | "price_below" | "earnings" | "ai_signal"
   target_value: number | null
-  triggered_price: number
+  triggered_price: number | null
   created_at: string
 }
 
@@ -22,7 +22,7 @@ export async function getMissedAlerts(accountId: number): Promise<MissedAlert[]>
     symbol: r.symbol as string,
     condition: r.condition as MissedAlert["condition"],
     target_value: r.target_value ? Number(r.target_value) : null,
-    triggered_price: Number(r.triggered_price),
+    triggered_price: r.triggered_price !== null && r.triggered_price !== undefined ? Number(r.triggered_price) : null,
     created_at: String(r.created_at),
   }))
 }
@@ -37,7 +37,7 @@ export async function insertMissedAlert(
   symbol: string,
   condition: string,
   targetValue: number | null,
-  triggeredPrice: number,
+  triggeredPrice: number | null,
 ): Promise<void> {
   const sql = getDb()
   await sql`

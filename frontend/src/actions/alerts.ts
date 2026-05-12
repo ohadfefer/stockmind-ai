@@ -1,5 +1,6 @@
 import type { StockAlert } from "@/services/alerts/alerts-service"
 import type { MissedAlert } from "@/services/alerts/missed-alerts-service"
+import type { UpcomingEarnings } from "@/services/earnings-service"
 
 export async function fetchAlerts(): Promise<StockAlert[]> {
   const res = await fetch("/api/alerts")
@@ -11,15 +12,25 @@ export async function fetchAlerts(): Promise<StockAlert[]> {
 export async function createAlert(
   symbol: string,
   condition: string,
-  targetValue: number,
+  targetValue: number | null,
 ) {
   const res = await fetch("/api/alerts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbol, condition, targetValue }),
   })
-  if (!res.ok) throw new Error("Failed to create alert")
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error ?? "Failed to create alert")
+  }
   return res.json()
+}
+
+export async function fetchUpcomingEarnings(symbol: string): Promise<UpcomingEarnings | null> {
+  const res = await fetch(`/api/alerts/upcoming-earnings?symbol=${encodeURIComponent(symbol)}`)
+  if (!res.ok) throw new Error("Failed to fetch upcoming earnings")
+  const data = await res.json()
+  return data.upcoming
 }
 
 export async function deleteAlertAction(alertId: number): Promise<void> {

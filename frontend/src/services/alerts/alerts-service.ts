@@ -3,11 +3,18 @@ import { getDb } from "@/lib/db"
 export type AlertCondition = "price_above" | "price_below" | "earnings" | "ai_signal"
 export type AlertStatus = "active" | "triggered" | "cancelled"
 
+const SYMBOL_RE = /^[A-Z0-9.\-]{1,10}$/
+
+export function isValidSymbol(s: unknown): s is string {
+  return typeof s === "string" && SYMBOL_RE.test(s.toUpperCase())
+}
+
 export type StockAlert = {
   id: number
   symbol: string
   condition: AlertCondition
   target_value: number | null
+  earnings_date: string | null
   status: AlertStatus
   triggered_at: string | null
   created_at: string
@@ -16,7 +23,7 @@ export type StockAlert = {
 export async function getAlerts(accountId: number): Promise<StockAlert[]> {
   const sql = getDb()
   const rows = await sql`
-    SELECT id, symbol, condition, target_value, status, triggered_at, created_at
+    SELECT id, symbol, condition, target_value, earnings_date, status, triggered_at, created_at
     FROM stock_alerts
     WHERE account_id = ${accountId}
     ORDER BY created_at DESC
@@ -26,6 +33,11 @@ export async function getAlerts(accountId: number): Promise<StockAlert[]> {
     symbol: r.symbol as string,
     condition: r.condition as AlertCondition,
     target_value: r.target_value ? Number(r.target_value) : null,
+    earnings_date: r.earnings_date
+      ? (r.earnings_date instanceof Date
+          ? r.earnings_date.toISOString().slice(0, 10)
+          : String(r.earnings_date).slice(0, 10))
+      : null,
     status: r.status as AlertStatus,
     triggered_at: r.triggered_at ? String(r.triggered_at) : null,
     created_at: String(r.created_at),
@@ -36,13 +48,14 @@ export async function createAlert(
   accountId: number,
   symbol: string,
   condition: AlertCondition,
-  targetValue: number,
+  targetValue: number | null,
+  earningsDate: string | null = null,
 ) {
   const sql = getDb()
   const rows = await sql`
-    INSERT INTO stock_alerts (account_id, symbol, condition, target_value)
-    VALUES (${accountId}, ${symbol}, ${condition}, ${targetValue})
-    RETURNING id, symbol, condition, target_value, status, created_at
+    INSERT INTO stock_alerts (account_id, symbol, condition, target_value, earnings_date)
+    VALUES (${accountId}, ${symbol}, ${condition}, ${targetValue}, ${earningsDate})
+    RETURNING id, symbol, condition, target_value, earnings_date, status, created_at
   `
   return rows[0]
 }
