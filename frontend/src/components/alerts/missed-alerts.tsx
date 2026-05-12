@@ -82,10 +82,14 @@ export function MissedAlerts() {
             {missedAlerts.map((alert) => (
               <li
                 key={alert.id}
-                className="flex items-start gap-3 border-b border-border px-4 py-3 last:border-b-0"
+                className={clsx(
+                  "flex gap-3 border-b border-border px-4 py-3 last:border-b-0",
+                  alert.condition === "earnings" ? "items-center" : "items-start",
+                )}
               >
                 <div className={clsx(
-                  "mt-0.5 rounded-md p-1.5",
+                  "rounded-md p-1.5",
+                  alert.condition !== "earnings" && "mt-0.5",
                   alert.condition === "price_above" && "bg-[#10B981]/10 text-[#10B981]",
                   alert.condition === "price_below" && "bg-[#EF4444]/10 text-[#EF4444]",
                   alert.condition === "earnings" && "bg-primary/10 text-primary",
