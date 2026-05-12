@@ -9,6 +9,20 @@ export function isValidSymbol(s: unknown): s is string {
   return typeof s === "string" && SYMBOL_RE.test(s.toUpperCase())
 }
 
+// Postgres DATE columns come back as a JS Date built from local-time components.
+// Using toISOString() would shift to UTC and lose a day east of UTC, so we
+// extract local components directly.
+function dbDateToIso(value: unknown): string | null {
+  if (!value) return null
+  if (value instanceof Date) {
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, "0")
+    const d = String(value.getDate()).padStart(2, "0")
+    return `${y}-${m}-${d}`
+  }
+  return String(value).slice(0, 10)
+}
+
 export type StockAlert = {
   id: number
   symbol: string
@@ -33,11 +47,7 @@ export async function getAlerts(accountId: number): Promise<StockAlert[]> {
     symbol: r.symbol as string,
     condition: r.condition as AlertCondition,
     target_value: r.target_value ? Number(r.target_value) : null,
-    earnings_date: r.earnings_date
-      ? (r.earnings_date instanceof Date
-          ? r.earnings_date.toISOString().slice(0, 10)
-          : String(r.earnings_date).slice(0, 10))
-      : null,
+    earnings_date: dbDateToIso(r.earnings_date),
     status: r.status as AlertStatus,
     triggered_at: r.triggered_at ? String(r.triggered_at) : null,
     created_at: String(r.created_at),

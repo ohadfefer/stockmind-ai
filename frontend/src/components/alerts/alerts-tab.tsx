@@ -51,8 +51,18 @@ function AlertTypeBadge({ condition }: { condition: AlertCondition }) {
   )
 }
 
-function formatDate(dateStr: string): string {
+// For DATE columns (e.g. earnings_date) — already YYYY-MM-DD, render in local TZ.
+function formatIsoDate(dateStr: string): string {
   return parseIsoDateLocal(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+// For TIMESTAMPTZ columns (e.g. created_at) — full ISO instant, convert to local TZ.
+function formatTimestamp(ts: string): string {
+  return new Date(ts).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -67,7 +77,7 @@ function formatCondition(alert: StockAlert): string {
     return `Price < $${alert.target_value.toFixed(2)}`
   }
   if (alert.condition === "earnings" && alert.earnings_date) {
-    return `Earnings on ${formatDate(alert.earnings_date)}`
+    return `Earnings on ${formatIsoDate(alert.earnings_date)}`
   }
   return conditionLabels[alert.condition]
 }
@@ -156,7 +166,7 @@ export function AlertsTab({ alerts }: AlertsTabProps) {
                 <StatusBadge status={alert.status} />
               </TableCell>
               <TableCell className="font-mono text-sm text-muted-foreground">
-                {formatDate(alert.created_at)}
+                {formatTimestamp(alert.created_at)}
               </TableCell>
               <TableCell className="pr-5">
                 <ConfirmDelete

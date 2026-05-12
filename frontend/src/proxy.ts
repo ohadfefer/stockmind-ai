@@ -60,7 +60,10 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   }
 
   // Allow QStash webhook routes (secured by signature verification in the route handler)
-  if (request.nextUrl.pathname === "/api/alerts/check") {
+  if (
+    request.nextUrl.pathname === "/api/alerts/check" ||
+    request.nextUrl.pathname === "/api/alerts/check-earnings"
+  ) {
     return authRes
   }
 
