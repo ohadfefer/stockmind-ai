@@ -4,6 +4,7 @@ import { Auth0Provider } from "@auth0/nextjs-auth0/client"
 import { Analytics } from "@vercel/analytics/next"
 import { auth0 } from "@/lib/auth0"
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration"
+import { Toaster } from "@/components/ui/sonner"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -54,6 +55,7 @@ export default async function RootLayout({
           {children}
         </Auth0Provider>
         <ServiceWorkerRegistration />
+        <Toaster />
         <Analytics />
       </body>
     </html>
