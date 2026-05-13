@@ -80,9 +80,11 @@ export default async function DetailsPage({
           <div className="flex items-center gap-2">
             <FollowButton symbol={upperSymbol} initialFollowing={initialFollowing} />
             <CreateAlertDialog symbol={upperSymbol} />
-            <Button variant="outline" size="sm">
-              <Bot className="size-4" />
-              Analyze
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/conversation?prompt=${encodeURIComponent(upperSymbol)}`}>
+                <Bot className="size-4" />
+                Analyze
+              </Link>
             </Button>
           </div>
         </div>
@@ -103,7 +105,7 @@ export default async function DetailsPage({
               previousClose={stock.previousClose}
             />
 
-            {stock.price > 0 && <QuoteMeta currency={stock.currency} />}
+            {stock.price > 0 && <QuoteMeta currency="USD" />}
 
             {/* Chart */}
             <PriceChart symbol={upperSymbol} />

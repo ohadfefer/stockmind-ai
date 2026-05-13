@@ -10,13 +10,13 @@ import {
 import { ChatPanel } from "@/components/conversation/chat-panel"
 
 interface ConversationPageProps {
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<{ id?: string; prompt?: string }>
 }
 
 export default async function ConversationPage({
   searchParams,
 }: ConversationPageProps) {
-  const { id: idParam } = await searchParams
+  const { id: idParam, prompt: promptParam } = await searchParams
 
   let initialMessages: ConversationMessage[] = []
   let conversationId: number | null = null
@@ -43,10 +43,19 @@ export default async function ConversationPage({
     }
   }
 
+  // Only honor ?prompt=… when it looks like a ticker symbol. The auto-send
+  // fires without explicit user confirmation, so a crafted link could
+  // otherwise inject arbitrary instructions into the victim's chat.
+  const TICKER_RE = /^[A-Z][A-Z0-9.-]{0,9}$/
+  const rawPrompt = promptParam?.trim().toUpperCase() ?? ""
+  const initialPrompt =
+    conversationId == null && TICKER_RE.test(rawPrompt) ? rawPrompt : null
+
   return (
     <ChatPanel
       conversationId={conversationId}
       initialMessages={initialMessages}
+      initialPrompt={initialPrompt}
     />
   )
 }

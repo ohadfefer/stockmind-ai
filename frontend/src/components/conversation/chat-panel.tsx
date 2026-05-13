@@ -10,6 +10,7 @@ import type { ConversationMessage } from "@/services/ai/conversation-service"
 interface ChatPanelProps {
   conversationId: number | null
   initialMessages: ConversationMessage[]
+  initialPrompt?: string | null
 }
 
 type DisplayMessage = {
@@ -39,6 +40,7 @@ const SEED_PROMPTS = [
 export function ChatPanel({
   conversationId,
   initialMessages,
+  initialPrompt = null,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>(() =>
     initialMessages.map((m) => ({
@@ -61,6 +63,17 @@ export function ChatPanel({
   useEffect(() => {
     setActiveConversationId(conversationId)
   }, [conversationId])
+  const autoSentRef = useRef(false)
+  // Track unmount so navigating away mid-stream (e.g. to /portfolio) doesn't
+  // rewrite the URL out from under the new page. We intentionally do NOT
+  // abort the in-flight fetch: the server keeps generating, onFinish persists
+  // the assistant message, and the user can find the chat in the history tab.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // Auto-scroll only when the user is already pinned to (or near) the bottom.
   // If they've scrolled up to read history mid-stream, don't yank them down.
@@ -80,6 +93,21 @@ export function ChatPanel({
       behavior: "smooth",
     })
   }, [messages, isStreaming])
+
+  // Auto-send when arriving via /conversation?prompt=… (e.g. Analyze button
+  // on a details page). Strip the query before firing so a refresh during
+  // streaming doesn't trigger a second send.
+  useEffect(() => {
+    if (autoSentRef.current) return
+    if (!initialPrompt) return
+    if (conversationId != null) return
+    if (initialMessages.length > 0) return
+    autoSentRef.current = true
+    window.history.replaceState(null, "", "/conversation")
+    void send(initialPrompt)
+    // send closes over component state; the ref guard makes this a one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt, conversationId, initialMessages.length])
 
   async function send(content: string) {
     if (!content.trim() || isStreaming) return
@@ -135,7 +163,7 @@ export function ChatPanel({
       // sync the URL so a refresh keeps the user in this conversation.
       // Use history.replaceState (not router.replace) so we don't trigger an
       // RSC refetch of this same page while the response is still streaming.
-      if (activeConversationId == null) {
+      if (activeConversationId == null && mountedRef.current) {
         const idHeader = res.headers.get("X-Conversation-Id")
         const newId = idHeader != null ? Number(idHeader) : NaN
         if (Number.isInteger(newId) && newId > 0) {
@@ -161,6 +189,9 @@ export function ChatPanel({
         })
       }
     } catch (err) {
+      // Reader/setState calls on an unmounted component are no-ops; nothing
+      // to clean up beyond logging.
+      if (!mountedRef.current) return
       console.error(err)
       setError({
         kind: "generic",
@@ -170,7 +201,7 @@ export function ChatPanel({
         prev.filter((m) => m.key !== userKey && m.key !== assistantKey),
       )
     } finally {
-      setIsStreaming(false)
+      if (mountedRef.current) setIsStreaming(false)
     }
   }
 
