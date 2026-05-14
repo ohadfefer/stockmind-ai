@@ -70,6 +70,10 @@ export function ChatPanel({
   // the assistant message, and the user can find the chat in the history tab.
   const mountedRef = useRef(true)
   useEffect(() => {
+    // Reset on (re)mount: in dev, React strict mode runs mount → unmount →
+    // remount, and without this the unmount cleanup would leave the ref
+    // stuck at false, freezing isStreaming after an auto-sent first message.
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
     }

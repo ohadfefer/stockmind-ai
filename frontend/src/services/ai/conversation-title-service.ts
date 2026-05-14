@@ -38,11 +38,16 @@ export async function maybeAutoTitleConversation(
     if (row.title !== DEFAULT_TITLE) return
     if (Number(row.msg_count) !== 2) return
 
-    let title: string | null = null
-    try {
-      title = await generateTitle(params.firstUserMessage, params.userId)
-    } catch (err) {
-      console.error("conversation title generation failed:", err)
+    // Single-token messages (e.g., a bare ticker from the Analyze button)
+    // confuse the title model: asked for 3–6 words it hallucinates context.
+    // Use the token directly and skip the model call entirely.
+    let title: string | null = singleTokenTitle(params.firstUserMessage)
+    if (!title) {
+      try {
+        title = await generateTitle(params.firstUserMessage, params.userId)
+      } catch (err) {
+        console.error("conversation title generation failed:", err)
+      }
     }
 
     // If the model errored or returned junk, fall back to a truncated
@@ -120,6 +125,18 @@ function sanitizeTitle(raw: string): string | null {
   if (cleaned.length < 2) return null
   if (/^https?:\/\//i.test(cleaned)) return null
   return cleaned.slice(0, MAX_TITLE_LEN)
+}
+
+function singleTokenTitle(message: string): string | null {
+  const cleaned = message.trim()
+  if (!cleaned || /\s/.test(cleaned)) return null
+  if (cleaned.length > 20) return null
+  // Ticker-shaped → uppercase ("aapl" → "AAPL"). Other single words keep
+  // their original casing so "Diversification" doesn't become "DIVERSIFICATION".
+  if (/^[A-Za-z][A-Za-z0-9.-]{0,9}$/.test(cleaned)) {
+    return cleaned.toUpperCase()
+  }
+  return cleaned
 }
 
 function fallbackTitle(firstUserMessage: string): string | null {
