@@ -63,18 +63,15 @@ export function NewsFeed({ news, sentiment }: NewsFeedProps) {
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex flex-col gap-2 border-t border-border px-5 py-4 transition-colors hover:bg-muted/30"
+              className="group flex flex-col gap-2 border-t border-border px-5 py-4 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                  {(item.category || "market").toUpperCase()}
-                </span>
                 <span className="text-xs text-muted-foreground">
-                  {timeAgo(item.datetime)}
+                  {item.source}
                 </span>
                 <span className="text-xs text-muted-foreground/50">·</span>
                 <span className="text-xs text-muted-foreground">
-                  {item.source}
+                  {timeAgo(item.datetime)}
                 </span>
               </div>
               <h3 className="text-sm font-semibold leading-snug text-foreground text-pretty group-hover:text-primary">

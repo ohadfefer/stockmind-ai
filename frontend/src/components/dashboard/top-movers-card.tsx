@@ -84,7 +84,7 @@ function MoverRow({
           {holding.ticker}
         </span>
       </div>
-      <span className={`font-mono text-base font-semibold ${color}`}>
+      <span className="font-mono text-base font-semibold text-foreground">
         {sign}
         {value.toFixed(2)}%
       </span>

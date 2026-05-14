@@ -18,8 +18,6 @@ export function KPICards({
   holdings,
   stats,
 }: KPICardsProps) {
-  const portfolioPositive = portfolioReturnPercent >= 0
-  const portfolioColor = portfolioPositive ? "text-[#10B981]" : "text-[#EF4444]"
   const portfolioSign = portfolioReturnPercent > 0 ? "+" : ""
 
   const benchmark = etfs.find((e) => e.ticker === "SPY") ?? etfs[0]
@@ -43,7 +41,7 @@ export function KPICards({
           <LineChart className="size-5 text-muted-foreground" />
         </div>
         <p className="text-lg font-bold tracking-tight">
-          <span className={`font-mono ${portfolioColor}`}>
+          <span className="font-mono text-foreground">
             {portfolioSign}
             {portfolioReturnPercent.toFixed(2)}%
           </span>
@@ -96,7 +94,7 @@ export function KPICards({
         {stats && stats.totalDays > 0 ? (
           <>
             <p className="font-mono text-2xl font-bold tracking-tight">
-              <span className="text-[#10B981]">{stats.gainDays}</span>
+              <span className="text-foreground">{stats.gainDays}</span>
               <span className="text-muted-foreground">/{stats.totalDays}</span>
               <span className="ml-1.5 text-base font-medium text-muted-foreground">
                 days

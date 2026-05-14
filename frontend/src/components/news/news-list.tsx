@@ -1,6 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton"
 import type { FinnhubNewsItem } from "@/services/news-service"
-import { NewsImage } from "./news-image"
 
 function formatDatetime(unix: number): string {
   const date = new Date(unix * 1000)
@@ -62,7 +61,6 @@ export function NewsList({ items, emptyMessage = "No recent news found.", compac
               </p>
             )}
           </div>
-          {!compact && <NewsImage src={item.image} />}
         </a>
       ))}
     </div>
@@ -79,7 +77,6 @@ export function NewsListSkeleton({ count = 3, compact = false }: { count?: numbe
             <Skeleton className="h-4 w-full" />
             {!compact && <Skeleton className="h-3 w-3/4" />}
           </div>
-          {!compact && <Skeleton className="size-20 shrink-0 rounded-lg" />}
         </div>
       ))}
     </div>
