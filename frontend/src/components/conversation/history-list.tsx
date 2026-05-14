@@ -3,14 +3,38 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Check, MessageSquare, Pencil, Pin, Sparkles, Trash2, X } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  MessageSquare,
+  Pencil,
+  Pin,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   deleteConversation,
   renameConversation,
   setConversationPinned,
 } from "@/actions/conversation"
 import type { ConversationListItem } from "@/services/ai/conversation-service"
+
+type SortMode = "newest" | "pinned" | "oldest"
+
+const SORT_LABEL: Record<SortMode, string> = {
+  newest: "Newest",
+  pinned: "Pinned",
+  oldest: "Oldest",
+}
 
 const DEFAULT_TITLE = "New chat"
 const PREVIEW_MAX = 80
@@ -43,8 +67,9 @@ export function ConversationHistoryList({
   const [pinOverrides, setPinOverrides] = useState<Map<number, Date | null>>(
     new Map(),
   )
+  const [sortMode, setSortMode] = useState<SortMode>("newest")
 
-  const visible = items
+  const decorated = items
     .filter((i) => !removedIds.has(i.id))
     .map((item) => {
       const override = pinOverrides.get(item.id)
@@ -52,14 +77,19 @@ export function ConversationHistoryList({
         pinOverrides.has(item.id) ? (override as Date | null) : item.pinnedAt
       return { ...item, pinnedAt }
     })
+
+  // "Pinned" mode is a filter, not a sort priority: only show pinned items.
+  // Newest and Oldest order all items by updatedAt.
+  const visible = decorated
+    .filter((item) => sortMode !== "pinned" || item.pinnedAt !== null)
     .sort((a, b) => {
-      const aPin = a.pinnedAt ? a.pinnedAt.getTime() : 0
-      const bPin = b.pinnedAt ? b.pinnedAt.getTime() : 0
-      if (aPin !== bPin) return bPin - aPin
+      if (sortMode === "oldest") {
+        return a.updatedAt.getTime() - b.updatedAt.getTime()
+      }
       return b.updatedAt.getTime() - a.updatedAt.getTime()
     })
 
-  if (visible.length === 0) return <EmptyState />
+  if (decorated.length === 0) return <EmptyState />
 
   async function handleDelete(id: number) {
     setRemovedIds((s) => new Set(s).add(id))
@@ -113,33 +143,74 @@ export function ConversationHistoryList({
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {visible.map((item) => (
-        <li key={item.id}>
-          <ConversationRow
-            item={item}
-            editing={active?.id === item.id && active.mode === "editing"}
-            confirming={
-              active?.id === item.id && active.mode === "confirming"
-            }
-            onStartRename={() =>
-              setActive({ id: item.id, mode: "editing" })
-            }
-            onCancelRename={() =>
-              setActive((a) =>
-                a?.id === item.id && a.mode === "editing" ? null : a,
-              )
-            }
-            onConfirmingChange={(v) =>
-              setActive(v ? { id: item.id, mode: "confirming" } : null)
-            }
-            onSubmitRename={(t) => handleRename(item.id, t)}
-            onDelete={() => handleDelete(item.id)}
-            onTogglePin={() => handleTogglePin(item.id, !item.pinnedAt)}
-          />
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <SortDropdown value={sortMode} onChange={setSortMode} />
+      </div>
+      {visible.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
+          No pinned conversations yet. Pin a conversation to find it here.
+        </div>
+      ) : (
+      <ul className="flex flex-col gap-2">
+        {visible.map((item) => (
+          <li key={item.id}>
+            <ConversationRow
+              item={item}
+              editing={active?.id === item.id && active.mode === "editing"}
+              confirming={
+                active?.id === item.id && active.mode === "confirming"
+              }
+              onStartRename={() =>
+                setActive({ id: item.id, mode: "editing" })
+              }
+              onCancelRename={() =>
+                setActive((a) =>
+                  a?.id === item.id && a.mode === "editing" ? null : a,
+                )
+              }
+              onConfirmingChange={(v) =>
+                setActive(v ? { id: item.id, mode: "confirming" } : null)
+              }
+              onSubmitRename={(t) => handleRename(item.id, t)}
+              onDelete={() => handleDelete(item.id)}
+              onTogglePin={() => handleTogglePin(item.id, !item.pinnedAt)}
+            />
+          </li>
+        ))}
+      </ul>
+      )}
+    </div>
+  )
+}
+
+function SortDropdown({
+  value,
+  onChange,
+}: {
+  value: SortMode
+  onChange: (mode: SortMode) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm">
+          Sort: {SORT_LABEL[value]}
+          <ChevronDown className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onChange("newest")}>
+          Sort: Newest
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onChange("pinned")}>
+          Sort: Pinned
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onChange("oldest")}>
+          Sort: Oldest
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
