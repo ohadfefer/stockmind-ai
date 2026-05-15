@@ -1,7 +1,8 @@
+import { redirect } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { auth0 } from "@/lib/auth0"
-import { getUserName } from "@/services/user-service"
+import { getUserName, isUserOnboarded } from "@/services/user-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 
 export default async function MainLayout({
@@ -11,6 +12,13 @@ export default async function MainLayout({
 }>) {
   const session = await auth0.getSession()
   const user = session?.user ?? null
+
+  // A session can exist without a completed Neon users/account row (e.g. signup
+  // that never finished onboarding). Such users have no DB-backed data and the
+  // app breaks for them — route them back to onboarding until it's complete.
+  if (user && !(await isUserOnboarded(user.sub))) {
+    redirect("/onboarding")
+  }
 
   const [displayName, subscription] = user
     ? await Promise.all([

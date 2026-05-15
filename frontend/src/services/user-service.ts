@@ -34,6 +34,19 @@ export async function getUserIdByAuth0Id(auth0Id: string): Promise<number | null
   }
 }
 
+export async function isUserOnboarded(auth0Id: string): Promise<boolean> {
+  const sql = getDb()
+  try {
+    const rows = await sql`
+      SELECT 1 FROM users
+      WHERE auth0_id = ${auth0Id} AND onboarded_at IS NOT NULL
+    `
+    return rows.length > 0
+  } catch {
+    return false
+  }
+}
+
 export async function getStripeCustomerIdByAuth0Id(
   auth0Id: string,
 ): Promise<string | null> {
