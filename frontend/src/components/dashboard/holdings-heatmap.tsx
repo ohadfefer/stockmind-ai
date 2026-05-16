@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ResponsiveContainer, Treemap } from "recharts"
 import { cn } from "@/lib/utils"
-import type { Holding } from "@/services/portfolio-service"
+import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { WatchlistStockData } from "@/types/watchlist"
 
 type Dataset = "portfolio" | "watchlist"

@@ -3,7 +3,7 @@ import { Output, generateText } from "ai"
 import { xai } from "@ai-sdk/xai"
 import { z } from "zod"
 import { getDb } from "@/lib/db"
-import type { PortfolioSummary } from "@/services/portfolio-service"
+import type { PortfolioSummary } from "@/services/portfolio/portfolio-service"
 import { buildXaiUsage, type NormalizedUsage } from "@/services/ai/xai-cost"
 import {
   assertCanStartTurn,

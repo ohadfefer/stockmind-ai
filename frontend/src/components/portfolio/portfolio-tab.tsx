@@ -24,17 +24,19 @@ import {
   Wallet,
   ArrowUpRight,
 } from "lucide-react"
+import { ErrorBoundary, SectionError } from "@/components/section-error"
 import { fetchPortfolioSummary } from "@/actions/portfolio"
-import type { PortfolioSummary } from "@/services/portfolio-service"
+import type { PortfolioSummary } from "@/services/portfolio/portfolio-service"
 import type { PortfolioReview } from "@/services/ai/portfolio-review-service"
 
 const SECTOR_COLORS = ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316"]
 interface PortfolioTabProps {
-  summary: PortfolioSummary
+  summaryPromise: Promise<PortfolioSummary>
   reviewPromise: Promise<PortfolioReview>
 }
 
-export function PortfolioTab({ summary: initialSummary, reviewPromise }: PortfolioTabProps) {
+export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProps) {
+  const initialSummary = use(summaryPromise)
   const [summary, setSummary] = useState(initialSummary)
 
   useEffect(() => {
@@ -171,10 +173,22 @@ export function PortfolioTab({ summary: initialSummary, reviewPromise }: Portfol
           </div>
         </div>
 
-        {/* AI Strategy Insight */}
-        <Suspense fallback={<AiInsightCardSkeleton />}>
-          <AiInsightCard reviewPromise={reviewPromise} />
-        </Suspense>
+        {/* AI Strategy Insight — failures here stay contained to this card
+            so the holdings table still renders. */}
+        <ErrorBoundary
+          resetKeys={[reviewPromise]}
+          fallback={
+            <SectionError
+              compact
+              title="AI insight unavailable"
+              description="Couldn't load the strategy insight."
+            />
+          }
+        >
+          <Suspense fallback={<AiInsightCardSkeleton />}>
+            <AiInsightCard reviewPromise={reviewPromise} />
+          </Suspense>
+        </ErrorBoundary>
       </div>
 
       {/* Holdings Table */}
@@ -349,6 +363,67 @@ function AiInsightCardSkeleton() {
         <div className="h-3 w-9/12 rounded bg-secondary" />
       </div>
       <div className="mt-auto h-10 rounded-lg bg-secondary" />
+    </div>
+  )
+}
+
+export function PortfolioTabSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col gap-6">
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-24 rounded bg-secondary" />
+              <div className="size-4 rounded bg-secondary" />
+            </div>
+            <div className="h-7 w-32 rounded bg-secondary" />
+            <div className="h-3 w-20 rounded bg-secondary" />
+          </div>
+        ))}
+      </div>
+
+      {/* Sector allocation + AI insight */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:gap-8">
+          <div className="mx-auto size-52 rounded-full bg-secondary sm:mx-0" />
+          <div className="flex flex-1 flex-col gap-3">
+            <div className="h-5 w-40 rounded bg-secondary" />
+            <div className="h-3 w-48 rounded bg-secondary" />
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-3 w-full rounded bg-secondary" />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
+          <div className="h-5 w-40 rounded bg-secondary" />
+          <div className="space-y-2">
+            <div className="h-3 w-full rounded bg-secondary" />
+            <div className="h-3 w-11/12 rounded bg-secondary" />
+            <div className="h-3 w-9/12 rounded bg-secondary" />
+          </div>
+          <div className="mt-auto h-10 rounded-lg bg-secondary" />
+        </div>
+      </div>
+
+      {/* Holdings table */}
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between px-5 py-4">
+          <div className="h-5 w-40 rounded bg-secondary" />
+          <div className="h-8 w-48 rounded bg-secondary" />
+        </div>
+        <div className="space-y-3 px-5 pb-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-10 w-full rounded bg-secondary" />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

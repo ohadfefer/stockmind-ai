@@ -1,4 +1,4 @@
-import type { PortfolioSummary } from "@/services/portfolio-service"
+import type { PortfolioSummary } from "@/services/portfolio/portfolio-service"
 
 export async function fetchPortfolioSummary(): Promise<PortfolioSummary | null> {
   const res = await fetch("/api/portfolio/summary")

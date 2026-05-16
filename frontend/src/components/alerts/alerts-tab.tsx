@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { use, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Table,
@@ -82,11 +82,27 @@ function formatCondition(alert: StockAlert): string {
   return conditionLabels[alert.condition]
 }
 
-interface AlertsTabProps {
-  alerts: StockAlert[]
+export function AlertsTabSkeleton() {
+  return (
+    <div className="animate-pulse rounded-xl border border-border bg-card">
+      <div className="border-b border-border px-5 py-4">
+        <div className="h-4 w-32 rounded bg-secondary" />
+      </div>
+      <div className="space-y-3 px-5 py-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-10 w-full rounded bg-secondary" />
+        ))}
+      </div>
+    </div>
+  )
 }
 
-export function AlertsTab({ alerts }: AlertsTabProps) {
+interface AlertsTabProps {
+  alertsPromise: Promise<StockAlert[]>
+}
+
+export function AlertsTab({ alertsPromise }: AlertsTabProps) {
+  const alerts = use(alertsPromise)
   const router = useRouter()
   const [removedIds, setRemovedIds] = useState<Set<number>>(new Set())
   const [confirmingId, setConfirmingId] = useState<number | null>(null)

@@ -4,7 +4,7 @@ import { xai } from "@ai-sdk/xai"
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getAccountDetails } from "@/services/account-service"
-import { getPortfolioSummary } from "@/services/portfolio-service"
+import { getPortfolioSummary } from "@/services/portfolio/portfolio-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 import {
   appendUserMessage,

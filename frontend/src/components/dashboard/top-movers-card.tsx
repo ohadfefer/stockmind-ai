@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { TrendingUp, TrendingDown } from "lucide-react"
-import type { Holding } from "@/services/portfolio-service"
+import type { Holding } from "@/services/portfolio/portfolio-service"
 
 type Range = "day" | "all"
 

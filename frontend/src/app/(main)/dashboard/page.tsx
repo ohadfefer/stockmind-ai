@@ -1,7 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getAccountDetails } from "@/services/account-service"
-import { getPortfolioSummary, type Holding } from "@/services/portfolio-service"
+import { getPortfolioSummary, type Holding } from "@/services/portfolio/portfolio-service"
 import { getDashboardWatchlistStocks } from "@/services/dashboard/dashboard-watchlist-service"
 import { getEtfQuote, type EtfQuote } from "@/services/dashboard/etf-quote-service"
 import {

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { TrendingUp, TrendingDown, LineChart, ArrowRight } from "lucide-react"
 import type { EtfQuote } from "@/services/dashboard/etf-quote-service"
-import type { Holding } from "@/services/portfolio-service"
+import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { PortfolioStats } from "@/services/position/portfolio-daily-value-service"
 import { TopMoversCard } from "@/components/dashboard/top-movers-card"
 
