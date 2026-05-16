@@ -1,23 +1,16 @@
-import { finnhubFetch } from "@/lib/finnhub"
 import type { WatchlistStockData } from "@/types/watchlist"
+import { getMarketIsOpenCached } from "@/services/stock/quote-cache"
 
 const priceCache = new Map<
   string,
   { data: WatchlistStockData; marketWasOpen: boolean }
 >()
 
+// Single source of truth — shares the 30s cache and in-flight dedupe in
+// quote-cache instead of spending a Finnhub /stock/market-status call per
+// watchlist request (and avoids the two paths disagreeing across a transition).
 export async function getMarketIsOpen(): Promise<boolean> {
-  try {
-    const status = await finnhubFetch("/stock/market-status", {
-      exchange: "US",
-    })
-    const isOpen = (status as { isOpen?: unknown })?.isOpen
-    if (typeof isOpen === "boolean") return isOpen
-    return true
-  } catch (err) {
-    console.error("[getMarketIsOpen] failed", err)
-    return true
-  }
+  return getMarketIsOpenCached()
 }
 
 export async function getOrFetchPrice(

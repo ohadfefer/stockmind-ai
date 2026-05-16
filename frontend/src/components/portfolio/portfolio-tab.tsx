@@ -39,13 +39,30 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
   const initialSummary = use(summaryPromise)
   const [summary, setSummary] = useState(initialSummary)
 
+  // Poll once a minute while the market is open. While closed, prices are
+  // frozen server-side so we don't poll — but a user returning after hours
+  // should still see the latest close, so we refetch on tab refocus.
   useEffect(() => {
-    const interval = setInterval(async () => {
+    async function refresh() {
       const updated = await fetchPortfolioSummary()
       if (updated) setSummary(updated)
-    }, 60_000)
-    return () => clearInterval(interval)
-  }, [])
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") refresh()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    const interval =
+      summary.marketOpen !== false
+        ? setInterval(refresh, 60_000)
+        : undefined
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      if (interval) clearInterval(interval)
+    }
+  }, [summary.marketOpen])
 
   {/* PieChart */}
   const sectorAllocation = useMemo(() => {

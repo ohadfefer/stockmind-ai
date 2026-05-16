@@ -10,6 +10,22 @@ export interface Position {
   updated_at: string
 }
 
+const POSITIONS_TTL_MS = 60_000
+const positionsCache = new Map<
+  number,
+  { positions: Position[]; fetchedAt: number }
+>()
+// Bumped on every invalidation. A getPositions read that began before the most
+// recent bump refuses to write its (now stale) rows back into the cache, so a
+// poll racing a concurrent trade can't re-cache pre-trade holdings.
+let positionsEpoch = 0
+
+/** Drop the cached positions for an account (call after a trade mutates them). */
+export function invalidatePositions(accountId: number): void {
+  positionsCache.delete(accountId)
+  positionsEpoch++
+}
+
 interface UpdatePositionParams {
   accountId: number
   symbol: string
@@ -55,6 +71,7 @@ export async function updatePosition(params: UpdatePositionParams): Promise<void
         WHERE account_id = ${params.accountId} AND symbol = ${params.symbol}
       `
     }
+    invalidatePositions(params.accountId)
   } else {
     // Sell — reduce quantity, realize P&L
     if (rows.length === 0) return // nothing to sell
@@ -74,10 +91,17 @@ export async function updatePosition(params: UpdatePositionParams): Promise<void
           updated_at = NOW()
       WHERE account_id = ${params.accountId} AND symbol = ${params.symbol}
     `
+    invalidatePositions(params.accountId)
   }
 }
 
 export async function getPositions(accountId: number): Promise<Position[]> {
+  const cached = positionsCache.get(accountId)
+  if (cached && Date.now() - cached.fetchedAt < POSITIONS_TTL_MS) {
+    return cached.positions
+  }
+
+  const startedEpoch = positionsEpoch
   const sql = getDb()
 
   const rows = await sql`
@@ -87,7 +111,7 @@ export async function getPositions(accountId: number): Promise<Position[]> {
     ORDER BY symbol
   `
 
-  return rows.map((r) => ({
+  const positions: Position[] = rows.map((r) => ({
     id: r.id as number,
     account_id: r.account_id as number,
     symbol: r.symbol as string,
@@ -96,4 +120,11 @@ export async function getPositions(accountId: number): Promise<Position[]> {
     realized_pnl: Number(r.realized_pnl),
     updated_at: r.updated_at as string,
   }))
+
+  // Skip the write if an invalidation landed while this query was in flight —
+  // these rows may predate the trade that triggered it.
+  if (positionsEpoch === startedEpoch) {
+    positionsCache.set(accountId, { positions, fetchedAt: Date.now() })
+  }
+  return positions
 }

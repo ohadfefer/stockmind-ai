@@ -1,6 +1,9 @@
-import { finnhubFetch } from "@/lib/finnhub"
 import { getPositions } from "@/services/position/position-service"
-import type { FinnhubQuote, FinnhubProfile } from "@/services/stock/stock-service"
+import {
+  getCachedQuote,
+  getCachedProfile,
+  getMarketIsOpenCached,
+} from "@/services/stock/quote-cache"
 
 export interface Holding {
   ticker: string
@@ -25,32 +28,41 @@ export interface PortfolioSummary {
   todayPL: number
   todayPLPercent: number
   holdings: Holding[]
+  // US market open/closed at fetch time. Drives the client's poll cadence:
+  // poll every minute while open, stop (refetch on refocus) while closed.
+  marketOpen?: boolean
 }
 
 export async function getPortfolioSummary(
   accountId: number,
   runningBalance: number,
 ): Promise<PortfolioSummary> {
-  const positions = await getPositions(accountId)
+  const [positions, marketOpen] = await Promise.all([
+    getPositions(accountId),
+    getMarketIsOpenCached(),
+  ])
 
   if (positions.length === 0) {
-    return { runningBalance, portfolioValue: 0, totalPL: 0, totalPLPercent: 0, todayPL: 0, todayPLPercent: 0, holdings: [] }
+    return { runningBalance, portfolioValue: 0, totalPL: 0, totalPLPercent: 0, todayPL: 0, todayPLPercent: 0, holdings: [], marketOpen }
   }
 
-  // Fetch quotes and profiles for all held symbols in parallel
+  // Cached + market-aware: quotes refetch at most 1/min while open and freeze
+  // to the captured close while shut; profiles are long-lived.
   const [quotes, profiles] = await Promise.all([
     Promise.all(
       positions.map((p) =>
-        finnhubFetch("/quote", { symbol: p.symbol })
-          .then((q: FinnhubQuote) => ({ symbol: p.symbol, quote: q }))
-          .catch(() => ({ symbol: p.symbol, quote: null }))
+        getCachedQuote(p.symbol, marketOpen).then((quote) => ({
+          symbol: p.symbol,
+          quote,
+        })),
       ),
     ),
     Promise.all(
       positions.map((p) =>
-        finnhubFetch("/stock/profile2", { symbol: p.symbol })
-          .then((prof: FinnhubProfile) => ({ symbol: p.symbol, profile: prof }))
-          .catch(() => ({ symbol: p.symbol, profile: null }))
+        getCachedProfile(p.symbol).then((profile) => ({
+          symbol: p.symbol,
+          profile,
+        })),
       ),
     ),
   ])
@@ -103,5 +115,5 @@ export async function getPortfolioSummary(
   const totalPLPercent = totalCostBasis > 0 ? (totalPL / totalCostBasis) * 100 : 0
   const todayPLPercent = portfolioValue - todayPL > 0 ? (todayPL / (portfolioValue - todayPL)) * 100 : 0
 
-  return { runningBalance, portfolioValue, totalPL, totalPLPercent, todayPL, todayPLPercent, holdings }
+  return { runningBalance, portfolioValue, totalPL, totalPLPercent, todayPL, todayPLPercent, holdings, marketOpen }
 }
