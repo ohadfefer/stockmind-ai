@@ -12,6 +12,11 @@ export interface FinnhubNewsItem {
   url: string
 }
 
+// News changes slowly relative to quotes; refresh at most twice a day to keep
+// Finnhub request volume low. Backed by Next's data cache (per-URL), so each
+// category / symbol caches independently.
+const TWELVE_HOURS_SECONDS = 12 * 60 * 60
+
 const DATE_STRING_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 export function toLocalDateString(date: Date): string {
@@ -40,7 +45,14 @@ export async function getMarketNews(
   category = "general"
 ): Promise<FinnhubNewsItem[]> {
   try {
-    const data = await finnhubFetch("/news", { category })
+    const data = await finnhubFetch(
+      "/news",
+      { category },
+      {
+        revalidate: TWELVE_HOURS_SECONDS,
+        tags: ["market-news", `market-news:${category}`],
+      },
+    )
     return Array.isArray(data) ? data : []
   } catch (err) {
     console.error("getMarketNews failed", err)
@@ -58,11 +70,14 @@ export async function getCompanyNews(
   const toDate = to ?? range.to
 
   try {
-    const data = await finnhubFetch("/company-news", {
-      symbol,
-      from: fromDate,
-      to: toDate,
-    })
+    const data = await finnhubFetch(
+      "/company-news",
+      { symbol, from: fromDate, to: toDate },
+      {
+        revalidate: TWELVE_HOURS_SECONDS,
+        tags: ["company-news", `company-news:${symbol}`],
+      },
+    )
     return Array.isArray(data) ? data : []
   } catch (err) {
     console.error("getCompanyNews failed", err)

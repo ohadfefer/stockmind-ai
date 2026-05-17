@@ -1,6 +1,8 @@
 import { auth0 } from "@/lib/auth0"
-import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getAccountDetails } from "@/services/account-service"
+import {
+  resolveAccountContext,
+  type AccountContext,
+} from "@/services/account-context"
 import {
   getPortfolioSummary,
   type PortfolioSummary,
@@ -33,10 +35,7 @@ const EMPTY_REVIEW: PortfolioReview = {
   usage: null,
 }
 
-interface PortfolioContext {
-  userId: number
-  accountId: number
-  runningBalance: number
+interface PortfolioContext extends AccountContext {
   plan: UserSubscriptionPlan
 }
 
@@ -44,21 +43,13 @@ async function resolvePortfolioContext(): Promise<PortfolioContext | null> {
   const session = await auth0.getSession()
   if (!session) return null
 
-  const [subscription, userId] = await Promise.all([
+  const [ctx, subscription] = await Promise.all([
+    resolveAccountContext(),
     getSubscriptionForAuth0Id(session.user.sub),
-    getUserIdByAuth0Id(session.user.sub),
   ])
-  if (!userId) return null
+  if (!ctx) return null
 
-  const account = await getAccountDetails(userId)
-  if (!account) return null
-
-  return {
-    userId,
-    accountId: account.id,
-    runningBalance: account.running_balance,
-    plan: subscription?.plan ?? "free",
-  }
+  return { ...ctx, plan: subscription?.plan ?? "free" }
 }
 
 export interface PortfolioPageData {
