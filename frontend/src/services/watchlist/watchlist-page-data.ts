@@ -1,11 +1,12 @@
 import { resolveAccountContext } from "@/services/account-context"
 import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
-import { getStockQuote } from "@/services/stock/stock-service"
 import {
-  getMarketIsOpen,
-  getOrFetchPrice,
-} from "@/services/stock/stock-price-cache"
+  getCachedQuote,
+  getCachedProfile,
+  getMarketIsOpenCached,
+  toWatchlistStockData,
+} from "@/services/stock/quote-cache"
 import type { WatchlistStockData, WatchlistInfo } from "@/types/watchlist"
 
 export interface WatchlistStocks {
@@ -35,25 +36,22 @@ async function loadWatchlistStocks(
   accountId: number,
 ): Promise<WatchlistStocks> {
   const symbols = await getWatchlistSymbolsById(activeWatchlistId, accountId)
-  const marketIsOpen = await getMarketIsOpen()
+  const marketIsOpen = await getMarketIsOpenCached()
 
+  // getCachedQuote/getCachedProfile share quote-cache's market-aware 60s
+  // quote TTL, ~static profile TTL, and per-symbol in-flight dedupe — so
+  // concurrent requests and the client's 60s poll reuse one snapshot
+  // instead of fanning out a Finnhub /quote + /profile2 per symbol per
+  // request. Both swallow failures to a cached-or-null value, so a single
+  // bad ticker degrades that row instead of rejecting the whole table.
   const stocks = await Promise.all(
-    symbols.map((symbol) =>
-      getOrFetchPrice(symbol, marketIsOpen, async () => {
-        const data = await getStockQuote(symbol)
-        return {
-          ticker: symbol,
-          company: data.name,
-          price: data.price,
-          changeDollar: data.changeDollar,
-          changePercent: data.changePercent,
-          marketCap: null,
-          dayLow: data.dayLow || null,
-          dayHigh: data.dayHigh || null,
-          aiScore: null,
-        }
-      }),
-    ),
+    symbols.map(async (symbol) => {
+      const [quote, profile] = await Promise.all([
+        getCachedQuote(symbol, marketIsOpen),
+        getCachedProfile(symbol),
+      ])
+      return toWatchlistStockData(symbol, quote, profile)
+    }),
   )
 
   return { stocks, activeWatchlistId }

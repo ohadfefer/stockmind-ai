@@ -3,11 +3,12 @@ import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
 import { getOrCreateDefaultAccount } from "@/services/account-service"
-import { getStockQuote } from "@/services/stock/stock-service"
 import {
-  getMarketIsOpen,
-  getOrFetchPrice,
-} from "@/services/stock/stock-price-cache"
+  getCachedQuote,
+  getCachedProfile,
+  getMarketIsOpenCached,
+  toWatchlistStockData,
+} from "@/services/stock/quote-cache"
 import type { WatchlistStockData } from "@/types/watchlist"
 
 export async function getDashboardWatchlistStocks(
@@ -29,25 +30,20 @@ export async function getDashboardWatchlistStocks(
     const symbols = await getWatchlistSymbolsById(defaultWatchlistId, accountId)
     const limited = limit === undefined ? symbols : symbols.slice(0, limit)
 
-    const marketIsOpen = await getMarketIsOpen()
+    const marketIsOpen = await getMarketIsOpenCached()
 
+    // Shares quote-cache's market-aware 60s quote TTL, ~static profile TTL,
+    // and per-symbol in-flight dedupe with the watchlist page, so the
+    // dashboard's watchlist widget reuses the same snapshot instead of
+    // fanning out a Finnhub /quote + /profile2 per symbol per request.
     const stocks = await Promise.all(
-      limited.map((symbol) =>
-        getOrFetchPrice(symbol, marketIsOpen, async () => {
-          const data = await getStockQuote(symbol)
-          return {
-            ticker: symbol,
-            company: data.name,
-            price: data.price,
-            changeDollar: data.changeDollar,
-            changePercent: data.changePercent,
-            marketCap: null,
-            dayLow: data.dayLow || null,
-            dayHigh: data.dayHigh || null,
-            aiScore: null,
-          }
-        }),
-      ),
+      limited.map(async (symbol) => {
+        const [quote, profile] = await Promise.all([
+          getCachedQuote(symbol, marketIsOpen),
+          getCachedProfile(symbol),
+        ])
+        return toWatchlistStockData(symbol, quote, profile)
+      }),
     )
 
     return stocks
