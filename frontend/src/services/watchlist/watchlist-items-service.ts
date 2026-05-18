@@ -1,11 +1,22 @@
 import { getDb } from "@/lib/db"
 
-export async function getWatchlistSymbolsById(watchlistId: number): Promise<string[]> {
+/**
+ * Symbols in a watchlist, scoped to the owning account. The JOIN on
+ * watchlists.account_id makes a foreign or guessed watchlistId return zero
+ * rows instead of another account's tickers (prevents IDOR — CWE-639).
+ */
+export async function getWatchlistSymbolsById(
+  watchlistId: number,
+  accountId: number,
+): Promise<string[]> {
   const sql = getDb()
   const rows = await sql`
-    SELECT symbol FROM watchlist_items
-    WHERE watchlist_id = ${watchlistId}
-    ORDER BY symbol
+    SELECT wi.symbol
+    FROM watchlist_items wi
+    JOIN watchlists w ON w.id = wi.watchlist_id
+    WHERE wi.watchlist_id = ${watchlistId}
+      AND w.account_id = ${accountId}
+    ORDER BY wi.symbol
   `
   return rows.map((r) => r.symbol as string)
 }

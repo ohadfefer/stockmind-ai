@@ -1,7 +1,8 @@
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getUserWatchlistsWithCounts } from "@/services/watchlist-crud-service"
-import { getWatchlistSymbolsById } from "@/services/watchlist-items-service"
+import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
+import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
+import { getOrCreateDefaultAccount } from "@/services/account-service"
 import { getStockQuote } from "@/services/stock/stock-service"
 import {
   getMarketIsOpen,
@@ -24,7 +25,8 @@ export async function getDashboardWatchlistStocks(
     const defaultWatchlistId = watchlists[0]?.id
     if (!defaultWatchlistId) return []
 
-    const symbols = await getWatchlistSymbolsById(defaultWatchlistId)
+    const accountId = await getOrCreateDefaultAccount(userId)
+    const symbols = await getWatchlistSymbolsById(defaultWatchlistId, accountId)
     const limited = limit === undefined ? symbols : symbols.slice(0, limit)
 
     const marketIsOpen = await getMarketIsOpen()

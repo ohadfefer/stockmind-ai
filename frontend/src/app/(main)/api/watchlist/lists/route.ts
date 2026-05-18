@@ -1,8 +1,8 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { addToWatchlist, removeFromWatchlist } from "@/services/watchlist-items-service"
-import { getUserWatchlistsForSymbol } from "@/services/watchlist-crud-service"
+import { addToWatchlist, removeFromWatchlist } from "@/services/watchlist/watchlist-items-service"
+import { getUserWatchlistsForSymbol } from "@/services/watchlist/watchlist-crud-service"
 
 export async function GET(request: Request) {
   const session = await auth0.getSession()

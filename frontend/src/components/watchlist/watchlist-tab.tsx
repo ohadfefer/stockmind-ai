@@ -69,6 +69,23 @@ function RangeBar({
   )
 }
 
+export function WatchlistTabSkeleton() {
+  return (
+    <div className="animate-pulse rounded-xl border border-border bg-card">
+      <div className="flex items-center gap-6 border-b border-border px-5 py-4">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="h-3 w-20 rounded bg-secondary" />
+        ))}
+      </div>
+      <div className="space-y-3 p-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-10 w-full rounded bg-secondary" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface WatchlistTabProps {
   stocks: WatchlistStockData[]
   watchlistId?: number

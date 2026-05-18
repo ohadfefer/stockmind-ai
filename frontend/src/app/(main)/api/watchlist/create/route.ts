@@ -1,7 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { createWatchlist } from "@/services/watchlist-crud-service"
+import { createWatchlist } from "@/services/watchlist/watchlist-crud-service"
 
 export async function POST(request: Request) {
   const session = await auth0.getSession()

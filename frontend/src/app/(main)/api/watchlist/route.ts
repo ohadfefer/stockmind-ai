@@ -5,8 +5,8 @@ import {
   isFollowing,
   addToWatchlist,
   removeFromWatchlist,
-} from "@/services/watchlist-items-service"
-import { getDefaultWatchlistId } from "@/services/watchlist-crud-service"
+} from "@/services/watchlist/watchlist-items-service"
+import { getDefaultWatchlistId } from "@/services/watchlist/watchlist-crud-service"
 
 export async function GET(request: Request) {
   const session = await auth0.getSession()

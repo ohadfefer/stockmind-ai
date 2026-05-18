@@ -21,7 +21,7 @@ import { FollowButton } from "@/components/details/follow-button"
 import { CreateAlertDialog } from "@/components/alerts/create-alert-dialog"
 import { getStockData } from "@/services/stock/stock-service"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { isFollowing } from "@/services/watchlist-items-service"
+import { isFollowing } from "@/services/watchlist/watchlist-items-service"
 import { auth0 } from "@/lib/auth0"
 
 export default async function DetailsPage({
