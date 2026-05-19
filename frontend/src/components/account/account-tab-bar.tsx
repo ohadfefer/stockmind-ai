@@ -3,15 +3,14 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { Wallet, History, ArrowLeftRight, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { parseAccountTab, type AccountTab } from "./account-tabs"
 
 const tabs = [
   { key: "balances", label: "Account Balances", icon: Wallet },
   { key: "history", label: "Account History", icon: History },
   { key: "performance", label: "Performance", icon: TrendingUp },
   { key: "transfer", label: "Transfer", icon: ArrowLeftRight },
-] as const
-
-export type AccountTab = (typeof tabs)[number]["key"]
+] as const satisfies readonly { key: AccountTab; label: string; icon: unknown }[]
 
 interface AccountTabBarProps {
   runningBalance: number
@@ -21,7 +20,7 @@ interface AccountTabBarProps {
 export function AccountTabBar({ runningBalance, currency }: AccountTabBarProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const activeTab = (searchParams.get("tab") as AccountTab) || "balances"
+  const activeTab = parseAccountTab(searchParams.get("tab"))
 
   return (
     <div className="flex items-center justify-between border-b">
