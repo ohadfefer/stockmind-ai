@@ -1,6 +1,6 @@
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getAccountDetails } from "@/services/account-service"
+import { getAccountDetails } from "@/services/account/account-service"
 
 export interface AccountContext {
   userId: number

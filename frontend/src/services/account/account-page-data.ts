@@ -5,7 +5,7 @@ import {
   getAccountHistory,
   type AccountDetails,
   type HistoryEntry,
-} from "@/services/account-service"
+} from "@/services/account/account-service"
 import {
   getPortfolioDailyValues,
   type PortfolioDailyValue,

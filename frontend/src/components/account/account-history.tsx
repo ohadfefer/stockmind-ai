@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { formatDate, formatMoney, formatPrice } from "@/lib/format"
-import type { HistoryEntry } from "@/services/account-service"
+import type { HistoryEntry } from "@/services/account/account-service"
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]

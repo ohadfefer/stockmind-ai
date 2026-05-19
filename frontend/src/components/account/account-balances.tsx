@@ -1,7 +1,7 @@
 "use client"
 
 import { DollarSign, Hash, BadgeDollarSign } from "lucide-react"
-import type { AccountDetails } from "@/services/account-service"
+import type { AccountDetails } from "@/services/account/account-service"
 
 interface AccountBalancesProps {
   account: AccountDetails | null

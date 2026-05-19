@@ -1,7 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getAccountDetails } from "@/services/account-service"
+import { getAccountDetails } from "@/services/account/account-service"
 import { getPositions } from "@/services/position/position-service"
 
 export async function GET() {

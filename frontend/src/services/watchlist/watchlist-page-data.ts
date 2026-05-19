@@ -1,4 +1,4 @@
-import { resolveAccountContext } from "@/services/account-context"
+import { resolveAccountContext } from "@/services/account/account-context"
 import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
 import {

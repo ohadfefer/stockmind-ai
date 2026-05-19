@@ -2,7 +2,7 @@ import { auth0 } from "@/lib/auth0"
 import {
   resolveAccountContext,
   type AccountContext,
-} from "@/services/account-context"
+} from "@/services/account/account-context"
 import {
   getPortfolioSummary,
   type PortfolioSummary,

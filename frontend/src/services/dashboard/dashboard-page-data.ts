@@ -1,4 +1,4 @@
-import { resolveAccountContext } from "@/services/account-context"
+import { resolveAccountContext } from "@/services/account/account-context"
 import {
   getPortfolioSummary,
   type PortfolioSummary,

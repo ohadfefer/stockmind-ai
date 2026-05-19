@@ -1,7 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account-service"
+import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import { getAlerts, createAlert, deleteAlert, isValidSymbol, type AlertCondition } from "@/services/alerts/alerts-service"
 import { getUpcomingEarnings } from "@/services/earnings-service"
 

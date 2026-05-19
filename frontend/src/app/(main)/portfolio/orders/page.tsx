@@ -1,7 +1,7 @@
 import { ClipboardList } from "lucide-react"
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account-service"
+import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import { getOrdersByAccountId, type Order } from "@/services/order-service"
 import { ExecuteOrderButton } from "@/components/portfolio/execute-order-button"
 import { CancelOrderButton } from "@/components/portfolio/cancel-order-button"

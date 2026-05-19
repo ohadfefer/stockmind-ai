@@ -8,7 +8,7 @@ import { AccountHistory } from "./account-history"
 import { AccountTransfer } from "./account-transfer"
 import { AccountPerformance } from "./account-performance"
 import type { AccountPageData } from "@/services/account/account-page-data"
-import type { AccountDetails, HistoryEntry } from "@/services/account-service"
+import type { AccountDetails, HistoryEntry } from "@/services/account/account-service"
 import type { PortfolioDailyValue } from "@/services/position/portfolio-daily-value-service"
 
 export function AccountContent({

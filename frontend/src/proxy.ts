@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, NextFetchEvent } from "next/server"
 import { auth0 } from "@/lib/auth0"
 import { logAudit } from "@/services/audit-log-service"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getDefaultAccountId } from "@/services/account-service"
+import { getDefaultAccountId } from "@/services/account/account-service"
 import { getClientIp } from "@/lib/request-ip"
 
 async function logAuthEvent(

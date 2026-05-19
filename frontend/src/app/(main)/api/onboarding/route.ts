@@ -1,7 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { insertUser } from "@/services/user-service"
-import { createDefaultAccount, getDefaultAccountId } from "@/services/account-service"
+import { createDefaultAccount, getDefaultAccountId } from "@/services/account/account-service"
 import { logAudit } from "@/services/audit-log-service"
 import {
   upsertUserProfile,

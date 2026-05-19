@@ -2,7 +2,7 @@ import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
-import { getOrCreateDefaultAccount } from "@/services/account-service"
+import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import {
   getCachedQuote,
   getCachedProfile,

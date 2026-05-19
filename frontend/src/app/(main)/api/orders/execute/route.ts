@@ -1,7 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account-service"
+import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import { createExecution } from "@/services/execution-service"
 import { markOrderFilled } from "@/services/order-service"
 import { recordTradeSettlement } from "@/services/cash-ledger-service"

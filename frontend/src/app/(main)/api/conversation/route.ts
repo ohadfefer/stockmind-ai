@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getDefaultAccountId } from "@/services/account-service"
+import { getDefaultAccountId } from "@/services/account/account-service"
 import {
   deleteConversationForAccount,
   renameConversationForAccount,

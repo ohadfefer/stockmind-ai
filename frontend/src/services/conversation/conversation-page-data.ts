@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { resolveAccountContext } from "@/services/account-context"
+import { resolveAccountContext } from "@/services/account/account-context"
 import {
   getConversationOwner,
   getMessages,

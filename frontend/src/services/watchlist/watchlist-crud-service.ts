@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db"
-import { getOrCreateDefaultAccount } from "@/services/account-service"
+import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import type { WatchlistInfo, WatchlistWithStatus } from "@/types/watchlist"
 
 /**
