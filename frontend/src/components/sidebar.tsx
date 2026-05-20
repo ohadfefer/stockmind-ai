@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -16,6 +17,7 @@ import {
   Sparkles,
   Zap,
   LogOut,
+  Menu,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -25,22 +27,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 
 const primaryNavItems = [
-  { icon: LayoutDashboard, label: "Dashboard", active: true, href: "/dashboard" },
-  { icon: Briefcase, label: "Portfolio", active: false, href: "/portfolio" },
-  { icon: Eye, label: "Watchlist", active: false, href: "/watchlist" },
-  { icon: ScanSearch, label: "Scanner", active: false, href: "#" },
-  { icon: Bot, label: "AI Advisor", active: false, href: "/conversation" },
-  { icon: Newspaper, label: "News", active: false, href: "/news" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: Briefcase, label: "Portfolio", href: "/portfolio" },
+  { icon: Eye, label: "Watchlist", href: "/watchlist" },
+  { icon: ScanSearch, label: "Scanner", href: "#" },
+  { icon: Bot, label: "AI Advisor", href: "/conversation" },
+  { icon: Newspaper, label: "News", href: "/news" },
 ]
 
 const secondaryNavItems = [
-  { icon: CircleUserRound, label: "My Account", active: false, href: "/account" },
-  { icon: History, label: "History", active: false, href: "/conversation/history" },
+  { icon: CircleUserRound, label: "My Account", href: "/account" },
+  { icon: History, label: "History", href: "/conversation/history" },
 ]
 
-interface SidebarProps {
+export interface SidebarUserProps {
   userName?: string
   userImage?: string
   userPlan?: "free" | "pro"
@@ -55,15 +63,53 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-export function Sidebar({ userName, userImage, userPlan }: SidebarProps) {
+export function Sidebar(props: SidebarUserProps) {
+  return (
+    <aside className="hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
+      <SidebarBody {...props} />
+    </aside>
+  )
+}
+
+export function MobileSidebar(props: SidebarUserProps) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        aria-label="Open navigation"
+        className="-ml-2 flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:hidden"
+      >
+        <Menu className="size-5" />
+      </SheetTrigger>
+      <SheetContent
+        side="left"
+        className="w-64 border-r border-border bg-card p-0 sm:max-w-xs"
+      >
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SidebarBody {...props} onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function SidebarBody({
+  userName,
+  userImage,
+  userPlan,
+  onNavigate,
+}: SidebarUserProps & { onNavigate?: () => void }) {
   const pathname = usePathname()
   const displayName = userName ?? "User"
   const planLabel =
     userPlan === "pro" ? "Pro plan" : userPlan === "free" ? "Free plan" : null
 
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card">
-      <Link href="/" className="flex items-center gap-2 px-6 py-5">
+    <>
+      <Link
+        href="/"
+        onClick={onNavigate}
+        className="flex items-center gap-2 px-6 py-5"
+      >
         <Zap className="size-5 text-primary" />
         <div>
           <h1 className="text-sm font-bold text-foreground">StockMind AI</h1>
@@ -75,11 +121,21 @@ export function Sidebar({ userName, userImage, userPlan }: SidebarProps) {
 
       <nav className="flex flex-1 flex-col gap-1 px-3 pt-2">
         {primaryNavItems.map((item) => (
-          <NavLink key={item.label} item={item} pathname={pathname} />
+          <NavLink
+            key={item.label}
+            item={item}
+            pathname={pathname}
+            onNavigate={onNavigate}
+          />
         ))}
         <div className="my-2 border-t border-border" />
         {secondaryNavItems.map((item) => (
-          <NavLink key={item.label} item={item} pathname={pathname} />
+          <NavLink
+            key={item.label}
+            item={item}
+            pathname={pathname}
+            onNavigate={onNavigate}
+          />
         ))}
       </nav>
 
@@ -115,20 +171,32 @@ export function Sidebar({ userName, userImage, userPlan }: SidebarProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-52">
             <DropdownMenuItem asChild>
-              <Link href="/settings/general" className="cursor-pointer">
+              <Link
+                href="/settings/general"
+                onClick={onNavigate}
+                className="cursor-pointer"
+              >
                 <Settings className="size-4" />
                 Settings
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/settings/payments" className="cursor-pointer">
+              <Link
+                href="/settings/payments"
+                onClick={onNavigate}
+                className="cursor-pointer"
+              >
                 <Sparkles className="size-4" />
                 Upgrade Account
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <a href="/auth/logout" className="cursor-pointer">
+              <a
+                href="/auth/logout"
+                onClick={onNavigate}
+                className="cursor-pointer"
+              >
                 <LogOut className="size-4" />
                 Log out
               </a>
@@ -136,7 +204,7 @@ export function Sidebar({ userName, userImage, userPlan }: SidebarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </aside>
+    </>
   )
 }
 
@@ -146,11 +214,20 @@ interface NavItem {
   href: string
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: NavItem
+  pathname: string
+  onNavigate?: () => void
+}) {
   const active = pathname === item.href
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
         active
