@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/table"
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
+import { MobileDataCard } from "@/components/mobile-data-card"
 import { deleteStock } from "@/actions/watchlist"
+import { cn } from "@/lib/utils"
 
 import type { WatchlistStockData } from "@/types/watchlist"
 
@@ -166,7 +168,9 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <>
+      {/* Desktop table */}
+      <div className="hidden rounded-xl border border-border bg-card md:block">
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
@@ -295,6 +299,87 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
           })}
         </TableBody>
       </Table>
-    </div>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-3 md:hidden">
+        {sortedStocks.map((stock) => {
+          const positive = stock.changePercent >= 0
+          return (
+            <MobileDataCard
+              key={stock.ticker}
+              onClick={() => router.push(`/details/${stock.ticker}`)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold text-foreground">
+                    {stock.ticker}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {stock.company}
+                  </p>
+                </div>
+                {stock.aiScore != null && (
+                  <span
+                    className={cn(
+                      "inline-flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold",
+                      getAIScoreColor(stock.aiScore),
+                    )}
+                  >
+                    {stock.aiScore}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-end justify-between gap-3">
+                <span className="font-mono text-xl font-bold text-foreground">
+                  ${stock.price.toFixed(2)}
+                </span>
+                <div
+                  className={cn(
+                    "text-right font-mono font-semibold",
+                    positive ? "text-[#10B981]" : "text-[#EF4444]",
+                  )}
+                >
+                  <div className="text-sm">
+                    {positive ? "+" : ""}${stock.changeDollar.toFixed(2)}
+                  </div>
+                  <div className="text-xs">
+                    {positive ? "+" : ""}
+                    {stock.changePercent.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              {stock.dayLow != null && stock.dayHigh != null && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Day Range
+                  </span>
+                  <RangeBar
+                    low={stock.dayLow}
+                    high={stock.dayHigh}
+                    current={stock.price}
+                  />
+                </div>
+              )}
+
+              <div
+                className="flex justify-end"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ConfirmDelete
+                  onDelete={() => handleDelete(stock.ticker)}
+                  confirming={confirmingTicker === stock.ticker}
+                  onConfirmingChange={(v) =>
+                    setConfirmingTicker(v ? stock.ticker : null)
+                  }
+                />
+              </div>
+            </MobileDataCard>
+          )
+        })}
+      </div>
+    </>
   )
 }

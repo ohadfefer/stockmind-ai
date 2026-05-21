@@ -25,6 +25,8 @@ import {
   ArrowUpRight,
 } from "lucide-react"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
+import { MobileDataCard } from "@/components/mobile-data-card"
+import { cn } from "@/lib/utils"
 import { fetchPortfolioSummary } from "@/actions/portfolio"
 import type { PortfolioSummary } from "@/services/portfolio/portfolio-service"
 import type { PortfolioReview } from "@/services/ai/portfolio-review-service"
@@ -208,8 +210,8 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
         </ErrorBoundary>
       </div>
 
-      {/* Holdings Table */}
-      <div className="rounded-xl border border-border bg-card">
+      {/* Holdings — desktop table */}
+      <div className="hidden rounded-xl border border-border bg-card md:block">
         <div className="flex items-center justify-between px-5 py-4">
           <h3 className="text-base font-semibold text-foreground">
             Current Holdings
@@ -339,6 +341,107 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
             </TableBody>
           </Table>
         </div>
+      </div>
+
+      {/* Holdings — mobile cards. Omits the Equity/Options/Crypto tab stub
+          (no filtering wired up yet) to keep mobile focused on the data. */}
+      <div className="flex flex-col gap-3 md:hidden">
+        <h3 className="text-base font-semibold text-foreground">
+          Current Holdings
+        </h3>
+        {summary.holdings.map((h) => {
+          const plPositive = h.plDollar >= 0
+          const dayPositive = h.dayChangeDollar >= 0
+          const plColor = plPositive ? "text-[#10B981]" : "text-[#EF4444]"
+          const dayColor = dayPositive ? "text-[#10B981]" : "text-[#EF4444]"
+          return (
+            <MobileDataCard key={h.ticker}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold text-primary">
+                    {h.ticker}
+                  </p>
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {h.company}
+                  </p>
+                  <span className="mt-1 inline-block rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {h.sector}
+                  </span>
+                </div>
+                <p className="shrink-0 font-mono text-base font-bold text-foreground">
+                  ${h.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    P&L
+                  </p>
+                  <p className={cn("font-mono text-sm font-semibold", plColor)}>
+                    {plPositive ? "+" : ""}${h.plDollar.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className={cn("font-mono text-xs", plColor)}>
+                    {plPositive ? "+" : ""}{h.plPercent.toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Day
+                  </p>
+                  <p className={cn("font-mono text-sm font-semibold", dayColor)}>
+                    {dayPositive ? "+" : ""}${h.dayChangeDollar.toFixed(2)}
+                  </p>
+                  <p className={cn("font-mono text-xs", dayColor)}>
+                    ({dayPositive ? "+" : ""}{h.dayChangePercent.toFixed(2)}%)
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 border-t border-border pt-3">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Shares
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    {h.shares.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Avg Buy
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    ${h.avgBuy.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Current
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    ${h.currentPrice.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 border-t border-border pt-3">
+                <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Weight
+                </span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${h.portfolioWeight}%` }}
+                  />
+                </div>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  {h.portfolioWeight.toFixed(1)}%
+                </span>
+              </div>
+            </MobileDataCard>
+          )
+        })}
       </div>
     </div>
   )
