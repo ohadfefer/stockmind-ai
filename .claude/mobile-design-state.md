@@ -5,7 +5,7 @@
 > Read this first when starting a new mobile-design session.
 
 **Branch:** `mobile-design-1`
-**Last updated:** 2026-05-20
+**Last updated:** 2026-05-21
 
 ---
 
@@ -23,16 +23,12 @@ StockMind AI was originally desktop-only. Goal: make every route in `(main)/` us
 
 ## To Do (carried forward)
 
-Ordered by recommended execution sequence — each step unblocks visual testing of the next.
+The original audit's to-do list is now empty — all 8 items shipped. The items below are deferred follow-ups surfaced during code review that were intentionally out of scope for the initial mobile pass.
 
-- [ ] **Settings layout mobile pattern** — `frontend/src/app/(main)/settings/layout.tsx` still has a nested `w-72` `<aside>` that pushes content off-screen on mobile. Convert to a horizontal scroll tab strip on `<md`, keep aside on `>=md`. May also need `components/settings/settings-nav.tsx` tweaks.
-- [ ] **Shared `<MobileDataCard>` + apply to wide tables** — `portfolio-tab.tsx` (8 cols, has overflow-x-auto), `watchlist-tab.tsx` (7 cols, NO overflow wrapper — bursts viewport), `account-history.tsx`, `portfolio/orders`. Pattern: `<table className="hidden md:table">` + `md:hidden` card list. Highest leverage fix in the audit.
-- [ ] **Tab bars** — `portfolio-tabs-bar.tsx` and `account-tab-bar.tsx`: tabs+right-actions in one `justify-between` row wraps poorly on mobile. Wrap tab row in `overflow-x-auto whitespace-nowrap [scrollbar-width:none]`; stack action group below tabs on `<md` via `flex-col md:flex-row`.
-- [ ] **MarketOverviewBar snap scroll** — `components/dashboard/market-overview-bar.tsx`: replace `overflow-x-hidden` + JS arrow buttons with native `overflow-x-auto snap-x snap-mandatory`, add `snap-start` to each pill, hide arrows on `<md`.
-- [ ] **Details page header** — `app/(main)/details/[symbol]/page.tsx:67-90`: title + 3 action buttons in `justify-between` will overflow at 375px with long company names. Change wrapper to `flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`.
-- [ ] **Charts vertical room** — `holdings-heatmap.tsx:274` hardcoded `height: 300`. Bump to `h-[280px] md:h-[300px] lg:h-[360px]` so phones get more vertical real estate.
-- [ ] **Portfolio sector allocation pie** — user has indicated this can be removed on mobile (doesn't translate to small screens). On `<md`, hide the pie + center label; keep the legend grid as a simple list. File: `components/portfolio/portfolio-tab.tsx:130-191`.
-- [ ] **Final sweep** — once core changes land, screenshot dashboard / portfolio / watchlist / account / details / news at 375 / 414 / 768 / 1024 to catch leftover edge cases.
+- [ ] **Recharts `Cell` deprecation** — `frontend/src/components/portfolio/portfolio-tab.tsx:153` uses Recharts `<Cell>` inside `<Pie>`, which the typechecker flags as deprecated. Migrate to the current Recharts API. Likely a Recharts-version-wide cleanup, not just this file.
+- [ ] **Tab-bar wrapper DRY** — the `-mx-4 md:-mx-6 ... overflow-x-auto whitespace-nowrap border-b border-border px-4 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden` recipe is repeated across `account-tab-bar.tsx`, `portfolio-tabs-bar.tsx`, `watchlist-list-bar.tsx`, and the `TabBarSkeleton` in `account-content.tsx`. Extract a `TabBarShell` (or class constant) once the right shape is clear — call sites differ on whether they have a right-side action slot.
+- [ ] **Clickable `MobileDataCard` a11y** — `components/mobile-data-card.tsx`: when `onClick` is passed, the card is a `<div>` with no `role="button"`, `tabIndex`, or keyboard handler. At parity with existing desktop `<TableRow onClick>` patterns but worth a focused a11y pass that also covers those.
+- [ ] **Avg-fill formatter duplication** — `app/(main)/portfolio/orders/page.tsx` formats `average_fill_price` identically in the desktop table and the mobile card. Extract to `lib/format.ts` once the right helper name/semantics are decided.
 
 ---
 
@@ -44,32 +40,28 @@ Ordered by recommended execution sequence — each step unblocks visual testing 
   - Header gained hamburger on mobile, search is `flex-1` instead of forced-centered, status pills don't overflow at 375px.
   - `<main>` padding goes `p-4 md:p-6`.
 - [x] **Code-review cleanup on the shell refactor** — exported `SidebarUserProps` (header.tsx and layout.tsx now import it), removed dead `active` field from nav item literals, added `onClick={onNavigate}` to Log out anchor for sheet-close symmetry.
+- [x] **Settings layout mobile pattern** (commit `63b32ed`, `frontend/src/app/(main)/settings/layout.tsx`, new `components/settings/settings-mobile-tabs.tsx`) — desktop `w-72` aside is now `hidden md:flex`; on `<md` a flat horizontal-scroll tab strip renders the 5 settings routes. Layout switched to `flex-col md:flex-row` and the `-m-6` overcorrection was fixed to `-m-4 md:-m-6`.
+- [x] **`MobileDataCard` primitive + watchlist + portfolio holdings** (commit `23101b7`, new `components/mobile-data-card.tsx`; `watchlist/watchlist-tab.tsx`; `portfolio/portfolio-tab.tsx`) — wide desktop tables wrapped in `hidden md:block`; new `md:hidden` card stacks for watchlist (ticker / AI score / price / change / day range / always-visible delete) and portfolio holdings (sector / total value / P&L+Day grid / shares-avg-current grid / weight bar). Mobile drops the unused Equity/Options/Crypto tab stub.
+- [x] **`MobileDataCard` for history + orders + tab bars mobile fix** (commit `bd99bec`, `components/account/account-history.tsx`, `app/(main)/portfolio/orders/page.tsx`, `components/account/account-tab-bar.tsx`, `components/portfolio/portfolio-tabs-bar.tsx`, `components/account/account-content.tsx`) — account history mobile cards branch on `entry.type` (trade vs cash_update); orders page mobile cards keep `<ExecuteOrderButton>` / `<CancelOrderButton>`. Tab bars on `/account` and `/portfolio` got `-mx-4 md:-mx-6`, `overflow-x-auto`, and stacked action group below tabs on mobile so touch swipes scroll the bar instead of dragging the page.
+- [x] **Polish pass: snap scroll, stacked details header, sized heatmap, hidden sector pie** (commit `e5cbc32`, `components/dashboard/market-overview-bar.tsx`, `app/(main)/details/[symbol]/page.tsx`, `components/dashboard/holdings-heatmap.tsx`, `components/portfolio/portfolio-tab.tsx`) — MarketOverviewBar uses native `overflow-x-auto snap-x snap-mandatory`; details title + actions stack via `flex-col gap-3 sm:flex-row`; heatmap height `h-[280px] md:h-[300px] lg:h-[360px]`; portfolio sector pie + center label `hidden md:block` (legend remains).
+- [x] **Final cross-viewport sweep + leftover fixes** (`components/watchlist/watchlist-list-bar.tsx`, `components/portfolio/portfolio-tab.tsx`) — see "Last Session Summary" below.
 
 ---
 
 ## Audit reference
 
-The original mobile audit (severity + grouping) is in conversation history from 2026-05-20. Key blockers it identified:
-- 🔴 App shell sidebar always rendered (fixed)
-- 🔴 Settings nested sidebar (still to do)
-- 🔴 Watchlist table with no overflow wrap (still to do)
-- 🔴 Portfolio table needs cards, not horizontal scroll (still to do)
+The original mobile audit (severity + grouping) is in conversation history from 2026-05-20. All 🔴 blockers have shipped:
+- 🔴 App shell sidebar always rendered (fixed in a26e94f)
+- 🔴 Settings nested sidebar (fixed in 63b32ed)
+- 🔴 Watchlist table with no overflow wrap (fixed in 23101b7 via `MobileDataCard`)
+- 🔴 Portfolio table needs cards, not horizontal scroll (fixed in 23101b7)
 
 ---
 
 ## Last Session Summary
 
-**2026-05-20 — App shell mobile refactor**
+**2026-05-21 — Final cross-viewport sweep**
 
-Connected the `chrome-devtools` MCP and verified at 375x812 viewport emulation. Three files changed:
-- `frontend/src/components/sidebar.tsx` — split desktop/mobile, Sheet wrapper, shared body.
-- `frontend/src/components/header.tsx` — accepts user props, renders MobileSidebar, mobile-friendly padding.
-- `frontend/src/app/(main)/layout.tsx` — passes user props to both, responsive `<main>` padding.
+Swept dashboard / portfolio / watchlist / account / details / news at 375, 414, 768, and 1024 (screenshots in `.mobile-audit/sweep-<viewport>-<page>.png`). Found two real leftover issues. At 375, `watchlist-list-bar.tsx` overflowed because its chip row had no `overflow-x-auto` or edge-to-edge negative margin — fixed by applying the same recipe used on the production tab bars. At 1024 on `/portfolio`, the parent grid `lg:grid-cols-[1fr_360px]` squeezed the Sector Allocation card so tightly that the in-card legend labels visibly overlapped, and the holdings desktop table propagated horizontal scroll to the page instead of being contained by its `overflow-x-auto` wrapper. Bumped the parent grid breakpoint to `xl:`, switched the legend to `grid-cols-2 md:grid-cols-1` with `truncate` + defensive `shrink-0`, and added `min-w-0` to the holdings desktop wrapper.
 
-Verified visually: dashboard renders correctly at 375px, hamburger opens drawer with full nav, settings page still broken (intentionally — next unit). Console clean except a pre-existing Recharts mount warning unrelated to the diff.
-
-Followed up with `code-review` skill; applied medium + two low fixes (type duplication, dead field, logout symmetry).
-
-Screenshots saved to `.mobile-audit/01-` through `.mobile-audit/05-`.
-
-Awaiting user review/commit before starting the Settings layout unit.
+All 24 page/viewport combos now report `horizOverflow: false`. Console clean. Files changed: `watchlist-list-bar.tsx`, `portfolio-tab.tsx`. Awaiting user review/commit. The original to-do list is now empty; "To Do" above tracks deferred-by-design follow-ups from code reviews.

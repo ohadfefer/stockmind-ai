@@ -9,3 +9,9 @@
 
 # Local TODO scratchpads
 stripe-todo.txt
+
+# Mobile-design verification screenshots. Folder kept via .gitkeep so the
+# documented save location stays stable, but the files themselves are
+# ephemeral inspection artifacts and shouldn't bloat the repo.
+.mobile-audit/*
+!.mobile-audit/.gitkeep

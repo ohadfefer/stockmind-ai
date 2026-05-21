@@ -46,7 +46,10 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
   }
 
   return (
-    <div className="flex items-center gap-1 border-b">
+    // -mx-* cancels parent <main>'s p-4 md:p-6 so the bar + divider span
+    // edge-to-edge on mobile; overflow-x-auto keeps the swipe inside the
+    // bar instead of dragging the page.
+    <div className="-mx-4 flex items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-border px-4 md:-mx-6 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {watchlists.map((wl) => {
         const isActive = wl.id === activeWatchlistId
 
@@ -63,7 +66,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
         }
 
         return (
-          <div key={wl.id} className="flex items-center">
+          <div key={wl.id} className="flex shrink-0 items-center">
             <Link
               href={`/watchlist?id=${wl.id}`}
               className={cn(
@@ -120,7 +123,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
       ) : (
         <button
           onClick={() => setIsCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          className="flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
         >
           <Plus className="size-4" />
           New watchlist

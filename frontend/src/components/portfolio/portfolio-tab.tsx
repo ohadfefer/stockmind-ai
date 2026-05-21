@@ -129,7 +129,7 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
       </div>
 
       {/* Sector Allocation + AI Strategy Insight */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
         {/* Donut + Legend */}
         <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:gap-8">
           {/* Pie + center label only on >=md; on small screens it shrinks
@@ -178,15 +178,18 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
                 <span className="font-semibold text-[#10B981]">Good</span>
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            {/* 2-col on phones (no pie alongside) keeps the legend compact;
+                from md+ the pie sits beside the legend, so we stack to a
+                single column to avoid cramping the labels. */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
               {sectorAllocation.map((sector) => (
-                <div key={sector.name} className="flex items-center gap-2">
+                <div key={sector.name} className="flex min-w-0 items-center gap-2">
                   <span
-                    className="size-2.5 rounded-full"
+                    className="size-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: sector.color }}
                   />
-                  <span className="text-sm text-foreground">{sector.name}</span>
-                  <span className="ml-auto font-mono text-sm font-semibold text-foreground">
+                  <span className="truncate text-sm text-foreground">{sector.name}</span>
+                  <span className="ml-auto shrink-0 font-mono text-sm font-semibold text-foreground">
                     {sector.value}%
                   </span>
                 </div>
@@ -213,8 +216,10 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
         </ErrorBoundary>
       </div>
 
-      {/* Holdings — desktop table */}
-      <div className="hidden rounded-xl border border-border bg-card md:block">
+      {/* Holdings — desktop table. min-w-0 lets the inner overflow-x-auto
+          actually scroll instead of pushing the page wider when the table
+          is intrinsically wider than the available column. */}
+      <div className="hidden min-w-0 rounded-xl border border-border bg-card md:block">
         <div className="flex items-center justify-between px-5 py-4">
           <h3 className="text-base font-semibold text-foreground">
             Current Holdings
