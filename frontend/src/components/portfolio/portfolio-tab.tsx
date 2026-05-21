@@ -132,7 +132,10 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
         {/* Donut + Legend */}
         <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:gap-8">
-          <div className="relative mx-auto size-52 sm:mx-0">
+          {/* Pie + center label only on >=md; on small screens it shrinks
+              past the point where labels stay readable, so we show just
+              the legend list below. */}
+          <div className="relative mx-auto hidden size-52 sm:mx-0 md:block">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

@@ -259,10 +259,7 @@ export function HoldingsHeatmap({
       </div>
 
       {isEmpty ? (
-        <div
-          className="flex items-center justify-center text-sm text-muted-foreground"
-          style={{ minHeight: 280 }}
-        >
+        <div className="flex min-h-[280px] items-center justify-center text-sm text-muted-foreground">
           {dataset === "portfolio"
             ? "No holdings yet."
             : "No stocks in your watchlist yet."}
@@ -270,8 +267,7 @@ export function HoldingsHeatmap({
       ) : (
         <div
           ref={chartRef}
-          className="relative"
-          style={{ width: "100%", height: 300 }}
+          className="relative h-[280px] w-full md:h-[300px] lg:h-[360px]"
           onMouseLeave={() => setHover(null)}
         >
           <ResponsiveContainer width="100%" height="100%">

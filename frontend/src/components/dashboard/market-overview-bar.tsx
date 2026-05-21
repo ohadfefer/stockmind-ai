@@ -35,7 +35,7 @@ export function MarketOverviewBar({ data }: MarketOverviewBarProps) {
       {canScrollLeft && (
         <button
           onClick={() => scroll("left")}
-          className="absolute left-0 z-10 flex h-full cursor-pointer items-center bg-gradient-to-r from-background to-transparent pr-3 pl-1"
+          className="absolute left-0 z-10 hidden h-full cursor-pointer items-center bg-gradient-to-r from-background to-transparent pl-1 pr-3 md:flex"
         >
           <ChevronLeft className="size-5 text-foreground" />
         </button>
@@ -44,12 +44,12 @@ export function MarketOverviewBar({ data }: MarketOverviewBarProps) {
       <div
         ref={scrollRef}
         onScroll={updateScrollState}
-        className="flex items-center gap-3 overflow-x-hidden"
+        className="flex items-center gap-3 overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {data.map((index) => (
           <div
             key={index.symbol}
-            className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5"
+            className="flex shrink-0 snap-start items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5"
           >
             <span className="text-xs font-semibold text-muted-foreground">
               {index.name}
@@ -72,7 +72,7 @@ export function MarketOverviewBar({ data }: MarketOverviewBarProps) {
       {canScrollRight && (
         <button
           onClick={() => scroll("right")}
-          className="absolute right-0 z-10 flex h-full cursor-pointer items-center bg-gradient-to-l from-background to-transparent pl-3 pr-1"
+          className="absolute right-0 z-10 hidden h-full cursor-pointer items-center bg-gradient-to-l from-background to-transparent pl-3 pr-1 md:flex"
         >
           <ChevronRight className="size-5 text-foreground" />
         </button>
