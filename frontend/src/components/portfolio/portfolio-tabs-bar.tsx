@@ -19,8 +19,11 @@ export function PortfolioTabsBar() {
   const activeTab = (searchParams.get("tab") as PortfolioTabKey) || "portfolio"
 
   return (
-    <div className="flex items-center justify-between border-b">
-      <div className="flex items-center gap-1">
+    // -mx-* cancels parent <main>'s p-4 md:p-6 so the tab strip + divider
+    // span edge-to-edge on mobile. Inner rows re-add px-4 md:px-6 to keep
+    // content aligned with the rest of the page.
+    <div className="-mx-4 flex flex-col md:-mx-6 md:flex-row md:items-center md:justify-between md:border-b">
+      <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-border px-4 md:border-b-0 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => {
           const isActive = tab.key === activeTab
           return (
@@ -28,7 +31,7 @@ export function PortfolioTabsBar() {
               key={tab.key}
               onClick={() => router.push(`/portfolio?tab=${tab.key}`)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+                "flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
                 isActive
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -41,7 +44,7 @@ export function PortfolioTabsBar() {
         })}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-end gap-3 px-4 py-2 md:px-6 md:py-0">
         <Link
           href="/portfolio/orders"
           className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground/70"

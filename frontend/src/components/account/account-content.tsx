@@ -141,13 +141,13 @@ function PerformanceSection({
 
 function TabBarSkeleton() {
   return (
-    <div className="flex animate-pulse items-center justify-between border-b">
-      <div className="flex items-center gap-1">
+    <div className="-mx-4 flex animate-pulse flex-col md:-mx-6 md:flex-row md:items-center md:justify-between md:border-b">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-border px-4 py-2.5 md:border-b-0 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="mx-2 my-2.5 h-5 w-32 rounded bg-secondary" />
+          <div key={i} className="h-5 w-32 shrink-0 rounded bg-secondary" />
         ))}
       </div>
-      <div className="my-2 mr-4 h-5 w-28 rounded bg-secondary" />
+      <div className="mx-4 my-2 h-5 w-28 rounded bg-secondary md:mx-6 md:my-0" />
     </div>
   )
 }

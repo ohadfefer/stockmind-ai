@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { formatDate, formatMoney, formatPrice } from "@/lib/format"
+import { MobileDataCard } from "@/components/mobile-data-card"
 import type { HistoryEntry } from "@/services/account/account-service"
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -89,7 +90,7 @@ export function AccountHistory({ entries }: AccountHistoryProps) {
       </div>
 
       {/* Month tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {months.map((m) => (
           <button
             key={m}
@@ -106,8 +107,8 @@ export function AccountHistory({ entries }: AccountHistoryProps) {
         ))}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-b border-border text-center">
@@ -202,6 +203,117 @@ export function AccountHistory({ entries }: AccountHistoryProps) {
             ))}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-3 md:hidden">
+        <p className="text-sm font-semibold text-foreground">
+          {MONTH_FULL[selectedMonth]}
+        </p>
+        {monthEntries.map((entry, i) => {
+          const pnlPositive = entry.pnl != null && entry.pnl >= 0
+          return (
+            <MobileDataCard
+              key={i}
+              className={cn(entry.type === "cash_update" && "bg-muted/30")}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                    entry.type === "trade"
+                      ? "bg-secondary text-secondary-foreground"
+                      : "bg-yellow-500/10 text-yellow-500",
+                  )}
+                >
+                  {entry.type === "trade" ? "Trade" : "Cash Update"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDate(entry.date)}
+                </span>
+              </div>
+
+              {entry.type === "trade" ? (
+                <>
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-bold text-foreground">
+                        {entry.symbol}
+                        {entry.action && (
+                          <span
+                            className={cn(
+                              "ml-2 text-xs font-semibold",
+                              entry.action === "buy"
+                                ? "text-green-500"
+                                : "text-red-500",
+                            )}
+                          >
+                            {entry.action === "buy" ? "BUY" : "SELL"}
+                          </span>
+                        )}
+                      </p>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {entry.quantity}
+                        {entry.price != null && ` @ ${formatPrice(entry.price)}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        P&L
+                      </p>
+                      <p
+                        className={cn(
+                          "font-mono text-sm font-semibold",
+                          entry.pnl != null &&
+                            (pnlPositive ? "text-green-500" : "text-red-500"),
+                        )}
+                      >
+                        {entry.pnl != null ? formatMoney(entry.pnl) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 border-t border-border pt-3">
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Principal
+                      </p>
+                      <p className="font-mono text-sm text-foreground">
+                        {formatMoney(entry.principal)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Comm
+                      </p>
+                      <p className="font-mono text-sm text-foreground">
+                        {entry.commission != null
+                          ? formatMoney(entry.commission)
+                          : "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Fees
+                      </p>
+                      <p className="font-mono text-sm text-foreground">
+                        {entry.fees != null ? formatMoney(entry.fees) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Principal
+                  </p>
+                  <p className="font-mono text-base font-semibold text-foreground">
+                    $ {formatMoney(entry.principal)}
+                  </p>
+                </div>
+              )}
+            </MobileDataCard>
+          )
+        })}
       </div>
     </div>
   )

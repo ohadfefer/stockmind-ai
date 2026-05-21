@@ -5,6 +5,7 @@ import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import { getOrdersByAccountId, type Order } from "@/services/order-service"
 import { ExecuteOrderButton } from "@/components/portfolio/execute-order-button"
 import { CancelOrderButton } from "@/components/portfolio/cancel-order-button"
+import { MobileDataCard } from "@/components/mobile-data-card"
 
 export default async function OrdersPage() {
   const session = await auth0.getSession()
@@ -36,7 +37,9 @@ export default async function OrdersPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <>
+        {/* Desktop table */}
+        <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-center text-muted-foreground">
@@ -100,6 +103,67 @@ export default async function OrdersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 md:hidden">
+          {orders.map((order) => (
+            <MobileDataCard key={order.id}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold text-foreground">
+                    {order.symbol}
+                    <span
+                      className={`ml-2 text-xs font-semibold ${
+                        order.side === "buy" ? "text-green-500" : "text-red-500"
+                      }`}
+                    >
+                      {order.side.toUpperCase()}
+                    </span>
+                  </p>
+                  <p className="text-xs uppercase text-muted-foreground">
+                    {order.order_type} · {order.time_in_force} · qty{" "}
+                    {Number(order.quantity)}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-500">
+                  {order.status}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Avg Fill
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    {order.average_fill_price != null
+                      ? `$${Number(order.average_fill_price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Submitted
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(order.submitted_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 border-t border-border pt-3">
+                <ExecuteOrderButton
+                  orderId={order.id}
+                  symbol={order.symbol}
+                  side={order.side as "buy" | "sell"}
+                  quantity={Number(order.quantity)}
+                />
+                <CancelOrderButton orderId={order.id} />
+              </div>
+            </MobileDataCard>
+          ))}
+        </div>
+        </>
       )}
     </div>
   )
