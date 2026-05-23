@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { Sidebar, type SidebarUserProps } from "@/components/sidebar"
 import { Header } from "@/components/header"
+import { MobileFooter } from "@/components/mobile/mobile-footer"
 import { auth0 } from "@/lib/auth0"
 import { getUserName, isUserOnboarded } from "@/services/user-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
@@ -39,6 +40,7 @@ export default async function MainLayout({
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header {...userProps} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <MobileFooter />
       </div>
     </div>
   )

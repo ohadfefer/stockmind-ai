@@ -1,5 +1,5 @@
 import { SymbolSearch } from "@/components/symbol-search"
-import { MobileSymbolSearch } from "@/components/mobile-symbol-search"
+import { MobileSymbolSearch } from "@/components/mobile/mobile-symbol-search"
 import { MissedAlerts } from "@/components/alerts/missed-alerts"
 import { MarketStatus } from "@/components/market/market-status"
 import { MobileSidebar, type SidebarUserProps } from "@/components/sidebar"

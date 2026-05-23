@@ -24,7 +24,7 @@ import {
   ArrowUpRight,
 } from "lucide-react"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
-import { MobileDataCard } from "@/components/mobile-data-card"
+import { MobileDataCard } from "@/components/mobile/mobile-data-card"
 import { cn } from "@/lib/utils"
 import { fetchPortfolioSummary } from "@/actions/portfolio"
 import type { PortfolioSummary } from "@/services/portfolio/portfolio-service"

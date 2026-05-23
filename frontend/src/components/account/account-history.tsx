@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { formatDate, formatMoney, formatPrice } from "@/lib/format"
-import { MobileDataCard } from "@/components/mobile-data-card"
+import { MobileDataCard } from "@/components/mobile/mobile-data-card"
 import type { HistoryEntry } from "@/services/account/account-service"
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

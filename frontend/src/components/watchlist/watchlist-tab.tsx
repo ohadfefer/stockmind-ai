@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
-import { MobileDataCard } from "@/components/mobile-data-card"
+import { MobileDataCard } from "@/components/mobile/mobile-data-card"
 import { deleteStock } from "@/actions/watchlist"
 import { cn } from "@/lib/utils"
 

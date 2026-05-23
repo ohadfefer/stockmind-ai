@@ -5,7 +5,7 @@ import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import { getOrdersByAccountId, type Order } from "@/services/order-service"
 import { ExecuteOrderButton } from "@/components/portfolio/execute-order-button"
 import { CancelOrderButton } from "@/components/portfolio/cancel-order-button"
-import { MobileDataCard } from "@/components/mobile-data-card"
+import { MobileDataCard } from "@/components/mobile/mobile-data-card"
 import { formatMoneyOrDash } from "@/lib/format"
 
 export default async function OrdersPage() {
