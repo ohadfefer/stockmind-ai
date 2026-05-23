@@ -3,13 +3,7 @@
 import { Search } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-
-interface SearchResult {
-  description: string
-  displaySymbol: string
-  symbol: string
-  type: string
-}
+import { useSymbolSearch } from "@/hooks/use-symbol-search"
 
 interface SymbolSearchProps {
   navigateTo?: string
@@ -22,45 +16,15 @@ export function SymbolSearch({
   placeholder = "Search tickers, news, or AI analysis...",
   className = "w-full max-w-lg",
 }: SymbolSearchProps) {
-  const [query, setQuery] = useState("")
-  const [results, setResults] = useState<SearchResult[]>([])
+  const { query, setQuery, results, isLoading } = useSymbolSearch()
   const [isOpen, setIsOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
+  // Open the dropdown as soon as matches arrive; close it when they clear.
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([])
-      setIsOpen(false)
-      return
-    }
-
-    const controller = new AbortController()
-    const timeout = setTimeout(async () => {
-      setIsLoading(true)
-      try {
-        const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`, {
-          signal: controller.signal,
-        })
-        const data = await res.json()
-        const items = (data.result || []).slice(0, 5)
-        setResults(items)
-        setIsOpen(items.length > 0)
-      } catch (e) {
-        if (!(e instanceof DOMException && e.name === "AbortError")) {
-          setResults([])
-        }
-      } finally {
-        setIsLoading(false)
-      }
-    }, 300)
-
-    return () => {
-      clearTimeout(timeout)
-      controller.abort()
-    }
-  }, [query])
+    setIsOpen(results.length > 0)
+  }, [results])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
