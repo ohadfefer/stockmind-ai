@@ -10,11 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   PieChart,
   Pie,
-  Cell,
   ResponsiveContainer,
 } from "recharts"
 import {
@@ -77,7 +76,9 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
       .map(([name, value], i) => ({
         name,
         value: total > 0 ? Math.round((value / total) * 100) : 0,
-        color: SECTOR_COLORS[i % SECTOR_COLORS.length],
+        // `fill` is read directly by each Recharts <Pie> sector (it spreads
+        // the data entry onto the sector) and reused for the legend dot.
+        fill: SECTOR_COLORS[i % SECTOR_COLORS.length],
       }))
       .sort((a, b) => b.value - a.value)
   }, [summary.holdings])
@@ -148,11 +149,7 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
                   dataKey="value"
                   strokeWidth={0}
                   isAnimationActive={false}
-                >
-                  {sectorAllocation.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
+                />
               </PieChart>
             </ResponsiveContainer>
             {/* Center Label */}
@@ -186,7 +183,7 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
                 <div key={sector.name} className="flex min-w-0 items-center gap-2">
                   <span
                     className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: sector.color }}
+                    style={{ backgroundColor: sector.fill }}
                   />
                   <span className="truncate text-sm text-foreground">{sector.name}</span>
                   <span className="ml-auto shrink-0 font-mono text-sm font-semibold text-foreground">

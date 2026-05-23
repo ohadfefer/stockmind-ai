@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { List, Plus, EllipsisVertical, Pencil, Trash2, Check, X } from "lucide-react"
+import { List, Plus, EllipsisVertical, Pencil, Trash2, Check } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { TabBarShell } from "@/components/tab-bar-shell"
 import { InlineNameInput } from "@/components/watchlist/inline-name-input"
 import {
   createWatchlist,
@@ -46,10 +47,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
   }
 
   return (
-    // -mx-* cancels parent <main>'s p-4 md:p-6 so the bar + divider span
-    // edge-to-edge on mobile; overflow-x-auto keeps the swipe inside the
-    // bar instead of dragging the page.
-    <div className="-mx-4 flex items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-border px-4 md:-mx-6 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <TabBarShell>
       {watchlists.map((wl) => {
         const isActive = wl.id === activeWatchlistId
 
@@ -129,6 +127,6 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
           New watchlist
         </button>
       )}
-    </div>
+    </TabBarShell>
   )
 }

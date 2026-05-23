@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { Sparkles, BarChart3, Bell, Plus, ClipboardList } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { TabBarShell } from "@/components/tab-bar-shell"
 import Link from "next/link"
 
 const tabs = [
@@ -19,47 +20,44 @@ export function PortfolioTabsBar() {
   const activeTab = (searchParams.get("tab") as PortfolioTabKey) || "portfolio"
 
   return (
-    // -mx-* cancels parent <main>'s p-4 md:p-6 so the tab strip + divider
-    // span edge-to-edge on mobile. Inner rows re-add px-4 md:px-6 to keep
-    // content aligned with the rest of the page.
-    <div className="-mx-4 flex flex-col md:-mx-6 md:flex-row md:items-center md:justify-between md:border-b">
-      <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-border px-4 md:border-b-0 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {tabs.map((tab) => {
-          const isActive = tab.key === activeTab
-          return (
-            <button
-              key={tab.key}
-              onClick={() => router.push(`/portfolio?tab=${tab.key}`)}
-              className={cn(
-                "flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
-                isActive
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <tab.icon className="size-4" />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="flex items-center justify-end gap-3 px-4 py-2 md:px-6 md:py-0">
-        <Link
-          href="/portfolio/orders"
-          className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground/70"
-        >
-          <ClipboardList className="size-4" />
-          Orders
-        </Link>
-        <Link
-          href="/portfolio/trade"
-          className="flex items-center gap-2 text-sm font-semibold text-primary brightness-125 transition-colors hover:brightness-100"
-        >
-          <Plus className="size-4" />
-          Trade
-        </Link>
-      </div>
-    </div>
+    <TabBarShell
+      action={
+        <div className="flex items-center justify-end gap-3 px-4 py-2 md:px-6 md:py-0">
+          <Link
+            href="/portfolio/orders"
+            className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground/70"
+          >
+            <ClipboardList className="size-4" />
+            Orders
+          </Link>
+          <Link
+            href="/portfolio/trade"
+            className="flex items-center gap-2 text-sm font-semibold text-primary brightness-125 transition-colors hover:brightness-100"
+          >
+            <Plus className="size-4" />
+            Trade
+          </Link>
+        </div>
+      }
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.key === activeTab
+        return (
+          <button
+            key={tab.key}
+            onClick={() => router.push(`/portfolio?tab=${tab.key}`)}
+            className={cn(
+              "flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+              isActive
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <tab.icon className="size-4" />
+            {tab.label}
+          </button>
+        )
+      })}
+    </TabBarShell>
   )
 }

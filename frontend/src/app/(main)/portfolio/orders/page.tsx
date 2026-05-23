@@ -6,6 +6,7 @@ import { getOrdersByAccountId, type Order } from "@/services/order-service"
 import { ExecuteOrderButton } from "@/components/portfolio/execute-order-button"
 import { CancelOrderButton } from "@/components/portfolio/cancel-order-button"
 import { MobileDataCard } from "@/components/mobile-data-card"
+import { formatMoneyOrDash } from "@/lib/format"
 
 export default async function OrdersPage() {
   const session = await auth0.getSession()
@@ -80,9 +81,7 @@ export default async function OrdersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-foreground">
-                    {order.average_fill_price != null
-                      ? `$${Number(order.average_fill_price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "—"}
+                    {formatMoneyOrDash(order.average_fill_price)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {new Date(order.submitted_at).toLocaleString()}
@@ -136,9 +135,7 @@ export default async function OrdersPage() {
                     Avg Fill
                   </p>
                   <p className="font-mono text-sm text-foreground">
-                    {order.average_fill_price != null
-                      ? `$${Number(order.average_fill_price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "—"}
+                    {formatMoneyOrDash(order.average_fill_price)}
                   </p>
                 </div>
                 <div>

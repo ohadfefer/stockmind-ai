@@ -2,6 +2,7 @@
 
 import { Suspense, use } from "react"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
+import { TabBarShell } from "@/components/tab-bar-shell"
 import { AccountTabBar } from "./account-tab-bar"
 import { AccountBalances } from "./account-balances"
 import { AccountHistory } from "./account-history"
@@ -141,14 +142,17 @@ function PerformanceSection({
 
 function TabBarSkeleton() {
   return (
-    <div className="-mx-4 flex animate-pulse flex-col md:-mx-6 md:flex-row md:items-center md:justify-between md:border-b">
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-border px-4 py-2.5 md:border-b-0 md:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-5 w-32 shrink-0 rounded bg-secondary" />
-        ))}
-      </div>
-      <div className="mx-4 my-2 h-5 w-28 rounded bg-secondary md:mx-6 md:my-0" />
-    </div>
+    <TabBarShell
+      className="animate-pulse"
+      scrollClassName="py-2.5"
+      action={
+        <div className="mx-4 my-2 h-5 w-28 rounded bg-secondary md:mx-6 md:my-0" />
+      }
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-5 w-32 shrink-0 rounded bg-secondary" />
+      ))}
+    </TabBarShell>
   )
 }
 
