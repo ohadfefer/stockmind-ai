@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { Sidebar, type SidebarUserProps } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { MobileFooter } from "@/components/mobile/mobile-footer"
+import { NavHistoryTracker } from "@/components/nav-history-tracker"
 import { auth0 } from "@/lib/auth0"
 import { getUserName, isUserOnboarded } from "@/services/user-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
@@ -36,6 +37,7 @@ export default async function MainLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <NavHistoryTracker />
       <Sidebar {...userProps} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header {...userProps} />

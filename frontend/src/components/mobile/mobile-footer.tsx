@@ -18,6 +18,9 @@ const footerNavItems = [
 export function MobileFooter() {
   const pathname = usePathname()
 
+  // Settings has its own full-screen mobile shell (back-arrow header, no nav).
+  if (pathname.startsWith("/settings")) return null
+
   return (
     <nav className="flex shrink-0 items-stretch border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden">
       {footerNavItems.map((item) => {

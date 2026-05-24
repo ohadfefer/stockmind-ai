@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { RefreshCw, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownMessage } from "@/components/ai/markdown-message"
 import type { ConversationMessage } from "@/services/ai/conversation-service"
@@ -209,19 +209,6 @@ export function ChatPanel({
     }
   }
 
-  function reset() {
-    if (isStreaming) return
-    // Pure UI clear: drop messages, forget the active id, strip ?id= from
-    // the URL. No DB write — the next send will lazily create the row.
-    // history.replaceState (not router.replace) so we just update the URL
-    // without re-running the RSC: the local state is already in the desired
-    // empty shape, so a refetch would only be wasted work.
-    setMessages([])
-    setError(null)
-    setActiveConversationId(null)
-    window.history.replaceState(null, "", "/conversation")
-  }
-
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
     void send(input)
@@ -229,22 +216,6 @@ export function ChatPanel({
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="flex items-center justify-between border-b border-border pb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-5 text-primary" />
-          <h1 className="text-lg font-semibold text-foreground">AI Advisor</h1>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={reset}
-          disabled={isStreaming || messages.length === 0}
-        >
-          <RefreshCw className="size-4" />
-          New chat
-        </Button>
-      </div>
-
       <div
         ref={scrollRef}
         onScroll={handleScroll}

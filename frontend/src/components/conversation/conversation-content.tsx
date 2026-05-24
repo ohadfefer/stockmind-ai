@@ -1,7 +1,6 @@
 "use client"
 
 import { Suspense, use } from "react"
-import { Sparkles } from "lucide-react"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
 import { ChatPanel } from "@/components/conversation/chat-panel"
 import type { ConversationPageData } from "@/services/conversation/conversation-page-data"
@@ -57,20 +56,12 @@ function ChatPanelLoader({
   )
 }
 
-// Mirrors the ChatPanel chrome (header + input) so an existing-thread load
-// reads as the chat filling in, not the page reflowing. The new-chat path
-// resolves synchronously and never shows this.
+// Mirrors the ChatPanel chrome (input) so an existing-thread load reads as the
+// chat filling in, not the page reflowing. The new-chat path resolves
+// synchronously and never shows this.
 function ChatPanelSkeleton() {
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="flex items-center justify-between border-b border-border pb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-5 text-primary" />
-          <h1 className="text-lg font-semibold text-foreground">AI Advisor</h1>
-        </div>
-        <div className="h-8 w-24 animate-pulse rounded-md bg-secondary" />
-      </div>
-
       <div className="flex-1 overflow-hidden py-4">
         <div className="mx-auto flex w-full max-w-[880px] animate-pulse flex-col gap-6">
           <div className="flex justify-end">
