@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, use } from "react"
+import { Fragment, Suspense, use } from "react"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
 import { KPICards } from "@/components/dashboard/kpi-cards"
 import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
@@ -151,21 +151,43 @@ function MarketOverviewBarSkeleton() {
 
 function KPICardsSkeleton() {
   return (
-    <div className="grid animate-pulse grid-cols-1 gap-4 md:grid-cols-3">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
-        >
-          <div className="flex items-center justify-between">
-            <div className="h-4 w-32 rounded bg-secondary" />
-            <div className="size-5 rounded bg-secondary" />
+    <>
+      {/* Mobile: single split card */}
+      <div className="flex animate-pulse items-stretch rounded-xl border border-border bg-card md:hidden">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div
+            key={i}
+            className={`flex flex-1 flex-col gap-2 p-3 ${
+              i === 0 ? "border-r border-border" : ""
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 rounded bg-secondary" />
+              <div className="h-3 w-8 rounded bg-secondary" />
+            </div>
+            <div className="h-5 w-16 rounded bg-secondary" />
+            <div className="h-3 w-full rounded bg-secondary" />
           </div>
-          <div className="h-7 w-28 rounded bg-secondary" />
-          <div className="h-3 w-40 rounded bg-secondary" />
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      {/* Desktop: three cards */}
+      <div className="hidden animate-pulse gap-4 md:grid md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-32 rounded bg-secondary" />
+              <div className="size-5 rounded bg-secondary" />
+            </div>
+            <div className="h-7 w-28 rounded bg-secondary" />
+            <div className="h-3 w-40 rounded bg-secondary" />
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -188,22 +210,44 @@ function HoldingsHeatmapSkeleton() {
   )
 }
 
+function NewsItemSkeleton() {
+  // Mirrors NewsItemContent: 2-line headline, 2-line summary, source row.
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="h-4 w-full rounded bg-secondary" />
+      <div className="h-4 w-3/4 rounded bg-secondary" />
+      <div className="mt-0.5 h-3 w-full rounded bg-secondary" />
+      <div className="h-3 w-5/6 rounded bg-secondary" />
+      <div className="mt-0.5 h-3 w-24 rounded bg-secondary" />
+    </div>
+  )
+}
+
 function NewsFeedSkeleton() {
   return (
     <div className="flex animate-pulse flex-col rounded-xl border border-border bg-card">
       <div className="px-5 py-4">
         <div className="h-6 w-40 rounded bg-secondary" />
       </div>
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex flex-col gap-2 border-t border-border px-5 py-4"
-        >
-          <div className="h-3 w-32 rounded bg-secondary" />
-          <div className="h-4 w-11/12 rounded bg-secondary" />
-          <div className="h-3 w-full rounded bg-secondary" />
-        </div>
-      ))}
+
+      {/* Mobile: horizontal swipe cards */}
+      <div className="flex gap-4 overflow-hidden px-5 pb-4 md:hidden">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="w-64 shrink-0">
+            <NewsItemSkeleton />
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: vertical list with centered separators */}
+      <div className="hidden flex-1 flex-col justify-between gap-5 px-5 pb-5 md:flex">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Fragment key={i}>
+            {i > 0 && <div className="h-px shrink-0 bg-border" />}
+            <NewsItemSkeleton />
+          </Fragment>
+        ))}
+      </div>
     </div>
   )
 }

@@ -8,9 +8,18 @@ type Range = "day" | "all"
 
 interface TopMoversCardProps {
   holdings: Holding[]
+  /** Overrides the default standalone-card container styling (border, bg, padding)
+   *  so the card can be embedded as a section inside another card. */
+  className?: string
+  /** Tightens fonts/controls for narrow embedded layouts (e.g. the mobile KPI card). */
+  compact?: boolean
 }
 
-export function TopMoversCard({ holdings }: TopMoversCardProps) {
+export function TopMoversCard({
+  holdings,
+  className,
+  compact = false,
+}: TopMoversCardProps) {
   const [range, setRange] = useState<Range>("day")
 
   const valueOf = (h: Holding) =>
@@ -23,24 +32,35 @@ export function TopMoversCard({ holdings }: TopMoversCardProps) {
   }, [holdings, range])
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">
+    <div
+      className={
+        className ??
+        "flex flex-col gap-2 rounded-xl border border-border bg-card p-4"
+      }
+    >
+      <div className="flex items-center justify-between gap-1">
+        <span
+          className={`font-medium text-muted-foreground ${
+            compact ? "text-xs" : "text-sm"
+          }`}
+        >
           Top Movers
         </span>
-        <div className="flex rounded-md bg-muted p-0.5">
+        <div className="flex shrink-0 rounded-md bg-muted p-0.5">
           {(["day", "all"] as const).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRange(r)}
-              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+              className={`rounded font-medium transition-colors ${
+                compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs"
+              } ${
                 range === r
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {r === "day" ? "Day" : "All Time"}
+              {r === "day" ? "Day" : compact ? "All" : "All Time"}
             </button>
           ))}
         </div>
@@ -48,13 +68,27 @@ export function TopMoversCard({ holdings }: TopMoversCardProps) {
 
       {best && worst ? (
         <>
-          <MoverRow holding={best} value={valueOf(best)} variant="up" />
+          <MoverRow
+            holding={best}
+            value={valueOf(best)}
+            variant="up"
+            compact={compact}
+          />
           {best.ticker !== worst.ticker && (
-            <MoverRow holding={worst} value={valueOf(worst)} variant="down" />
+            <MoverRow
+              holding={worst}
+              value={valueOf(worst)}
+              variant="down"
+              compact={compact}
+            />
           )}
         </>
       ) : (
-        <div className="flex flex-1 items-center text-sm text-muted-foreground">
+        <div
+          className={`flex flex-1 items-center text-muted-foreground ${
+            compact ? "text-xs" : "text-sm"
+          }`}
+        >
           No holdings yet
         </div>
       )}
@@ -66,25 +100,28 @@ function MoverRow({
   holding,
   value,
   variant,
+  compact = false,
 }: {
   holding: Holding
   value: number
   variant: "up" | "down"
+  compact?: boolean
 }) {
   const positive = value >= 0
   const color = positive ? "text-[#10B981]" : "text-[#EF4444]"
   const Icon = variant === "up" ? TrendingUp : TrendingDown
   const sign = value > 0 ? "+" : ""
+  const textSize = compact ? "text-sm" : "text-base"
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Icon className={`size-4 ${color}`} />
-        <span className="font-mono text-base font-bold text-foreground">
+    <div className="flex items-center justify-between gap-1">
+      <div className={`flex min-w-0 items-center ${compact ? "gap-1" : "gap-2"}`}>
+        <Icon className={`shrink-0 ${compact ? "size-3.5" : "size-4"} ${color}`} />
+        <span className={`truncate font-mono font-bold text-foreground ${textSize}`}>
           {holding.ticker}
         </span>
       </div>
-      <span className="font-mono text-base font-semibold text-foreground">
+      <span className={`shrink-0 font-mono font-semibold text-foreground ${textSize}`}>
         {sign}
         {value.toFixed(2)}%
       </span>
