@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ResponsiveContainer, Treemap } from "recharts"
+import { Triangle, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { WatchlistStockData } from "@/types/watchlist"
@@ -61,6 +62,10 @@ function formatPrice(d: number) {
   return `$${d.toFixed(2)}`
 }
 
+function accentClass(positive: boolean) {
+  return positive ? "text-[#10B981]" : "text-[#EF4444]"
+}
+
 function cellValueText(metric: Metric, percent: number, dollar: number) {
   if (metric === "percent") return formatPercent(percent)
   return formatGain(dollar)
@@ -77,13 +82,13 @@ interface HeatmapCellProps {
   marketValue?: number
   price?: number
   metric: Metric
-  onSelect: (ticker: string) => void
+  onActivate: (info: CellHoverData) => void
   onHover: (info: CellHoverData) => void
 }
 
 type RechartsCellProps = Omit<
   HeatmapCellProps,
-  "metric" | "onSelect" | "onHover"
+  "metric" | "onActivate" | "onHover"
 >
 
 function HeatmapCell({
@@ -97,7 +102,7 @@ function HeatmapCell({
   marketValue = 0,
   price = 0,
   metric,
-  onSelect,
+  onActivate,
   onHover,
 }: HeatmapCellProps) {
   if (!ticker || width <= 0 || height <= 0) return null
@@ -110,25 +115,23 @@ function HeatmapCell({
   const valueSize = Math.round(Math.max(tickerSize * 0.55, 10))
   const textColor = "#1A1D25"
 
-  const reportHover = () => {
-    onHover({
-      ticker,
-      changePercent,
-      changeDollar,
-      marketValue,
-      price,
-      cellX: x,
-      cellY: y,
-      cellWidth: width,
-      cellHeight: height,
-    })
-  }
+  const buildInfo = (): CellHoverData => ({
+    ticker,
+    changePercent,
+    changeDollar,
+    marketValue,
+    price,
+    cellX: x,
+    cellY: y,
+    cellWidth: width,
+    cellHeight: height,
+  })
 
   return (
     <g
       style={{ cursor: "pointer" }}
-      onClick={() => onSelect(ticker)}
-      onMouseEnter={reportHover}
+      onClick={() => onActivate(buildInfo())}
+      onMouseEnter={() => onHover(buildInfo())}
     >
       <rect
         x={x}
@@ -179,6 +182,9 @@ export function HoldingsHeatmap({
   const [dataset, setDataset] = useState<Dataset>("portfolio")
   const [metric, setMetric] = useState<Metric>("percent")
   const [hover, setHover] = useState<CellHoverData | null>(null)
+  // Touch devices can't hover, so they get a tap-to-open modal instead.
+  const [selected, setSelected] = useState<CellHoverData | null>(null)
+  const [isTouch, setIsTouch] = useState(false)
 
   const data = useMemo(() => {
     const rawData =
@@ -215,12 +221,28 @@ export function HoldingsHeatmap({
     return () => observer.disconnect()
   }, [])
 
+  // Treat devices that can't hover (touch screens) as tap-to-open.
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none)")
+    const update = () => setIsTouch(mq.matches)
+    update()
+    mq.addEventListener("change", update)
+    return () => mq.removeEventListener("change", update)
+  }, [])
+
   const isEmpty = data.length === 0
   const handleSelect = (ticker: string) => router.push(`/details/${ticker}`)
+
+  // Desktop click navigates straight to details; touch opens the modal.
+  const handleActivate = (info: CellHoverData) => {
+    if (isTouch) setSelected(info)
+    else handleSelect(info.ticker)
+  }
 
   const switchDataset = (d: Dataset) => {
     setDataset(d)
     setHover(null)
+    setSelected(null)
   }
 
   return (
@@ -280,19 +302,35 @@ export function HoldingsHeatmap({
                 <HeatmapCell
                   {...(props as RechartsCellProps)}
                   metric={metric}
-                  onSelect={handleSelect}
+                  onActivate={handleActivate}
                   onHover={setHover}
                 />
               )}
             />
           </ResponsiveContainer>
-          {hover && (
+          {!isTouch && hover && (
             <HoverTooltip
               info={hover}
               dataset={dataset}
               chartWidth={chartRef.current?.clientWidth ?? 0}
               chartHeight={chartRef.current?.clientHeight ?? 0}
             />
+          )}
+          {isTouch && selected && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-background/70"
+                onClick={() => setSelected(null)}
+                aria-hidden
+              />
+              <MobileDetailCard
+                key={selected.ticker}
+                info={selected}
+                dataset={dataset}
+                onClose={() => setSelected(null)}
+                onViewDetails={() => handleSelect(selected.ticker)}
+              />
+            </div>
           )}
         </div>
       )}
@@ -327,7 +365,7 @@ function HoverTooltip({
   else style.bottom = chartHeight - centerY
 
   const positive = info.changePercent >= 0
-  const accent = positive ? "text-[#10B981]" : "text-[#EF4444]"
+  const accent = accentClass(positive)
   const lastLabel = dataset === "portfolio" ? "Market value" : "Price"
   const lastValue =
     dataset === "portfolio" ? info.marketValue : info.price
@@ -355,6 +393,78 @@ function HoverTooltip({
           {formatPrice(lastValue)}
         </span>
       </div>
+    </div>
+  )
+}
+
+// Touch-only: tapping a cell opens this centered modal instead of navigating.
+function MobileDetailCard({
+  info,
+  dataset,
+  onClose,
+  onViewDetails,
+}: {
+  info: CellHoverData
+  dataset: Dataset
+  onClose: () => void
+  onViewDetails: () => void
+}) {
+  const positive = info.changePercent >= 0
+  const accent = accentClass(positive)
+  const lastLabel = dataset === "portfolio" ? "Market Value" : "Price"
+  const lastValue = dataset === "portfolio" ? info.marketValue : info.price
+
+  return (
+    <div className="relative z-10 w-full max-w-xs rounded-lg border border-border bg-card p-4 shadow-xl duration-150 animate-in fade-in zoom-in-95">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-2.5 top-2.5 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <X className="size-5" />
+      </button>
+
+      <div className="font-mono text-lg font-bold text-foreground">
+        {info.ticker}
+      </div>
+
+      <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <span className="text-muted-foreground">Today&apos;s Return</span>
+        <span
+          className={cn(
+            "flex items-center justify-end gap-1 font-mono font-semibold",
+            accent,
+          )}
+        >
+          <Triangle className={cn("size-2.5 fill-current", !positive && "rotate-180")} />
+          {formatPercent(info.changePercent)}
+        </span>
+
+        <span className="text-muted-foreground">Today&apos;s Gain</span>
+        <span
+          className={cn(
+            "flex items-center justify-end gap-1 font-mono font-semibold",
+            accent,
+          )}
+        >
+          <Triangle className={cn("size-2.5 fill-current", !positive && "rotate-180")} />
+          {formatGain(info.changeDollar)}
+        </span>
+
+        <span className="text-muted-foreground">{lastLabel}</span>
+        <span className="text-right font-mono text-foreground">
+          {formatPrice(lastValue)}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={onViewDetails}
+        className="mt-4 w-full text-center text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+      >
+        View Details
+      </button>
     </div>
   )
 }
