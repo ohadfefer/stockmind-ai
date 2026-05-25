@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ResponsiveContainer, Treemap } from "recharts"
-import { Triangle, X } from "lucide-react"
+import { ChevronLeft, Expand, Triangle, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { WatchlistStockData } from "@/types/watchlist"
@@ -26,6 +26,15 @@ interface CellHoverData {
   cellY: number
   cellWidth: number
   cellHeight: number
+}
+
+type ChartDatum = {
+  ticker: string
+  changePercent: number
+  changeDollar: number
+  marketValue: number
+  price: number
+  weight: number
 }
 
 function getCellColor(change: number) {
@@ -177,14 +186,10 @@ export function HoldingsHeatmap({
   holdings,
   watchlist,
 }: HoldingsHeatmapProps) {
-  const router = useRouter()
-  const chartRef = useRef<HTMLDivElement>(null)
   const [dataset, setDataset] = useState<Dataset>("portfolio")
   const [metric, setMetric] = useState<Metric>("percent")
-  const [hover, setHover] = useState<CellHoverData | null>(null)
-  // Touch devices can't hover, so they get a tap-to-open modal instead.
-  const [selected, setSelected] = useState<CellHoverData | null>(null)
   const [isTouch, setIsTouch] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
 
   const data = useMemo(() => {
     const rawData =
@@ -212,15 +217,6 @@ export function HoldingsHeatmap({
     return withWeight.sort((a, b) => b.weight - a.weight)
   }, [dataset, holdings, watchlist])
 
-  // Clear hover when the chart container resizes — cached cell coords go stale.
-  useEffect(() => {
-    const node = chartRef.current
-    if (!node) return
-    const observer = new ResizeObserver(() => setHover(null))
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
-
   // Treat devices that can't hover (touch screens) as tap-to-open.
   useEffect(() => {
     const mq = window.matchMedia("(hover: none)")
@@ -231,33 +227,21 @@ export function HoldingsHeatmap({
   }, [])
 
   const isEmpty = data.length === 0
-  const handleSelect = (ticker: string) => router.push(`/details/${ticker}`)
-
-  // Desktop click navigates straight to details; touch opens the modal.
-  const handleActivate = (info: CellHoverData) => {
-    if (isTouch) setSelected(info)
-    else handleSelect(info.ticker)
-  }
-
-  const switchDataset = (d: Dataset) => {
-    setDataset(d)
-    setHover(null)
-    setSelected(null)
-  }
+  const title = dataset === "portfolio" ? "Holdings" : "Watchlist"
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 md:gap-6">
           <TabButton
             active={dataset === "portfolio"}
-            onClick={() => switchDataset("portfolio")}
+            onClick={() => setDataset("portfolio")}
           >
             Holdings
           </TabButton>
           <TabButton
             active={dataset === "watchlist"}
-            onClick={() => switchDataset("watchlist")}
+            onClick={() => setDataset("watchlist")}
           >
             Watchlist
           </TabButton>
@@ -287,57 +271,149 @@ export function HoldingsHeatmap({
             : "No stocks in your watchlist yet."}
         </div>
       ) : (
-        <div
-          ref={chartRef}
-          className="relative h-[280px] w-full md:h-[300px] lg:h-[360px]"
-          onMouseLeave={() => setHover(null)}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={data}
-              dataKey="weight"
-              aspectRatio={4 / 3}
-              isAnimationActive={false}
-              content={(props: object) => (
-                <HeatmapCell
-                  {...(props as RechartsCellProps)}
-                  metric={metric}
-                  onActivate={handleActivate}
-                  onHover={setHover}
-                />
-              )}
-            />
-          </ResponsiveContainer>
-          {!isTouch && hover && (
-            <HoverTooltip
-              info={hover}
-              dataset={dataset}
-              chartWidth={chartRef.current?.clientWidth ?? 0}
-              chartHeight={chartRef.current?.clientHeight ?? 0}
-            />
-          )}
-          {isTouch && selected && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div
-                className="absolute inset-0 bg-background/70"
-                onClick={() => setSelected(null)}
-                aria-hidden
-              />
-              <MobileDetailCard
-                key={selected.ticker}
-                info={selected}
-                dataset={dataset}
-                onClose={() => setSelected(null)}
-                onViewDetails={() => handleSelect(selected.ticker)}
-              />
-            </div>
-          )}
+        <div className="relative h-[280px] w-full md:h-[300px] lg:h-[360px]">
+          <HeatmapChart
+            key={dataset}
+            data={data}
+            metric={metric}
+            dataset={dataset}
+            isTouch={isTouch}
+            className="h-full w-full"
+          />
+          <button
+            type="button"
+            onClick={() => setFullscreen(true)}
+            aria-label="Expand heatmap"
+            className="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full bg-background/80 text-foreground shadow-md ring-1 ring-border backdrop-blur transition hover:bg-background md:hidden"
+          >
+            <Expand className="size-3.5" />
+          </button>
         </div>
       )}
 
       <p className="text-xs italic text-muted-foreground">
-        Tile size reflects daily % change; color indicates direction
+        Tile size reflects daily % change
       </p>
+
+      {fullscreen && !isEmpty && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <button
+              type="button"
+              onClick={() => setFullscreen(false)}
+              aria-label="Back"
+              className="flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-secondary"
+            >
+              <ChevronLeft className="size-6" />
+            </button>
+            <span className="flex-1 text-center text-lg font-semibold text-foreground">
+              {title}
+            </span>
+            <div className="size-9 shrink-0" aria-hidden />
+          </div>
+          <div className="min-h-0 flex-1 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <HeatmapChart
+              key={`fs-${dataset}`}
+              data={data}
+              metric={metric}
+              dataset={dataset}
+              isTouch={isTouch}
+              showViewDetails={false}
+              className="h-full w-full"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HeatmapChart({
+  data,
+  metric,
+  dataset,
+  isTouch,
+  showViewDetails = true,
+  className,
+}: {
+  data: ChartDatum[]
+  metric: Metric
+  dataset: Dataset
+  isTouch: boolean
+  showViewDetails?: boolean
+  className?: string
+}) {
+  const router = useRouter()
+  const chartRef = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<CellHoverData | null>(null)
+  // Touch devices can't hover, so they get a tap-to-open modal instead.
+  const [selected, setSelected] = useState<CellHoverData | null>(null)
+
+  // Clear hover when the chart container resizes — cached cell coords go stale.
+  useEffect(() => {
+    const node = chartRef.current
+    if (!node) return
+    const observer = new ResizeObserver(() => setHover(null))
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const handleSelect = (ticker: string) => router.push(`/details/${ticker}`)
+
+  // Desktop click navigates straight to details; touch opens the modal.
+  const handleActivate = (info: CellHoverData) => {
+    if (isTouch) setSelected(info)
+    else handleSelect(info.ticker)
+  }
+
+  return (
+    <div
+      ref={chartRef}
+      className={cn("relative", className)}
+      onMouseLeave={() => setHover(null)}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <Treemap
+          data={data}
+          dataKey="weight"
+          aspectRatio={4 / 3}
+          isAnimationActive={false}
+          content={(props: object) => (
+            <HeatmapCell
+              {...(props as RechartsCellProps)}
+              metric={metric}
+              onActivate={handleActivate}
+              onHover={setHover}
+            />
+          )}
+        />
+      </ResponsiveContainer>
+      {!isTouch && hover && (
+        <HoverTooltip
+          info={hover}
+          dataset={dataset}
+          chartWidth={chartRef.current?.clientWidth ?? 0}
+          chartHeight={chartRef.current?.clientHeight ?? 0}
+        />
+      )}
+      {isTouch && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-background/70"
+            onClick={() => setSelected(null)}
+            aria-hidden
+          />
+          <MobileDetailCard
+            key={selected.ticker}
+            info={selected}
+            dataset={dataset}
+            onClose={() => setSelected(null)}
+            onViewDetails={
+              showViewDetails ? () => handleSelect(selected.ticker) : undefined
+            }
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -407,7 +483,7 @@ function MobileDetailCard({
   info: CellHoverData
   dataset: Dataset
   onClose: () => void
-  onViewDetails: () => void
+  onViewDetails?: () => void
 }) {
   const positive = info.changePercent >= 0
   const accent = accentClass(positive)
@@ -458,13 +534,15 @@ function MobileDetailCard({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={onViewDetails}
-        className="mt-4 w-full text-center text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
-      >
-        View Details
-      </button>
+      {onViewDetails && (
+        <button
+          type="button"
+          onClick={onViewDetails}
+          className="mt-4 w-full text-center text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+        >
+          View Details
+        </button>
+      )}
     </div>
   )
 }
@@ -482,7 +560,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={cn(
-        "border-b-2 pb-1 text-sm font-semibold uppercase tracking-wider transition-colors",
+        "border-b-2 pb-1 text-xs font-semibold uppercase tracking-wider transition-colors md:text-sm",
         active
           ? "border-foreground text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground",
@@ -509,7 +587,7 @@ function MetricButton({
       onClick={onClick}
       aria-label={label}
       className={cn(
-        "flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+        "flex size-6 items-center justify-center rounded-full text-[11px] font-semibold transition-colors md:size-7 md:text-xs",
         active
           ? "bg-foreground text-background"
           : "text-muted-foreground hover:bg-secondary hover:text-foreground",
