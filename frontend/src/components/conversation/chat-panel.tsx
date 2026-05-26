@@ -215,7 +215,7 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -264,7 +264,7 @@ export function ChatPanel({
           placeholder="Ask about stocks, ETFs, your portfolio…"
           rows={2}
           disabled={isStreaming || error?.kind === "budget"}
-          className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
+          className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-60"
         />
       </form>
     </div>

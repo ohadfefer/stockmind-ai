@@ -297,21 +297,33 @@ export function HoldingsHeatmap({
 
       {fullscreen && !isEmpty && (
         <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          {/*
+            Align the chevron's visible left edge with the chart's left edge.
+            Container has `px-5` (20px). The back button is `size-9` (36px) with
+            a `size-6` (24px) chevron centered inside, so the chevron's SVG box
+            sits 6px from the button's left edge. lucide's ChevronLeft path
+            starts at x=9 in a 24-unit viewBox (visible stroke ~x=8), so the
+            visible stroke is another 8px in from the SVG box. Total inset
+            from the button's left edge: 6 + 8 = 14px. `-ml-[14px]` pulls the
+            button left by exactly that, so the chevron tip lands at 20px from
+            the screen edge — same column as the chart. The right spacer
+            mirrors with `-mr-[14px]` so the centered title stays centered.
+          */}
+          <div className="flex items-center gap-3 border-b border-border px-5 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
             <button
               type="button"
               onClick={() => setFullscreen(false)}
               aria-label="Back"
-              className="flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-secondary"
+              className="-ml-[14px] flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-secondary"
             >
               <ChevronLeft className="size-6" />
             </button>
             <span className="flex-1 text-center text-lg font-semibold text-foreground">
               {title}
             </span>
-            <div className="size-9 shrink-0" aria-hidden />
+            <div className="-mr-[14px] size-9 shrink-0" aria-hidden />
           </div>
-          <div className="min-h-0 flex-1 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="min-h-0 flex-1 px-5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             <HeatmapChart
               key={`fs-${dataset}`}
               data={data}

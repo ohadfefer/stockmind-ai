@@ -61,7 +61,7 @@ function ChatPanelLoader({
 // synchronously and never shows this.
 function ChatPanelSkeleton() {
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="flex-1 overflow-hidden py-4">
         <div className="mx-auto flex w-full max-w-[880px] animate-pulse flex-col gap-6">
           <div className="flex justify-end">

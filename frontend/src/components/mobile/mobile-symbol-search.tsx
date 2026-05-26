@@ -1,7 +1,7 @@
 "use client"
 
 import { Search, X } from "lucide-react"
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Dialog,
@@ -26,7 +26,6 @@ interface MobileSymbolSearchProps {
 export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSearchProps) {
   const [open, setOpen] = useState(false)
   const { query, setQuery, results, isLoading } = useSymbolSearch()
-  const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   function handleOpenChange(next: boolean) {
@@ -55,10 +54,7 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
 
       <DialogContent
         showCloseButton={false}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault()
-          inputRef.current?.focus()
-        }}
+        onOpenAutoFocus={(e) => e.preventDefault()}
         className="inset-x-0 bottom-0 top-auto flex h-[60dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-t-2xl rounded-b-none border-x-0 border-b-0 p-0 sm:max-w-none"
       >
         <DialogHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 border-b border-border px-4 py-3 text-left">
@@ -81,12 +77,17 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
           <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Symbol or name (e.g. SPY, Apple)"
-              className="h-11 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              inputMode="search"
+              enterKeyHint="search"
+              className="h-11 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground"
             />
           </div>
 

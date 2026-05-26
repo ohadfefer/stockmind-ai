@@ -305,6 +305,10 @@ export function MobileTradeDialog() {
                     placeholder="e.g. AAPL"
                     value={symbol}
                     onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="characters"
+                    spellCheck={false}
                   />
                   <button
                     type="button"
@@ -358,6 +362,8 @@ export function MobileTradeDialog() {
                   placeholder="Number of shares"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
+                  autoComplete="off"
+                  inputMode="numeric"
                 />
               </div>
 

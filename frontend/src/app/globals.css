@@ -89,3 +89,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Make focused inputs visually identical to unfocused: no outline, no blue
+   ring. Each input keeps its own unfocused border-color naturally (we don't
+   set border-color here, since the app uses different defaults — `--input`
+   for shadcn Input, `--border` for custom inputs on `bg-secondary`).
+   Lives outside `@layer base` so it wins over Tailwind utilities
+   (`focus-visible:ring-*`) shipped by shadcn's Input/Textarea components. */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none;
+  /* Equivalent to Tailwind's `shadow-xs`, preserved so focus matches the
+     unfocused box-shadow exactly. */
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/* shadcn Input/Textarea additionally apply `focus-visible:border-ring` which
+   turns the border blue. Reset to the base (`--input`) so focus is a no-op. */
+[data-slot="input"]:focus,
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus,
+[data-slot="textarea"]:focus-visible {
+  border-color: var(--input);
+}

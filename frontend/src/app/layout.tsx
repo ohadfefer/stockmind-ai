@@ -34,11 +34,15 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0A0B0D",
+  themeColor: "#000000",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Shrinks the layout viewport when the on-screen keyboard appears, so
+  // `position: fixed; bottom: 0` bottom-sheets (mobile search + trade dialogs)
+  // sit above the keyboard instead of being covered by it.
+  interactiveWidget: "resizes-content",
 }
 
 export default async function RootLayout({
