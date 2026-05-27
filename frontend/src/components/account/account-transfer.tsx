@@ -194,12 +194,22 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
             </span>
             <Input
               id="amount"
-              type="number"
-              min="0"
-              step="0.01"
+              type="search"
+              inputMode="decimal"
+              pattern="[0-9]*\.?[0-9]*"
               placeholder="0.00"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/[^0-9.]/g, "")
+                const firstDot = cleaned.indexOf(".")
+                setAmount(
+                  firstDot === -1
+                    ? cleaned
+                    : cleaned.slice(0, firstDot + 1) +
+                        cleaned.slice(firstDot + 1).replace(/\./g, ""),
+                )
+              }}
+              autoComplete="off"
               className="pl-7 font-mono"
             />
           </div>
@@ -225,9 +235,11 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
           <Label htmlFor="description">Description (optional)</Label>
           <Input
             id="description"
+            type="search"
             placeholder={direction === "deposit" ? "e.g. Funding account" : "e.g. Withdrawal to bank"}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            autoComplete="off"
           />
         </div>
 

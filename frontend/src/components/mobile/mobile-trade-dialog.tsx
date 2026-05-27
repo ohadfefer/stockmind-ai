@@ -302,6 +302,7 @@ export function MobileTradeDialog() {
                 <div className="flex items-center gap-2">
                   <Input
                     id="trade-symbol"
+                    type="search"
                     placeholder="e.g. AAPL"
                     value={symbol}
                     onChange={(e) => setSymbol(e.target.value.toUpperCase())}
@@ -357,13 +358,15 @@ export function MobileTradeDialog() {
                 <Label htmlFor="trade-quantity">Quantity</Label>
                 <Input
                   id="trade-quantity"
-                  type="number"
-                  min={1}
+                  type="search"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="Number of shares"
                   value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
+                  onChange={(e) =>
+                    setQuantity(e.target.value.replace(/[^0-9]/g, ""))
+                  }
                   autoComplete="off"
-                  inputMode="numeric"
                 />
               </div>
 

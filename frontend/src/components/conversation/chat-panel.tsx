@@ -298,19 +298,10 @@ function EmptyState({
   disabled: boolean
 }) {
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 pt-12 text-center">
-      <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10">
-        <Sparkles className="size-6 text-primary" />
-      </div>
-      <div className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold text-foreground">
-          Chat about stocks
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Ask about a ticker, your holdings, or an investing concept. The
-          assistant only answers stock-related questions.
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-2xl flex-col items-start gap-6 pt-12 text-left">
+      <h2 className="text-xl font-semibold text-foreground">
+        Chat about stocks
+      </h2>
       <div className="flex w-full flex-col gap-2">
         {SEED_PROMPTS.map((p) => (
           <button

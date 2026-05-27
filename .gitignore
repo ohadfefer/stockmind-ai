@@ -9,6 +9,7 @@
 
 # Local TODO scratchpads
 stripe-todo.txt
+android-emulator-setup.txt
 
 # Mobile-design verification screenshots. Folder kept via .gitkeep so the
 # documented save location stays stable, but the files themselves are

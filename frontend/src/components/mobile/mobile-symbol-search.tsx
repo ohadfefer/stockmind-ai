@@ -55,7 +55,7 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
       <DialogContent
         showCloseButton={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className="inset-x-0 bottom-0 top-auto flex h-[60dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-t-2xl rounded-b-none border-x-0 border-b-0 p-0 sm:max-w-none"
+        className="inset-x-0 bottom-0 top-auto flex h-[60dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-t-2xl rounded-b-none border-x-0 border-b-0 p-0 transition-[height] duration-300 ease-out has-[input:focus]:h-[95dvh] sm:max-w-none"
       >
         <DialogHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 border-b border-border px-4 py-3 text-left">
           <DialogTitle className="text-base font-semibold">Search</DialogTitle>
@@ -77,7 +77,7 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
           <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              type="text"
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Symbol or name (e.g. SPY, Apple)"
@@ -87,7 +87,7 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
               spellCheck={false}
               inputMode="search"
               enterKeyHint="search"
-              className="h-11 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground"
+              className="h-11 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:appearance-none"
             />
           </div>
 
