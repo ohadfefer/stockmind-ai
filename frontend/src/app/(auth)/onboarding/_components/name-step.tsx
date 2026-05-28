@@ -43,12 +43,15 @@ export function NameStep({ fullName, onChange, onContinue, onBack, error }: Name
             </label>
             <input
               id="fullName"
-              type="text"
+              type="search"
               value={fullName}
               onChange={(e) => onChange(e.target.value)}
               placeholder="John Doe"
               maxLength={50}
-              autoFocus
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="words"
+              spellCheck={false}
               className="flex w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>

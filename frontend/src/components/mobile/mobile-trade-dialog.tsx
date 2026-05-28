@@ -38,12 +38,17 @@ type Step = "form" | "confirm"
 const ORDER_TYPE = "market"
 
 /**
- * Footer "Trade" action: a bottom-sheet Dialog (same shell as
- * <MobileSymbolSearch>) that runs the place-order → confirm-order flow inline,
- * mirroring the /portfolio/trade and /portfolio/trade/confirmation pages without
- * a full navigation. On submit it routes to /portfolio/orders.
+ * Bottom-sheet Dialog (same shell as <MobileSymbolSearch>) that runs the
+ * place-order → confirm-order flow inline, mirroring /portfolio/trade and
+ * /portfolio/trade/confirmation without a full navigation. Defaults to the
+ * footer-style trigger but accepts any element via `trigger`. On submit it
+ * routes to /portfolio/orders.
  */
-export function MobileTradeDialog() {
+export function MobileTradeDialog({
+  trigger,
+}: {
+  trigger?: React.ReactNode
+} = {}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("form")
@@ -226,14 +231,16 @@ export function MobileTradeDialog() {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <button
-          type="button"
-          aria-label="Trade"
-          className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <CandlestickChart className="size-5" />
-          Trade
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label="Trade"
+            className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <CandlestickChart className="size-5" />
+            Trade
+          </button>
+        )}
       </DialogTrigger>
 
       <DialogContent

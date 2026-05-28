@@ -1,10 +1,9 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { Sparkles, BarChart3, Bell, Plus, ClipboardList } from "lucide-react"
+import { Sparkles, BarChart3, Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TabBarShell } from "@/components/tab-bar-shell"
-import Link from "next/link"
 
 const tabs = [
   { key: "portfolio", label: "Portfolio", icon: BarChart3 },
@@ -20,26 +19,7 @@ export function PortfolioTabsBar() {
   const activeTab = (searchParams.get("tab") as PortfolioTabKey) || "portfolio"
 
   return (
-    <TabBarShell
-      action={
-        <div className="flex items-center justify-end gap-3 px-4 py-2 md:px-6 md:py-0">
-          <Link
-            href="/portfolio/orders"
-            className="flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground/70"
-          >
-            <ClipboardList className="size-4" />
-            Orders
-          </Link>
-          <Link
-            href="/portfolio/trade"
-            className="flex items-center gap-2 text-sm font-semibold text-primary brightness-125 transition-colors hover:brightness-100"
-          >
-            <Plus className="size-4" />
-            Trade
-          </Link>
-        </div>
-      }
-    >
+    <TabBarShell>
       {tabs.map((tab) => {
         const isActive = tab.key === activeTab
         return (

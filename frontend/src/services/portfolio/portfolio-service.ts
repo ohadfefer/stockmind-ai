@@ -9,6 +9,7 @@ export interface Holding {
   ticker: string
   company: string
   sector: string
+  logo?: string
   shares: number
   avgBuy: number
   currentPrice: number
@@ -95,6 +96,7 @@ export async function getPortfolioSummary(
       ticker: pos.symbol,
       company: profile?.name ?? pos.symbol,
       sector: profile?.finnhubIndustry ?? "—",
+      logo: profile?.logo,
       shares: pos.quantity,
       avgBuy: pos.average_cost_basis,
       currentPrice: quote.c,
