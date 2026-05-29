@@ -51,43 +51,69 @@ export function PortfolioTopPositions({
   const topSector = sectorAllocation[0]
   const maxWeight = ranked[0]?.portfolioWeight ?? 0
 
+  const concentration = useMemo(() => {
+    const sumTop = (n: number) =>
+      ranked.slice(0, n).reduce((acc, h) => acc + h.portfolioWeight, 0)
+    return {
+      top1: ranked[0]?.portfolioWeight ?? 0,
+      top3: sumTop(3),
+      top10: sumTop(10),
+    }
+  }, [ranked])
+
   return (
     <div className="flex flex-col gap-6">
-      {/* How They Stack Up — relocated portfolio weight column. */}
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 md:p-6">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          How They Stack Up
-        </h3>
-        <div className="flex flex-col gap-2.5">
-          {ranked.map((h, i) => (
-            <div key={h.ticker} className="flex items-center gap-3">
-              <span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">
-                #{i + 1}
-              </span>
-              <span className="w-14 shrink-0 font-mono text-sm font-bold text-primary">
-                {h.ticker}
-              </span>
-              <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-secondary/60">
-                <div
-                  className="h-full rounded-md bg-primary/80"
-                  style={{
-                    width: `${
-                      maxWeight > 0 ? (h.portfolioWeight / maxWeight) * 100 : 0
-                    }%`,
-                  }}
-                />
+      {/* Concentration + How They Stack Up — relocated portfolio weight column. */}
+      <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 md:p-6">
+        {ranked.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No holdings yet — add positions to see your concentration.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Concentration
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                <ConcentrationStat label="Top Position" value={concentration.top1} />
+                <ConcentrationStat label="Top 3" value={concentration.top3} />
+                <ConcentrationStat label="Top 10" value={concentration.top10} />
               </div>
-              <span className="w-14 shrink-0 text-right font-mono text-sm font-semibold text-foreground">
-                {h.portfolioWeight.toFixed(2)}%
-              </span>
             </div>
-          ))}
-          {ranked.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No holdings yet — add positions to see your concentration.
-            </p>
-          )}
-        </div>
+
+            <div className="flex flex-col gap-3">
+              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground md:text-xs">
+                How They Stack Up
+              </h3>
+              <div className="flex flex-col gap-2.5">
+                {ranked.map((h, i) => (
+                  <div key={h.ticker} className="flex items-center gap-2 md:gap-3">
+                    <span className="w-5 shrink-0 font-mono text-[10px] text-muted-foreground md:w-6 md:text-xs">
+                      #{i + 1}
+                    </span>
+                    <span className="w-11 shrink-0 font-mono text-xs font-bold text-primary md:w-14 md:text-sm">
+                      {h.ticker}
+                    </span>
+                    <div className="relative h-2 flex-1 overflow-hidden rounded bg-secondary/60 md:h-5">
+                      <div
+                        className="h-full rounded bg-primary/80"
+                        style={{
+                          width: `${
+                            maxWeight > 0 ? (h.portfolioWeight / maxWeight) * 100 : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <span className="w-12 shrink-0 text-right font-mono text-xs font-semibold text-foreground md:w-14 md:text-sm">
+                      {h.portfolioWeight.toFixed(2)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Sector allocation + AI insight, relocated from the portfolio tab. */}
@@ -165,6 +191,25 @@ export function PortfolioTopPositions({
           </Suspense>
         </ErrorBoundary>
       </div>
+    </div>
+  )
+}
+
+function ConcentrationStat({
+  label,
+  value,
+}: {
+  label: string
+  value: number
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground md:text-[11px]">
+        {label}
+      </span>
+      <span className="font-mono text-base font-bold text-foreground md:text-lg">
+        {value.toFixed(2)}%
+      </span>
     </div>
   )
 }
