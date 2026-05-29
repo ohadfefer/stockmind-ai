@@ -30,11 +30,15 @@ export function InlineNameInput({ placeholder = "Watchlist name", defaultValue =
     <div className="flex items-center gap-1 px-1.5 py-1.5">
       <input
         ref={inputRef}
-        type="text"
+        type="search"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="words"
+        spellCheck={false}
         className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
       />
       <button

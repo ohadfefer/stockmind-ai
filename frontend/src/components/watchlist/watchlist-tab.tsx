@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table"
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
-import { MobileDataCard } from "@/components/mobile/mobile-data-card"
 import { deleteStock } from "@/actions/watchlist"
 import { cn } from "@/lib/utils"
 
@@ -34,12 +33,6 @@ function SortIcon({
     return <ArrowUpDown className="size-3 opacity-50" />
   if (direction === "asc") return <ArrowUp className="size-3" />
   return <ArrowDown className="size-3" />
-}
-
-function getAIScoreColor(score: number): string {
-  if (score >= 8) return "bg-[#10B981] text-[#FFFFFF]"
-  if (score >= 6) return "bg-[#F59E0B] text-[#0A0B0D]"
-  return "bg-[#EF4444] text-[#FFFFFF]"
 }
 
 function RangeBar({
@@ -75,7 +68,7 @@ export function WatchlistTabSkeleton() {
   return (
     <div className="animate-pulse rounded-xl border border-border bg-card">
       <div className="flex items-center gap-6 border-b border-border px-5 py-4">
-        {Array.from({ length: 7 }).map((_, i) => (
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-3 w-20 rounded bg-secondary" />
         ))}
       </div>
@@ -216,12 +209,7 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Day Range
             </TableHead>
-            <TableHead className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              AI Score
-            </TableHead>
-            <TableHead className="pr-5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Actions
-            </TableHead>
+            <TableHead className="pr-5" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -273,19 +261,6 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell className="text-center">
-                  {stock.aiScore != null ? (
-                    <span
-                      className={`inline-flex size-8 items-center justify-center rounded-lg font-mono text-xs font-bold ${getAIScoreColor(
-                        stock.aiScore
-                      )}`}
-                    >
-                      {stock.aiScore}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
-                </TableCell>
                 <TableCell className="pr-5">
                   <ConfirmDelete
                     onDelete={() => handleDelete(stock.ticker)}
@@ -301,84 +276,147 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
       </Table>
       </div>
 
-      {/* Mobile cards */}
-      <div className="space-y-3 md:hidden">
-        {sortedStocks.map((stock) => {
-          const positive = stock.changePercent >= 0
-          return (
-            <MobileDataCard
-              key={stock.ticker}
-              onClick={() => router.push(`/details/${stock.ticker}`)}
+      {/* Mobile table — compact, no card wrapper. */}
+      {/*
+        Mobile table. Sticky-left Symbol column with horizontal scroll on the
+        rest; the symbol stays anchored while the user swipes through the
+        numeric columns (Price → % Change → Open → High → Low).
+      */}
+      <div className="overflow-x-auto overscroll-x-contain md:hidden">
+        <div className="min-w-[640px]">
+          <div className="flex items-center border-b border-border py-2.5 text-[11px] font-medium text-muted-foreground">
+            <button
+              type="button"
+              className="sticky left-0 z-10 inline-flex w-[7.5rem] shrink-0 items-center gap-1 bg-background pl-1 pr-2 text-left"
+              onClick={() => handleSort("ticker")}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-mono text-sm font-bold text-foreground">
-                    {stock.ticker}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {stock.company}
-                  </p>
-                </div>
-                {stock.aiScore != null && (
-                  <span
-                    className={cn(
-                      "inline-flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold",
-                      getAIScoreColor(stock.aiScore),
-                    )}
-                  >
-                    {stock.aiScore}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-end justify-between gap-3">
-                <span className="font-mono text-xl font-bold text-foreground">
-                  ${stock.price.toFixed(2)}
+              Symbol
+              <SortIcon
+                column="ticker"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+              />
+            </button>
+            {(
+              [
+                { col: "price", label: "Price", sortable: true },
+                { col: "changeDollar", label: "Change", sortable: true },
+                { col: "changePercent", label: "% Change", sortable: true },
+                { col: "open", label: "Open", sortable: false },
+                { col: "high", label: "High", sortable: false },
+                { col: "low", label: "Low", sortable: false },
+              ] as const
+            ).map(({ col, label, sortable }) =>
+              sortable ? (
+                <button
+                  key={col}
+                  type="button"
+                  className="inline-flex w-[5.5rem] shrink-0 items-center justify-end gap-1 px-2"
+                  onClick={() => handleSort(col as SortColumn)}
+                >
+                  {label}
+                  <SortIcon
+                    column={col as SortColumn}
+                    activeColumn={sortColumn}
+                    direction={sortDirection}
+                  />
+                </button>
+              ) : (
+                <span
+                  key={col}
+                  className="inline-flex w-[5.5rem] shrink-0 justify-end px-2"
+                >
+                  {label}
                 </span>
+              ),
+            )}
+          </div>
+          {sortedStocks.map((stock) => {
+            const isZero = stock.changePercent === 0
+            const positive = stock.changePercent > 0
+            const changeColor = isZero
+              ? "text-muted-foreground"
+              : positive
+                ? "text-[#10B981]"
+                : "text-[#EF4444]"
+            return (
+              <div
+                key={stock.ticker}
+                role="button"
+                tabIndex={0}
+                className="group flex w-full cursor-pointer items-center border-b border-border py-3 text-left transition-colors active:bg-secondary/40"
+                onClick={() => router.push(`/details/${stock.ticker}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    router.push(`/details/${stock.ticker}`)
+                  }
+                }}
+              >
+                {/*
+                  Sticky cell must paint a solid background so it isn't see-through
+                  while the user scrolls the row horizontally. On active we mix the
+                  same 40% secondary into background so the press tint visually
+                  extends through the sticky column.
+                */}
+                <div className="sticky left-0 z-10 w-[7.5rem] shrink-0 bg-background pl-1 pr-2 group-active:bg-[color-mix(in_oklab,var(--background),var(--secondary)_40%)]">
+                  <span className="block font-mono text-xs font-bold text-foreground">
+                    {stock.ticker}
+                  </span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {stock.company}
+                  </span>
+                </div>
+                <div className="w-[5.5rem] shrink-0 px-2 text-right font-mono text-xs tabular-nums text-foreground">
+                  {stock.price.toFixed(2)}
+                </div>
                 <div
                   className={cn(
-                    "text-right font-mono font-semibold",
-                    positive ? "text-[#10B981]" : "text-[#EF4444]",
+                    "flex w-[5.5rem] shrink-0 items-center justify-end gap-1 px-2 font-mono text-xs font-semibold tabular-nums",
+                    changeColor,
                   )}
                 >
-                  <div className="text-sm">
-                    {positive ? "+" : ""}${stock.changeDollar.toFixed(2)}
-                  </div>
-                  <div className="text-xs">
+                  <span>
+                    {positive ? "+" : ""}
+                    {stock.changeDollar.toFixed(2)}
+                  </span>
+                  {!isZero &&
+                    (positive ? (
+                      <ArrowUp className="size-3" />
+                    ) : (
+                      <ArrowDown className="size-3" />
+                    ))}
+                </div>
+                <div
+                  className={cn(
+                    "flex w-[5.5rem] shrink-0 items-center justify-end gap-1 px-2 font-mono text-xs font-semibold tabular-nums",
+                    changeColor,
+                  )}
+                >
+                  <span>
                     {positive ? "+" : ""}
                     {stock.changePercent.toFixed(2)}%
-                  </div>
-                </div>
-              </div>
-
-              {stock.dayLow != null && stock.dayHigh != null && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Day Range
                   </span>
-                  <RangeBar
-                    low={stock.dayLow}
-                    high={stock.dayHigh}
-                    current={stock.price}
-                  />
+                  {!isZero &&
+                    (positive ? (
+                      <ArrowUp className="size-3" />
+                    ) : (
+                      <ArrowDown className="size-3" />
+                    ))}
                 </div>
-              )}
-
-              <div
-                className="flex justify-end"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ConfirmDelete
-                  onDelete={() => handleDelete(stock.ticker)}
-                  confirming={confirmingTicker === stock.ticker}
-                  onConfirmingChange={(v) =>
-                    setConfirmingTicker(v ? stock.ticker : null)
-                  }
-                />
+                <div className="w-[5.5rem] shrink-0 px-2 text-right font-mono text-xs tabular-nums text-foreground">
+                  {stock.open != null ? stock.open.toFixed(2) : "—"}
+                </div>
+                <div className="w-[5.5rem] shrink-0 px-2 text-right font-mono text-xs tabular-nums text-foreground">
+                  {stock.dayHigh != null ? stock.dayHigh.toFixed(2) : "—"}
+                </div>
+                <div className="w-[5.5rem] shrink-0 px-2 text-right font-mono text-xs tabular-nums text-foreground">
+                  {stock.dayLow != null ? stock.dayLow.toFixed(2) : "—"}
+                </div>
               </div>
-            </MobileDataCard>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </>
   )

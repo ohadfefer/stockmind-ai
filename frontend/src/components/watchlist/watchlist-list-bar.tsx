@@ -68,13 +68,13 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
             <Link
               href={`/watchlist?id=${wl.id}`}
               className={cn(
-                "flex items-center gap-2 pl-4 pr-2 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+                "flex items-center gap-2 pl-4 pr-2 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px md:text-sm",
                 isActive
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
-              <List className="size-4" />
+              <List className="size-3.5 md:size-4" />
               {wl.name}
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                 {wl.stockCount}
@@ -121,7 +121,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
       ) : (
         <button
           onClick={() => setIsCreating(true)}
-          className="flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          className="flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors md:text-sm"
         >
           <Plus className="size-4" />
           New watchlist

@@ -17,6 +17,7 @@ export interface WatchlistStockData {
   changeDollar: number
   changePercent: number
   marketCap: string | null
+  open: number | null
   dayLow: number | null
   dayHigh: number | null
   aiScore: number | null
