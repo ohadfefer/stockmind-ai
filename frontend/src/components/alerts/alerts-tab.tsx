@@ -137,7 +137,9 @@ export function AlertsTab({ alertsPromise }: AlertsTabProps) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <>
+      {/* Desktop table */}
+      <div className="hidden rounded-xl border border-border bg-card md:block">
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
@@ -153,10 +155,10 @@ export function AlertsTab({ alertsPromise }: AlertsTabProps) {
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Status
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="w-[130px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Created
             </TableHead>
-            <TableHead className="text-right pr-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="w-[88px] text-right pr-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <span className="sr-only">Delete</span>
             </TableHead>
           </TableRow>
@@ -181,21 +183,76 @@ export function AlertsTab({ alertsPromise }: AlertsTabProps) {
               <TableCell>
                 <StatusBadge status={alert.status} />
               </TableCell>
-              <TableCell className="font-mono text-sm text-muted-foreground">
+              <TableCell className="w-[130px] font-mono text-sm text-muted-foreground">
                 {formatTimestamp(alert.created_at)}
               </TableCell>
-              <TableCell className="pr-5">
+              <TableCell className="w-[88px] pr-5">
                 <ConfirmDelete
                   onDelete={() => handleDelete(alert.id)}
                   confirming={confirmingId === alert.id}
                   onConfirmingChange={(v) => setConfirmingId(v ? alert.id : null)}
-                  className="opacity-0 group-hover:opacity-100"
+                  className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                 />
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-    </div>
+      </div>
+
+      {/* Mobile table — compact, no card wrapper. Sticky-left Ticker column with
+          horizontal scroll on the rest, mirroring the watchlist mobile layout. */}
+      <div className="overflow-x-auto overscroll-x-contain md:hidden">
+        <div className="min-w-[664px]">
+          <div className="flex items-center border-b border-border py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="sticky left-0 z-10 w-[5rem] shrink-0 bg-background pl-1 pr-2">
+              Ticker
+            </span>
+            <span className="w-[7rem] shrink-0 px-2">Condition</span>
+            <span className="w-[11rem] shrink-0 px-2">Target</span>
+            <span className="w-[6.5rem] shrink-0 px-2">Status</span>
+            <span className="w-[7rem] shrink-0 px-2">Created</span>
+            <span className="w-[5rem] shrink-0 pr-2 text-right">
+              <span className="sr-only">Delete</span>
+            </span>
+          </div>
+          {visibleAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className="flex items-center border-b border-border py-3"
+            >
+              {/*
+                Sticky cell paints a solid background so it isn't see-through
+                while the user scrolls the row horizontally. self-stretch makes
+                it fill the full row height so the taller condition/status
+                badges can't peek out above or below the ticker.
+              */}
+              <div className="sticky left-0 z-10 flex w-[5rem] shrink-0 items-center self-stretch bg-background pl-1 pr-2 font-mono text-xs font-bold text-foreground">
+                {alert.symbol}
+              </div>
+              <div className="w-[7rem] shrink-0 px-2">
+                <AlertTypeBadge condition={alert.condition} />
+              </div>
+              <div className="w-[11rem] shrink-0 whitespace-nowrap px-2 text-xs text-muted-foreground">
+                {formatCondition(alert)}
+              </div>
+              <div className="w-[6.5rem] shrink-0 px-2">
+                <StatusBadge status={alert.status} />
+              </div>
+              <div className="w-[7rem] shrink-0 px-2 font-mono text-xs text-muted-foreground">
+                {formatTimestamp(alert.created_at)}
+              </div>
+              <div className="w-[5rem] shrink-0 pr-2">
+                <ConfirmDelete
+                  onDelete={() => handleDelete(alert.id)}
+                  confirming={confirmingId === alert.id}
+                  onConfirmingChange={(v) => setConfirmingId(v ? alert.id : null)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   )
 }

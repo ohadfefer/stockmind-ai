@@ -86,7 +86,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
                   <EllipsisVertical className="size-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" onCloseAutoFocus={() => setConfirmDeleteId(null)}>
-                  <DropdownMenuItem onSelect={() => setRenamingId(wl.id)}>
+                  <DropdownMenuItem onSelect={() => { setRenamingId(wl.id); setIsCreating(false) }}>
                     <Pencil className="size-4" />
                     Rename
                   </DropdownMenuItem>
@@ -120,7 +120,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
         />
       ) : (
         <button
-          onClick={() => setIsCreating(true)}
+          onClick={() => { setIsCreating(true); setRenamingId(null) }}
           className="flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors md:text-sm"
         >
           <Plus className="size-4" />

@@ -206,10 +206,10 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
             {/* <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Market Cap
             </TableHead> */}
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="w-[170px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Day Range
             </TableHead>
-            <TableHead className="pr-5" />
+            <TableHead className="w-[88px] pr-5" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -250,7 +250,7 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                 {/* <TableCell className="font-mono text-sm text-muted-foreground">
                   {stock.marketCap ?? "—"}
                 </TableCell> */}
-                <TableCell>
+                <TableCell className="w-[170px]">
                   {stock.dayLow != null && stock.dayHigh != null ? (
                     <RangeBar
                       low={stock.dayLow}
@@ -261,12 +261,12 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell className="pr-5">
+                <TableCell className="w-[88px] pr-5">
                   <ConfirmDelete
                     onDelete={() => handleDelete(stock.ticker)}
                     confirming={confirmingTicker === stock.ticker}
                     onConfirmingChange={(v) => setConfirmingTicker(v ? stock.ticker : null)}
-                    className="opacity-0 group-hover:opacity-100"
+                    className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                   />
                 </TableCell>
               </TableRow>
