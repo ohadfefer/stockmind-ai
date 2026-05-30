@@ -42,7 +42,7 @@ export function AccountTabBar({ runningBalance, currency }: AccountTabBarProps) 
             key={tab.key}
             onClick={() => router.push(`/account?tab=${tab.key}`)}
             className={cn(
-              "flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+              "flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px md:text-sm",
               isActive
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"

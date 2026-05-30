@@ -66,15 +66,15 @@ export function PortfolioGraph({ dailyValues }: PortfolioGraphProps) {
 
   return (
     <Card className="rounded-xl">
-      <CardHeader>
+      <CardHeader className="px-3 md:px-6">
         <CardTitle className="text-foreground">Portfolio Value</CardTitle>
         <div className="flex flex-wrap items-baseline gap-3">
-          <p className="font-mono text-3xl font-bold text-foreground">
+          <p className="font-mono text-2xl font-bold text-foreground md:text-3xl">
             ${formatCurrency(latestValue)}
           </p>
           {hasReturn && (
             <p
-              className={`font-mono text-sm font-medium ${
+              className={`font-mono text-xs font-medium md:text-sm ${
                 returnIsPositive ? "text-[#10B981]" : "text-[#EF4444]"
               }`}
             >
@@ -85,7 +85,7 @@ export function PortfolioGraph({ dailyValues }: PortfolioGraphProps) {
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 md:px-6">
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>

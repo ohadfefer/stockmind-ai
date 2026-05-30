@@ -124,10 +124,10 @@ export function PortfolioHeatmapGrid({ dailyValues }: PortfolioHeatmapGridProps)
 
   return (
     <Card className="rounded-xl">
-      <CardHeader>
+      <CardHeader className="px-3 md:px-6">
         <CardTitle className="text-foreground">Daily Returns</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 md:px-6">
         <div className="flex gap-6">
         <div className="overflow-x-auto">
           {/* Month labels */}
@@ -235,9 +235,10 @@ export function PortfolioHeatmapGrid({ dailyValues }: PortfolioHeatmapGridProps)
           </div>
         </div>
 
-        <div className="w-px self-stretch bg-border" />
+        {/* Side panel — desktop only; hidden on mobile. */}
+        <div className="hidden w-px self-stretch bg-border md:block" />
 
-        <div className="flex flex-1 items-center justify-center">
+        <div className="hidden flex-1 items-center justify-center md:flex">
           <p className="text-sm text-muted-foreground">Statistics and AI analysis coming soon</p>
         </div>
         </div>
