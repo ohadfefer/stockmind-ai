@@ -57,13 +57,13 @@ export function LivePrice({
   return (
     <div className="space-y-1">
       <div className="flex items-baseline gap-3">
-        <span className="text-4xl font-bold tracking-tight text-foreground">
+        <span className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           ${price.toFixed(2)}
         </span>
         <Badge
           variant="destructive"
           className={clsx(
-            "text-sm",
+            "text-xs",
             !isDown && "bg-accent text-accent-foreground hover:bg-accent/90"
           )}
         >
@@ -76,7 +76,7 @@ export function LivePrice({
         </Badge>
         <span
           className={clsx(
-            "text-sm font-medium",
+            "text-xs font-medium",
             isDown ? "text-destructive" : "text-accent"
           )}
         >

@@ -58,7 +58,7 @@ export function WatchlistPicker({
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button variant="default" size="sm">
+        <Button variant="default" size="sm" className="h-7 gap-1 text-xs">
           <ChevronsUpDown className="size-4" />
           Following
         </Button>

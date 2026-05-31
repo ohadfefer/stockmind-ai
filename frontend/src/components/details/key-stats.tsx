@@ -59,14 +59,18 @@ export function KeyStats({ data }: KeyStatsProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-x-10 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-x-5 gap-y-1 sm:gap-x-10 lg:grid-cols-3">
       {visible.map((row) => (
         <div
           key={row.label}
           className="flex items-center justify-between border-b border-border/50 py-3 last:border-b-0"
         >
-          <span className="text-sm text-muted-foreground">{row.label}</span>
-          <span className="text-sm font-medium text-foreground">{row.value}</span>
+          <span className="text-xs text-muted-foreground xl:text-sm">
+            {row.label}
+          </span>
+          <span className="text-xs font-medium text-foreground xl:text-sm">
+            {row.value}
+          </span>
         </div>
       ))}
     </div>

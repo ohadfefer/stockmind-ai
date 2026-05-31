@@ -44,6 +44,7 @@ export function FollowButton({
     <Button
       variant={following ? "default" : "outline"}
       size="sm"
+      className="h-7 gap-1 text-xs"
       onClick={handleClick}
       disabled={isPending}
     >

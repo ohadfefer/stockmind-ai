@@ -9,7 +9,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Bot } from "lucide-react"
 import { PriceChart } from "@/components/details/price-chart"
@@ -49,7 +48,7 @@ export default async function DetailsPage({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Breadcrumb>
-          <BreadcrumbList>
+          <BreadcrumbList className="text-xs">
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
                 <Link href="/dashboard">HOME</Link>
@@ -73,14 +72,19 @@ export default async function DetailsPage({
                 className="size-8 rounded-md"
               />
             )}
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
               {stock.name}
             </h1>
           </div>
           <div className="flex items-center gap-2">
             <FollowButton symbol={upperSymbol} initialFollowing={initialFollowing} />
             <CreateAlertDialog symbol={upperSymbol} />
-            <Button variant="outline" size="sm" asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              asChild
+            >
               <Link href={`/conversation?prompt=${encodeURIComponent(upperSymbol)}`}>
                 <Bot className="size-4" />
                 Analyze
@@ -112,11 +116,7 @@ export default async function DetailsPage({
           </div>
 
           {/* Key Stats */}
-          <Card>
-            <CardContent>
-              <KeyStats data={stock.keyStats} />
-            </CardContent>
-          </Card>
+          <KeyStats data={stock.keyStats} />
         </div>
 
         <div
@@ -125,7 +125,7 @@ export default async function DetailsPage({
         />
 
         {/* Sidebar */}
-        <div className="w-full space-y-6 lg:w-[36rem]">
+        <div className="w-full space-y-6 lg:w-80 xl:w-96 2xl:w-[34rem]">
           <Suspense fallback={<NewsFeedSkeleton compact />}>
             <NewsFeed symbol={upperSymbol} compact />
           </Suspense>

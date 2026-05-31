@@ -117,7 +117,11 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+        >
           <Bell className="size-4" />
           Alert
         </Button>
