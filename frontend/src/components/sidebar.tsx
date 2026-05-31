@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -18,6 +18,8 @@ import {
   Zap,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -33,6 +35,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+
+const SIDEBAR_STORAGE_KEY = "stockmind:sidebar-collapsed"
 
 const primaryNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
@@ -64,9 +68,35 @@ function getInitials(name: string): string {
 }
 
 export function Sidebar(props: SidebarUserProps) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Restore the persisted preference after mount to avoid a hydration mismatch
+  // (the server always renders the expanded default).
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SIDEBAR_STORAGE_KEY)
+    if (saved !== null) setCollapsed(saved === "true")
+  }, [])
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next))
+      return next
+    })
+  }
+
   return (
-    <aside className="hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
-      <SidebarBody {...props} />
+    <aside
+      className={cn(
+        "hidden h-screen shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 md:flex",
+        collapsed ? "w-16" : "w-60",
+      )}
+    >
+      <SidebarBody
+        {...props}
+        collapsed={collapsed}
+        onToggleCollapse={toggleCollapsed}
+      />
     </aside>
   )
 }
@@ -97,7 +127,13 @@ function SidebarBody({
   userImage,
   userPlan,
   onNavigate,
-}: SidebarUserProps & { onNavigate?: () => void }) {
+  collapsed = false,
+  onToggleCollapse,
+}: SidebarUserProps & {
+  onNavigate?: () => void
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+}) {
   const pathname = usePathname()
   const displayName = userName ?? "User"
   const planLabel =
@@ -105,27 +141,41 @@ function SidebarBody({
 
   return (
     <>
-      <Link
-        href="/"
-        onClick={onNavigate}
-        className="flex items-center gap-2 px-6 py-5"
+      <div
+        className={cn(
+          "flex items-center py-5",
+          collapsed ? "justify-center px-2" : "justify-between px-4",
+        )}
       >
-        <Zap className="size-5 text-primary" />
-        <div>
-          <h1 className="text-sm font-bold text-foreground">StockMind AI</h1>
-          <p className="text-[10px] font-medium tracking-widest text-muted-foreground uppercase">
-            Research Suite
-          </p>
-        </div>
-      </Link>
+        <Link
+          href="/"
+          onClick={onNavigate}
+          aria-label="StockMind AI home"
+          className="flex items-center gap-2"
+        >
+          <Zap className="size-5 shrink-0 text-primary" />
+          {!collapsed && (
+            <h1 className="text-sm font-bold text-foreground">StockMind AI</h1>
+          )}
+        </Link>
+        {!collapsed && onToggleCollapse && (
+          <CollapseToggle collapsed={false} onClick={onToggleCollapse} />
+        )}
+      </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3 pt-2">
+      <nav
+        className={cn(
+          "flex flex-1 flex-col gap-1 pt-2",
+          collapsed ? "px-2" : "px-3",
+        )}
+      >
         {primaryNavItems.map((item) => (
           <NavLink
             key={item.label}
             item={item}
             pathname={pathname}
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
         ))}
         <div className="my-2 border-t border-border" />
@@ -135,39 +185,54 @@ function SidebarBody({
             item={item}
             pathname={pathname}
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
         ))}
       </nav>
 
-      <div className="mt-auto border-t border-border px-3 py-3">
+      <div
+        className={cn(
+          "mt-auto border-t border-border py-3",
+          collapsed ? "px-2" : "px-3",
+        )}
+      >
+        {collapsed && onToggleCollapse && (
+          <div className="mb-1 flex justify-center">
+            <CollapseToggle collapsed onClick={onToggleCollapse} />
+          </div>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger
+            aria-label={collapsed ? displayName : undefined}
             className={cn(
-              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+              "flex w-full items-center rounded-lg py-2 text-left text-sm font-medium transition-colors",
               "text-muted-foreground hover:bg-secondary hover:text-foreground",
               "outline-none focus:outline-none focus-visible:outline-none",
               "data-[state=open]:bg-secondary data-[state=open]:text-foreground",
+              collapsed ? "justify-center px-0" : "gap-3 px-3",
             )}
           >
             {userImage ? (
               <img
                 src={userImage}
                 alt={displayName}
-                className="size-7 rounded-full object-cover"
+                className="size-7 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <div className="flex size-7 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
                 {getInitials(displayName)}
               </div>
             )}
-            <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
-              <span className="w-full truncate">{displayName}</span>
-              {planLabel && (
-                <span className="text-xs font-normal text-muted-foreground/80">
-                  {planLabel}
-                </span>
-              )}
-            </div>
+            {!collapsed && (
+              <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+                <span className="w-full truncate">{displayName}</span>
+                {planLabel && (
+                  <span className="text-xs font-normal text-muted-foreground/80">
+                    {planLabel}
+                  </span>
+                )}
+              </div>
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-52">
             <DropdownMenuItem asChild>
@@ -208,6 +273,26 @@ function SidebarBody({
   )
 }
 
+function CollapseToggle({
+  collapsed,
+  onClick,
+}: {
+  collapsed: boolean
+  onClick: () => void
+}) {
+  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+    >
+      <Icon className="size-[18px]" />
+    </button>
+  )
+}
+
 interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   label: string
@@ -218,25 +303,29 @@ function NavLink({
   item,
   pathname,
   onNavigate,
+  collapsed = false,
 }: {
   item: NavItem
   pathname: string
   onNavigate?: () => void
+  collapsed?: boolean
 }) {
   const active = pathname === item.href
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors",
+        collapsed ? "justify-center px-0" : "px-3",
         active
           ? "bg-primary/10 text-primary"
           : "text-muted-foreground hover:bg-secondary hover:text-foreground",
       )}
     >
-      <item.icon className="size-[18px]" />
-      {item.label}
+      <item.icon className="size-[18px] shrink-0" />
+      {!collapsed && item.label}
     </Link>
   )
 }
