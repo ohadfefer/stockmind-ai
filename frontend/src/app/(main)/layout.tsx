@@ -3,6 +3,7 @@ import { Sidebar, type SidebarUserProps } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { MobileFooter } from "@/components/mobile/mobile-footer"
 import { NavHistoryTracker } from "@/components/nav-history-tracker"
+import { MainContainer } from "@/components/main-container"
 import { auth0 } from "@/lib/auth0"
 import { getUserName, isUserOnboarded } from "@/services/user-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
@@ -41,7 +42,9 @@ export default async function MainLayout({
       <Sidebar {...userProps} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header {...userProps} />
-        <main className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6">
+          <MainContainer>{children}</MainContainer>
+        </main>
         <MobileFooter />
       </div>
     </div>
