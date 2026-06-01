@@ -110,13 +110,21 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
             {summary.holdings.length} {summary.holdings.length === 1 ? "holding" : "holdings"}
           </span>
         </span>
-        {summary.marketOpen === false && lastCloseLabel && (
+        {summary.marketOpen === true ? (
           <>
             <span className="hidden text-muted-foreground/40 md:inline">•</span>
-            <span className="text-xs text-muted-foreground">
-              Prices as of {lastCloseLabel} @ 4:00 PM ET
-            </span>
+            <span className="text-xs text-muted-foreground">Market Open</span>
           </>
+        ) : (
+          summary.marketOpen === false &&
+          lastCloseLabel && (
+            <>
+              <span className="hidden text-muted-foreground/40 md:inline">•</span>
+              <span className="text-xs text-muted-foreground">
+                Prices as of {lastCloseLabel} @ 4:00 PM ET
+              </span>
+            </>
+          )
         )}
       </div>
 

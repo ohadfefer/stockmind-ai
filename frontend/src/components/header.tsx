@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation"
 import { SymbolSearch } from "@/components/symbol-search"
 import { MobileSymbolSearch } from "@/components/mobile/mobile-symbol-search"
 import { MissedAlerts } from "@/components/alerts/missed-alerts"
-import { MarketStatus } from "@/components/market/market-status"
 import { MobileSidebar, type SidebarUserProps } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 
@@ -32,10 +31,6 @@ export function Header(props: SidebarUserProps) {
         <MobileSymbolSearch />
         {/* Divider between the mobile search icon and the actions beside it. */}
         <div aria-hidden className="h-5 w-px shrink-0 bg-border md:hidden" />
-        {/* Market status pill takes too much room on phones. */}
-        <div className="hidden sm:flex">
-          <MarketStatus />
-        </div>
         <MissedAlerts />
       </div>
     </header>
