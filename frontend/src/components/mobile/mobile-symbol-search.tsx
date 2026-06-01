@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useSymbolSearch } from "@/hooks/use-symbol-search"
+import { useNavigationLoader } from "@/components/navigation-loader"
 
 interface MobileSymbolSearchProps {
   navigateTo?: string
@@ -27,6 +28,7 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
   const [open, setOpen] = useState(false)
   const { query, setQuery, results, isLoading } = useSymbolSearch()
   const router = useRouter()
+  const { startLoading } = useNavigationLoader()
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -36,6 +38,7 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
   function selectSymbol(symbol: string) {
     setOpen(false)
     setQuery("")
+    if (navigateTo.startsWith("/details")) startLoading()
     router.push(`${navigateTo}/${symbol}`)
   }
 

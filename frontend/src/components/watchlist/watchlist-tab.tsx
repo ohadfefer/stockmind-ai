@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
+import { useDetailsNavigation } from "@/components/navigation-loader"
 import { deleteStock } from "@/actions/watchlist"
 import { cn } from "@/lib/utils"
 
@@ -88,6 +89,7 @@ interface WatchlistTabProps {
 
 export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
   const router = useRouter()
+  const goToDetails = useDetailsNavigation()
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>("default")
   const [confirmingTicker, setConfirmingTicker] = useState<string | null>(null)
@@ -219,7 +221,7 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
               <TableRow
                 key={stock.ticker}
                 className="group cursor-pointer border-border transition-colors hover:bg-secondary/40"
-                onClick={() => router.push(`/details/${stock.ticker}`)}
+                onClick={() => goToDetails(stock.ticker)}
               >
                 <TableCell className="pl-5">
                   <div>
@@ -345,11 +347,11 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
                 role="button"
                 tabIndex={0}
                 className="group flex w-full cursor-pointer items-center border-b border-border py-3 text-left transition-colors active:bg-secondary/40"
-                onClick={() => router.push(`/details/${stock.ticker}`)}
+                onClick={() => goToDetails(stock.ticker)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault()
-                    router.push(`/details/${stock.ticker}`)
+                    goToDetails(stock.ticker)
                   }
                 }}
               >

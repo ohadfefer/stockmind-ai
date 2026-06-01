@@ -1,10 +1,10 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ResponsiveContainer, Treemap } from "recharts"
 import { ChevronLeft, Expand, Triangle, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useDetailsNavigation } from "@/components/navigation-loader"
 import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { WatchlistStockData } from "@/types/watchlist"
 
@@ -355,7 +355,7 @@ function HeatmapChart({
   showViewDetails?: boolean
   className?: string
 }) {
-  const router = useRouter()
+  const handleSelect = useDetailsNavigation()
   const chartRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<CellHoverData | null>(null)
   // Touch devices can't hover, so they get a tap-to-open modal instead.
@@ -369,8 +369,6 @@ function HeatmapChart({
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
-
-  const handleSelect = (ticker: string) => router.push(`/details/${ticker}`)
 
   // Desktop click navigates straight to details; touch opens the modal.
   const handleActivate = (info: CellHoverData) => {

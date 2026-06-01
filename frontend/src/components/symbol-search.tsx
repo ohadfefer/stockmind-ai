@@ -4,6 +4,7 @@ import { Search } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useSymbolSearch } from "@/hooks/use-symbol-search"
+import { useNavigationLoader } from "@/components/navigation-loader"
 
 interface SymbolSearchProps {
   navigateTo?: string
@@ -20,6 +21,7 @@ export function SymbolSearch({
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const { startLoading } = useNavigationLoader()
 
   // Open the dropdown as soon as matches arrive; close it when they clear.
   useEffect(() => {
@@ -63,6 +65,7 @@ export function SymbolSearch({
                 onClick={() => {
                   setQuery("")
                   setIsOpen(false)
+                  if (navigateTo.startsWith("/details")) startLoading()
                   router.push(`${navigateTo}/${item.symbol}`)
                 }}
               >

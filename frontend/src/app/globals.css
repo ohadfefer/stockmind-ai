@@ -90,6 +90,17 @@
   }
 }
 
+/* Indeterminate top progress bar for the navigation overlay (see
+   navigation-loader.tsx): a segment sweeps left → right on a loop. */
+@keyframes nav-loader-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
 /* Make focused inputs visually identical to unfocused: no outline, no blue
    ring. Each input keeps its own unfocused border-color naturally (we don't
    set border-color here, since the app uses different defaults — `--input`

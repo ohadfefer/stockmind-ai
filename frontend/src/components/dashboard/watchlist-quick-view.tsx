@@ -7,6 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DetailsLink } from "@/components/navigation-loader"
 import type { WatchlistStockData } from "@/types/watchlist"
 
 function getAIScoreColor(score: number): string {
@@ -100,12 +101,12 @@ export function WatchlistQuickView({ stocks }: WatchlistQuickViewProps) {
                   className="border-border transition-colors hover:bg-secondary/50 [&>td]:py-1"
                 >
                   <TableCell className="p-0">
-                    <Link
-                      href={`/details/${stock.ticker}`}
+                    <DetailsLink
+                      symbol={stock.ticker}
                       className="block px-2 py-3 pl-5 font-mono text-sm font-bold text-foreground"
                     >
                       {stock.ticker}
-                    </Link>
+                    </DetailsLink>
                   </TableCell>
                   <TableCell className="font-mono text-sm text-foreground">
                     ${stock.price.toFixed(2)}
