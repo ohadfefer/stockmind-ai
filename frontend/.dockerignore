@@ -1,0 +1,29 @@
+# Dependencies & build output (reinstalled/rebuilt inside the image)
+node_modules
+.next
+out
+build
+
+# Secrets — must never enter the image
+.env
+.env.*
+*.pem
+
+# VCS & local tooling
+.git
+.gitignore
+.vercel
+.agents
+.claude
+
+# TypeScript / Next incremental caches
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / editor cruft
+.DS_Store
+npm-debug.log*
+
+# Docker meta (no need to send into the build context)
+Dockerfile
+.dockerignore

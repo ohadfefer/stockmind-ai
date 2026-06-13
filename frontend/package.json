@@ -2,6 +2,9 @@
   "name": "stockmind-ai",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +16,6 @@
     "@auth0/nextjs-auth0": "^4.16.0",
     "@neondatabase/serverless": "^1.0.2",
     "@upstash/qstash": "^2.10.1",
-    "@upstash/redis": "^1.37.0",
     "@vercel/analytics": "^1.6.1",
     "ai": "^6.0.168",
     "class-variance-authority": "^0.7.1",
