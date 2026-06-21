@@ -15,7 +15,6 @@ import {
   Newspaper,
   Settings,
   Sparkles,
-  Zap,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -153,9 +152,12 @@ function SidebarBody({
           aria-label="StockMind AI home"
           className="flex items-center gap-2"
         >
-          <Zap className="size-5 shrink-0 text-primary" />
+          {/* App icon — same /logo.svg used by the favicon, apple-touch and
+              PWA manifest. alt="" because the Link already carries the
+              "StockMind AI home" label. */}
+          <img src="/logo.svg" alt="" className="size-7 shrink-0" />
           {!collapsed && (
-            <h1 className="text-sm font-bold text-foreground">StockMind AI</h1>
+            <h1 className="text-sm font-bold text-foreground">StockMind</h1>
           )}
         </Link>
         {!collapsed && onToggleCollapse && (

@@ -1,8 +1,2 @@
-{
-  "crons": [
-    {
-      "path": "/api/jobs/snapshot-positions",
-      "schedule": "30 21 * * 1-5"
-    }
-  ]
-}
+
+{}
