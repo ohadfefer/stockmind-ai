@@ -21,6 +21,9 @@ function ConfirmationContent() {
   const estimatedValue = searchParams.get("estimatedValue")
   const filledAt = searchParams.get("filledAt") ?? new Date().toISOString()
 
+  // Carry the submitted params back to the form so editing repopulates fields.
+  const editHref = `/portfolio/trade?${searchParams.toString()}`
+
   if (!symbol) {
     router.replace("/portfolio/trade")
     return null
@@ -65,7 +68,7 @@ function ConfirmationContent() {
     <div className="flex flex-col gap-6">
       <div>
         <Link
-          href="/portfolio/trade"
+          href={editHref}
           className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
@@ -120,7 +123,7 @@ function ConfirmationContent() {
           {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Link
-              href="/portfolio/trade"
+              href={editHref}
               className="flex flex-1 items-center justify-center rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
             >
               Edit Order

@@ -18,6 +18,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - **Account area** — balance, transfer history, and position history snapshots.
 - **Auth** — Auth0 login/signup with an onboarding step that captures the user's full name.
 - **Pro subscriptions** — Stripe-powered Checkout and Customer Portal for upgrading to StockMind Pro and managing billing (cancel, update card, view invoices); webhook-synced subscription state mirrored into Postgres.
+- **Installable PWA** — works as a Progressive Web App: installable to the home screen / desktop and launchable full-screen, with Web Push delivered through a service worker.
 
 ---
 
@@ -35,16 +36,22 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - [Stripe](https://stripe.com) for subscription billing — Checkout, Customer Portal, and webhooks (`stripe` Node SDK)
 - [Finnhub](https://finnhub.io) for live quotes, profiles, news, and market status
 - [FMP](https://financialmodelingprep.com) (currently gated behind an issue — see `src/app/(main)/dashboard/page.tsx`)
-- [Upstash Redis](https://upstash.com/redis) for caching
-- [Upstash QStash](https://upstash.com/qstash) for signed webhook delivery to the alert checker
+- [xAI Grok](https://x.ai) (`grok-4-1-fast-reasoning`) via the [Vercel AI SDK](https://sdk.vercel.ai) (`ai` + `@ai-sdk/xai`) for the AI assistant and portfolio review
+- [Upstash QStash](https://upstash.com/qstash) for signed, scheduled webhooks that drive the background jobs (alert checker + position snapshots)
 - [web-push](https://github.com/web-push-libs/web-push) + VAPID keys for browser push notifications
-- [Vercel Cron](https://vercel.com/docs/cron-jobs) for scheduled jobs
 - [@vercel/analytics](https://vercel.com/docs/analytics) for page analytics
+
+**Infrastructure & Deployment**
+- [Docker](https://www.docker.com) multi-stage build → Next.js standalone image (`node:22-slim`, non-root, ARM64)
+- [Amazon ECR](https://aws.amazon.com/ecr/) registry + [Amazon ECS on Fargate](https://aws.amazon.com/fargate/) (ARM64/Graviton) for hosting
+- [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/) + [ACM](https://aws.amazon.com/certificate-manager/) for HTTPS, with DNS on [Cloudflare](https://www.cloudflare.com)
+- [SSM Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) (SecureString) for runtime secrets; [CloudWatch Logs](https://aws.amazon.com/cloudwatch/) for container logs
+- [GitHub Actions](https://docs.github.com/actions) CI/CD — build, push to ECR, and roll the ECS service on every push to `master`
 
 **Tooling**
 - ESLint (`eslint-config-next`)
 - `shadcn` CLI for component scaffolding
-- Deployed on [Vercel](https://vercel.com)
+- Deployed on **AWS ECS (Fargate)** behind an ALB — see [Deployment](#deployment) (migrated from Vercel)
 
 ---
 
@@ -57,11 +64,11 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
   - Auth0 tenant (with a Regular Web Application configured)
   - Neon Postgres project
   - Finnhub API key
-  - Upstash Redis database
-  - Upstash QStash (signing keys)
+  - [xAI](https://x.ai) API key (powers the Grok-based AI assistant and portfolio review)
+  - Upstash QStash (signing keys, plus a schedule for the background jobs)
   - VAPID key pair for Web Push (generate with `npx web-push generate-vapid-keys`)
   - Stripe account (test mode is sufficient for local dev) and the [Stripe CLI](https://stripe.com/docs/stripe-cli) for forwarding webhooks to localhost
-  - Vercel account (for cron jobs and deployment) — optional for local dev
+  - For deployment: an AWS account (ECR, ECS/Fargate, ALB, ACM, SSM) and [Docker](https://www.docker.com) to build images — optional for local dev
 
 ---
 
@@ -99,6 +106,9 @@ On first login you'll be routed through `/onboarding` to capture your name, whic
 ```
 stockmind-ai/
 ├── CLAUDE.md                 # Repo conventions / agent context
+├── .github/
+│   └── workflows/
+│       └── deploy.yml        # CI/CD — build ARM64 image, push to ECR, roll ECS service
 ├── migrations/               # Plain .sql files — schema of record (run manually)
 │   ├── 001_create_users.sql
 │   ├── 002_create_accounts.sql
@@ -114,10 +124,13 @@ stockmind-ai/
 │   ├── 013_create_missed_alerts.sql
 │   └── 017_add_subscriptions.sql
 └── frontend/                 # Next.js app — all code lives here
+    ├── Dockerfile            # Multi-stage build → Next.js standalone image (ARM64, non-root)
+    ├── .dockerignore         # Keeps secrets (.env*) and build artifacts out of the image
+    ├── next.config.ts        # standalone output + baseline security headers
+    ├── vercel.json           # Empty ({}) — legacy; scheduled jobs now run via QStash
     ├── public/
     │   ├── sw.js             # Service worker for Web Push
     │   └── ...               # Icons, placeholder assets
-    ├── vercel.json           # Vercel cron definitions
     └── src/
         ├── proxy.ts          # Next.js 16 proxy — Auth0 middleware + route protection
         ├── app/
@@ -133,7 +146,7 @@ stockmind-ai/
         │       ├── details/[symbol]/  # Stock detail page
         │       ├── account/           # Balance, transfers, history
         │       ├── settings/          # User preferences (notifications, payments)
-        │       └── api/               # Route handlers (see API section, includes /api/stripe/{checkout,portal,webhook})
+        │       └── api/               # Route handlers (see API section; includes /api/health, /api/stripe/{checkout,portal,webhook})
         ├── components/
         │   ├── ui/           # shadcn/ui primitives — do not manually edit
         │   ├── dashboard/    # Dashboard widgets
@@ -147,6 +160,7 @@ stockmind-ai/
         │   └── header.tsx
         ├── actions/          # Client-side API call functions (named exports)
         ├── services/         # Server-side data-fetching functions
+        │   ├── ai/           # xAI/Grok conversation, portfolio-review, title, cost services
         │   ├── alerts/       # alerts-service, alert-checker-service, missed-alerts-service
         │   ├── dashboard/    # sector, index, and watchlist aggregates
         │   ├── position/     # position-service, position-history-service
@@ -187,13 +201,13 @@ npm run lint     # Run ESLint
 
 ## Environment Variables
 
-All variables live in `frontend/.env.local` (gitignored). Never commit real secrets.
+**Local development** reads these from `frontend/.env.local` (gitignored — never commit real secrets). **In production** every secret is stored in **AWS SSM Parameter Store** under the `/stockmind/*` prefix as a `SecureString` and injected into the ECS task at runtime (see [Deployment](#deployment)). The only build-time variable is the public VAPID key, passed to the Docker build as a build arg; nothing secret is baked into the image.
 
 ### Application
 
-| Variable        | Description                                                             |
-| --------------- | ----------------------------------------------------------------------- |
-| `APP_BASE_URL`  | Base URL of the app, e.g. `http://localhost:3000` in dev.               |
+| Variable        | Description                                                                       |
+| --------------- | --------------------------------------------------------------------------------- |
+| `APP_BASE_URL`  | Base URL of the app — `http://localhost:3000` in dev, `https://getstockmind.com` in production. |
 
 ### Auth0
 
@@ -219,12 +233,16 @@ All variables live in `frontend/.env.local` (gitignored). Never commit real secr
 | `FINNHUB_API_KEY` | Finnhub API key — required for quotes, search, profiles, news.     |
 | `FMP_API_KEY`     | Financial Modeling Prep key — used by some dashboard widgets.      |
 
-### Upstash Redis & QStash
+### AI — xAI Grok
+
+| Variable       | Description                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `XAI_API_KEY`  | xAI API key — used by the Vercel AI SDK (`@ai-sdk/xai`) for the Grok assistant / portfolio review. |
+
+### Upstash QStash
 
 | Variable                     | Description                                              |
 | ---------------------------- | -------------------------------------------------------- |
-| `UPSTASH_REDIS_REST_URL`     | Upstash Redis REST URL.                                  |
-| `UPSTASH_REDIS_REST_TOKEN`   | Upstash Redis REST token.                                |
 | `QSTASH_URL`                 | QStash base URL for publishing messages.                 |
 | `QSTASH_TOKEN`               | QStash auth token for publishing.                        |
 | `QSTASH_CURRENT_SIGNING_KEY` | Current signing key used to verify inbound QStash calls. |
@@ -234,7 +252,7 @@ All variables live in `frontend/.env.local` (gitignored). Never commit real secr
 
 | Variable                      | Description                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (exposed to the browser to register push subscriptions).            |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (exposed to the browser to register push subscriptions). Inlined at **build time** — locally via `.env.local`, in prod via the Docker `NEXT_PUBLIC_VAPID_PUBLIC_KEY` build arg (set as a GitHub Actions repository variable). |
 | `VAPID_PRIVATE_KEY`            | VAPID private key (server only) used to sign push payloads via `web-push`.           |
 
 ### Stripe (Subscriptions)
@@ -247,9 +265,9 @@ All variables live in `frontend/.env.local` (gitignored). Never commit real secr
 
 ### Scheduled Jobs
 
-| Variable      | Description                                                                            |
-| ------------- | -------------------------------------------------------------------------------------- |
-| `CRON_SECRET` | Shared secret sent by Vercel Cron as `Authorization: Bearer <secret>` to job handlers. |
+| Variable      | Description                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET` | Shared secret sent by the QStash schedule as `Authorization: Bearer <secret>` to the snapshot-positions job. |
 
 ---
 
@@ -361,9 +379,13 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 
 Copy the `whsec_...` it prints into `STRIPE_WEBHOOK_SECRET` in `frontend/.env.local`. Trigger lifecycle events with e.g. `stripe trigger checkout.session.completed` or `stripe trigger customer.subscription.deleted`.
 
+### Health
+
+- `GET /api/health` — unauthenticated liveness probe returning `{ "status": "ok" }`. Used by the ALB target group health check and the container `HEALTHCHECK`. Does no I/O, so a slow dependency never marks the task unhealthy.
+
 ### Scheduled Jobs
 
-- `GET /api/jobs/snapshot-positions` — **Vercel Cron** (auth via `Authorization: Bearer ${CRON_SECRET}`). Writes a daily row to `position_history` for every open position. Scheduled in `frontend/vercel.json` as `30 21 * * 1-5` (weekdays 21:30 UTC, after US market close).
+- `GET /api/jobs/snapshot-positions` — **scheduled job** (auth via `Authorization: Bearer ${CRON_SECRET}`). Writes a daily row to `position_history` for every open position. Triggered by an Upstash QStash schedule on `30 21 * * 1-5` (weekdays 21:30 UTC, after US market close). This previously ran on Vercel Cron via `frontend/vercel.json`, which is now empty (`{}`).
 
 ### Example
 
@@ -382,27 +404,135 @@ curl -X POST http://localhost:3000/api/alerts \
 Two recurring processes drive most of the "live" behavior:
 
 1. **Alert checker** — `POST /api/alerts/check` is triggered by an Upstash QStash schedule. The handler verifies the Upstash signature, fetches current quotes for every active alert's symbol, and atomically transitions matching rows to `triggered`. Alerts whose push notifications all fail are reverted to `active`; successful ones are mirrored into `missed_alerts` so the user sees them in the bell dropdown.
-2. **Position snapshots** — `GET /api/jobs/snapshot-positions` runs on Vercel Cron (`vercel.json`) every weekday at 21:30 UTC. It writes a `position_history` row per open position so the portfolio charts have an end-of-day anchor.
+2. **Position snapshots** — `GET /api/jobs/snapshot-positions` is triggered by an Upstash QStash schedule every weekday at 21:30 UTC (`30 21 * * 1-5`, after US market close). It writes a `position_history` row per open position so the portfolio charts have an end-of-day anchor. This used to run on Vercel Cron; after the move to AWS, `vercel.json` is empty and QStash drives it by calling the public app URL with the `CRON_SECRET` bearer token.
+
+Both jobs run by having QStash call the public app URL on the ALB — there is no AWS-native scheduler (EventBridge) involved.
 
 <!-- TODO: Document how to configure the QStash schedule/destination pointing at /api/alerts/check (URL, HTTP method, frequency) so a new contributor can wire it up from scratch. -->
 
 ---
 
+## Progressive Web App (PWA)
+
+StockMind AI is an installable PWA — on a phone it can be added to the home screen and launched full-screen (no browser chrome), which is also what unlocks Web Push on iOS. The wiring is framework-level and provider-agnostic; it behaves the same locally and on AWS.
+
+- **Manifest** — `src/app/manifest.ts` is served by Next.js at `/manifest.webmanifest` (`display: standalone`, 192/512 icons in both `any` and `maskable` variants from `public/icons/`). Next auto-injects the `<link rel="manifest">`.
+- **Service worker** — `public/sw.js`, registered from `app/layout.tsx` via `components/pwa/service-worker-registration.tsx`. It's deliberately minimal: a no-op `fetch` listener (required for Chrome to offer "Install app" rather than a shortcut) plus `push` / `notificationclick` handlers for Web Push. It does **no** asset caching, so a deploy never serves a stale app shell.
+- **iOS** — `appleWebApp` metadata + `apple-touch-icon` in `app/layout.tsx`, and `components/pwa/ios-install-hint.tsx` prompts iOS users to "Add to Home Screen" (the only way to enable notifications on iOS).
+- **Auth** — `proxy.ts` allowlists the PWA assets (`sw.js`, `manifest.webmanifest`, `icons/`, `apple-touch-icon.png`) so they load without an Auth0 session.
+
+**Requirements & gotchas**
+
+- A service worker requires a **secure context** (HTTPS, or `localhost` in dev). In production this comes from the ALB + ACM cert — the browser sees `https://getstockmind.com` even though the ALB forwards plain HTTP to the container.
+- **Install from the canonical domain** (`https://getstockmind.com`), not the raw ALB DNS — the ACM cert only covers `getstockmind.com`/`www`, and the manifest `scope`/`start_url` are relative to the origin you install from.
+- Web Push also needs the VAPID keys (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` at build time, `VAPID_PRIVATE_KEY` at runtime) — see [Environment Variables](#environment-variables).
+
+To verify, open DevTools → **Application → Manifest / Service Workers**, or run a **Lighthouse → PWA** audit against the deployed site.
+
+---
+
 ## Deployment
 
-The app is designed to deploy to [Vercel](https://vercel.com):
+StockMind AI was **migrated from Vercel to AWS**. It now runs as a container on **Amazon ECS (Fargate)** behind an **Application Load Balancer**, deployed automatically by **GitHub Actions** on every push to `master`. Everything lives in `us-east-1`.
 
-- `vercel.json` declares the cron schedule for `snapshot-positions`.
-- `@vercel/analytics` is mounted in `app/layout.tsx`.
-- The service worker at `public/sw.js` is served at `/sw.js`.
+### Request flow
 
-To deploy:
+```
+Browser ──HTTPS──▶ Cloudflare DNS (getstockmind.com)
+                      │
+                      ▼
+            Application Load Balancer  (stockmind-alb)
+              :80  ── 301 redirect ──▶ :443
+              :443 (ACM cert) ── forward ──▶ stockmind-tg (IP targets, :3000)
+                      │
+                      ▼
+            ECS Fargate task  (stockmind-task, ARM64)
+              └─ container stockmind-app  :3000  (Next.js standalone)
+                      │  secrets ◀── SSM Parameter Store (/stockmind/*)
+                      └─ logs ───▶ CloudWatch Logs (/ecs/stockmind-task)
+```
 
-1. Import the repo into Vercel.
-2. Set the **Root Directory** to `frontend/`.
-3. Configure every variable from [Environment Variables](#environment-variables) in the Vercel project settings.
-4. Apply any pending `/migrations/*.sql` to your Neon database.
-5. Point your QStash schedule at `https://<your-domain>/api/alerts/check`.
+### Key resources (`us-east-1`)
+
+| Resource | Value |
+| --- | --- |
+| Domain | `https://getstockmind.com` (registrar / DNS: Cloudflare) |
+| ECR repo | `735381630663.dkr.ecr.us-east-1.amazonaws.com/stockmind-ai` (tags: `latest` + commit SHA) |
+| ECS cluster | `stockmind-cluster` |
+| ECS service | `stockmind-task-service` — Fargate, desired count 1, rolling deploys |
+| Task definition | `stockmind-task` — ARM64/Linux, 0.5 vCPU, 1 GB, container port 3000 |
+| Container | `stockmind-app` |
+| Load balancer | `stockmind-alb` → `stockmind-alb-2082442465.us-east-1.elb.amazonaws.com` (internet-facing) |
+| Target group | `stockmind-tg` — IP targets, HTTP :3000, health check `GET /api/health` → 200 |
+| ALB security group | `stockmind-alb-sg` — 80/443 from `0.0.0.0/0` |
+| ECS security group | `stockmind-sg` — 3000 from `stockmind-alb-sg` only |
+| TLS cert | ACM (`getstockmind.com` + `www.getstockmind.com`), DNS-validated |
+| Secrets | SSM Parameter Store under `/stockmind/*` (SecureString) |
+| Logs | CloudWatch Logs group `/ecs/stockmind-task` |
+| Execution role | `ecsTaskExecutionRole` (pulls the image + reads SSM params) |
+
+### Container image
+
+`frontend/Dockerfile` is a multi-stage build:
+
+1. **deps** — `npm ci` against `package-lock.json`.
+2. **builder** — `npm run build`, producing Next.js **standalone** output (`output: "standalone"` in `next.config.ts`). The only build-time variable is the public VAPID key, passed as the `NEXT_PUBLIC_VAPID_PUBLIC_KEY` build arg (it's inlined into the client bundle); every other secret is read at runtime.
+3. **runner** — a slim `node:22-slim` image running `node server.js` as a **non-root** user, exposing port 3000, with a container `HEALTHCHECK` that hits `/api/health`.
+
+`.dockerignore` keeps `.env*`, `node_modules`, `.next`, and VCS/tooling out of the build context.
+
+### CI/CD — GitHub Actions
+
+`.github/workflows/deploy.yml` runs on every push to `master` (and via manual `workflow_dispatch`), serialized by a `deploy-ecs` concurrency group so two deploys never overlap:
+
+1. Build the `linux/arm64` image on a native Graviton runner (`ubuntu-24.04-arm` — no QEMU emulation), with GitHub Actions layer caching.
+2. Push to ECR tagged both `latest` and the commit SHA. (Single-arch — no provenance/SBOM attestation, since those manifest-lists break Fargate image pulls.)
+3. Download the current `stockmind-task` definition and render a new revision pointing at the SHA-tagged image.
+4. Update `stockmind-task-service` and **wait for service stability** — the job only goes green once the new task is healthy in the target group and the old one has drained.
+
+**Required GitHub configuration:**
+
+| Kind | Name | Purpose |
+| --- | --- | --- |
+| Secret | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credentials with ECR push + ECS deploy permissions |
+| Variable | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key baked into the client bundle at build time |
+
+### Secrets & configuration
+
+The runtime secrets are stored in **SSM Parameter Store** as `SecureString` under `/stockmind/*` and referenced by the task definition's `secrets` block, so they're injected as env vars at container start and never baked into the image:
+
+`APP_BASE_URL`, `AUTH0_SECRET`, `AUTH0_CLIENT_SECRET`, `CRON_SECRET`, `DATABASE_URL`, `FINNHUB_API_KEY`, `FMP_API_KEY`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VAPID_PRIVATE_KEY`, `XAI_API_KEY`.
+
+Non-secret config (`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `STRIPE_PRICE_ID`) is set as plaintext `environment` entries on the task definition. Changing a secret means updating its SSM value and forcing a new deployment so the container re-reads it.
+
+### DNS & TLS
+
+`getstockmind.com` is registered and DNS-hosted on **Cloudflare**, pointing at the ALB. The ALB terminates TLS with an **ACM** certificate covering `getstockmind.com` and `www.getstockmind.com`; the `:80` listener 301-redirects to `:443`.
+
+### Deploying manually
+
+Pushing to `master` is the normal path (you can also hit **Run workflow** on the Actions tab). To ship the same image by hand from `frontend/`:
+
+```bash
+# Authenticate Docker to ECR
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin 735381630663.dkr.ecr.us-east-1.amazonaws.com
+
+# Build the ARM64 image and push it
+docker buildx build --platform linux/arm64 \
+  --build-arg NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key> \
+  -t 735381630663.dkr.ecr.us-east-1.amazonaws.com/stockmind-ai:latest \
+  --push ./frontend
+
+# Roll the service onto the new image
+aws ecs update-service --cluster stockmind-cluster \
+  --service stockmind-task-service --force-new-deployment
+```
+
+### Database & scheduled jobs
+
+- Apply any pending `/migrations/*.sql` to the Neon database alongside the deploy.
+- The background jobs run on **QStash schedules** that call the public app URL — point them at `https://getstockmind.com/api/alerts/check` and `https://getstockmind.com/api/jobs/snapshot-positions` (the latter with the `CRON_SECRET` bearer token). See [Background Jobs](#background-jobs).
 
 ---
 

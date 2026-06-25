@@ -9,7 +9,6 @@ import {
   Briefcase,
   CircleUserRound,
   Eye,
-  ScanSearch,
   Bot,
   History,
   Newspaper,
@@ -41,7 +40,6 @@ const primaryNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: Briefcase, label: "Portfolio", href: "/portfolio" },
   { icon: Eye, label: "Watchlist", href: "/watchlist" },
-  { icon: ScanSearch, label: "Scanner", href: "#" },
   { icon: Bot, label: "AI Advisor", href: "/conversation" },
   { icon: Newspaper, label: "News", href: "/news" },
 ]

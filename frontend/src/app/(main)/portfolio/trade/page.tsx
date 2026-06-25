@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Select,
   SelectContent,
@@ -18,11 +18,12 @@ import { fetchTradingInfo } from "@/actions/portfolio"
 import type { FinnhubQuote } from "@/services/stock/stock-service"
 import type { TradingInfo } from "@/actions/portfolio"
 
-export default function TradePage() {
+function TradeForm() {
   const router = useRouter()
-  const [action, setAction] = useState<string>("buy")
-  const [symbol, setSymbol] = useState("")
-  const [quantity, setQuantity] = useState("")
+  const searchParams = useSearchParams()
+  const [action, setAction] = useState<string>(searchParams.get("action") ?? "buy")
+  const [symbol, setSymbol] = useState(searchParams.get("symbol") ?? "")
+  const [quantity, setQuantity] = useState(searchParams.get("quantity") ?? "")
   const [type] = useState("market")
   const [quote, setQuote] = useState<FinnhubQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
@@ -79,6 +80,14 @@ export default function TradePage() {
     setQuoteLoading(false)
   }
 
+  // When the form mounts already populated (e.g. editing back from the
+  // confirmation page), fetch the quote immediately instead of waiting out the
+  // debounce, so the funds check has real data right away.
+  useEffect(() => {
+    if (symbol.trim()) refreshQuote()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const currentPrice = quote?.c ?? null
   const estimatedValue =
     currentPrice && Number(quantity) > 0
@@ -89,7 +98,13 @@ export default function TradePage() {
     (p) => p.symbol === debouncedSymbol
   )?.quantity ?? 0
 
-  const canContinue = symbol.trim() !== "" && Number(quantity) > 0
+  // A buy requires a loaded quote so the funds check below has a real cost; a
+  // sell is validated against held shares, not price. This also closes the
+  // window where a pre-filled form could submit before the quote resolved.
+  const canContinue =
+    symbol.trim() !== "" &&
+    Number(quantity) > 0 &&
+    (action === "sell" || quote !== null)
 
   function handleContinue() {
     if (!canContinue) return
@@ -265,5 +280,13 @@ export default function TradePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function TradePage() {
+  return (
+    <Suspense>
+      <TradeForm />
+    </Suspense>
   )
 }

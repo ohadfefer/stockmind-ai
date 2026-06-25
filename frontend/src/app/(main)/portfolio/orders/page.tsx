@@ -1,4 +1,5 @@
-import { ClipboardList } from "lucide-react"
+import { ArrowLeft, ClipboardList } from "lucide-react"
+import Link from "next/link"
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account/account-service"
@@ -23,6 +24,13 @@ export default async function OrdersPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
+        <Link
+          href="/portfolio"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Portfolio
+        </Link>
         <h1 className="text-2xl font-bold text-foreground">Orders</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           View and manage your trade orders

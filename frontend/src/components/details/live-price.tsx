@@ -64,7 +64,7 @@ export function LivePrice({
           variant="destructive"
           className={clsx(
             "text-xs",
-            !isDown && "bg-accent text-accent-foreground hover:bg-accent/90"
+            !isDown && "bg-emerald-500 text-white hover:bg-emerald-500/90"
           )}
         >
           {isDown ? (
@@ -77,15 +77,15 @@ export function LivePrice({
         <span
           className={clsx(
             "text-xs font-medium",
-            isDown ? "text-destructive" : "text-accent"
+            isDown ? "text-destructive" : "text-emerald-500"
           )}
         >
           {change >= 0 ? "+" : ""}
           {change.toFixed(2)} Today
         </span>
         {isLive && (
-          <span className="inline-flex items-center gap-1 text-xs text-accent">
-            <span className="size-1.5 animate-pulse rounded-full bg-accent" />
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+            <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
             Live
           </span>
         )}
