@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowRight, BarChart3, Brain, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -6,7 +7,14 @@ export default function HomePage() {
   return (
     <div className="flex flex-col items-center justify-center gap-8 py-16 text-center">
       <div className="flex flex-col items-center gap-3">
-        <Brain className="text-primary h-16 w-16" />
+        <Image
+          src="/icons/icon-192x192.png"
+          alt="StockMind AI"
+          width={96}
+          height={96}
+          className="h-24 w-24"
+          priority
+        />
         <h1 className="text-4xl font-bold tracking-tight">StockMind AI</h1>
         <p className="text-muted-foreground max-w-md text-lg">
           AI-powered stock research and analysis at your fingertips.

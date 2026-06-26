@@ -10,8 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
+import { ArrowDown, ArrowUp } from "lucide-react"
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
+import {
+  SortableHeader,
+  SortIcon,
+  type SortDirection,
+} from "@/components/ui/sortable-header"
 import { useDetailsNavigation } from "@/components/navigation-loader"
 import { deleteStock } from "@/actions/watchlist"
 import { cn } from "@/lib/utils"
@@ -19,22 +24,6 @@ import { cn } from "@/lib/utils"
 import type { WatchlistStockData } from "@/types/watchlist"
 
 type SortColumn = "ticker" | "price" | "changeDollar" | "changePercent"
-type SortDirection = "asc" | "desc" | "default"
-
-function SortIcon({
-  column,
-  activeColumn,
-  direction,
-}: {
-  column: SortColumn
-  activeColumn: SortColumn | null
-  direction: SortDirection
-}) {
-  if (activeColumn !== column || direction === "default")
-    return <ArrowUpDown className="size-3 opacity-50" />
-  if (direction === "asc") return <ArrowUp className="size-3" />
-  return <ArrowDown className="size-3" />
-}
 
 function RangeBar({
   low,
@@ -170,40 +159,44 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
             <TableHead className="pl-5">
-              <button
-                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => handleSort("ticker")}
+              <SortableHeader
+                column="ticker"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
               >
                 Ticker
-                <SortIcon column="ticker" activeColumn={sortColumn} direction={sortDirection} />
-              </button>
+              </SortableHeader>
             </TableHead>
             <TableHead>
-              <button
-                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => handleSort("price")}
+              <SortableHeader
+                column="price"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
               >
                 Price
-                <SortIcon column="price" activeColumn={sortColumn} direction={sortDirection} />
-              </button>
+              </SortableHeader>
             </TableHead>
             <TableHead>
-              <button
-                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => handleSort("changeDollar")}
+              <SortableHeader
+                column="changeDollar"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
               >
                 Change $
-                <SortIcon column="changeDollar" activeColumn={sortColumn} direction={sortDirection} />
-              </button>
+              </SortableHeader>
             </TableHead>
             <TableHead>
-              <button
-                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => handleSort("changePercent")}
+              <SortableHeader
+                column="changePercent"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
               >
                 Change %
-                <SortIcon column="changePercent" activeColumn={sortColumn} direction={sortDirection} />
-              </button>
+              </SortableHeader>
             </TableHead>
             {/* <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Market Cap

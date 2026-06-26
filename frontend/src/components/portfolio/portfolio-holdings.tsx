@@ -10,6 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  SortableHeader,
+  type SortDirection,
+} from "@/components/ui/sortable-header"
 import { MobileDataCard } from "@/components/mobile/mobile-data-card"
 import { cn } from "@/lib/utils"
 import type { Holding } from "@/services/portfolio/portfolio-service"
@@ -18,8 +22,13 @@ interface PortfolioHoldingsProps {
   holdings: Holding[]
 }
 
+// Sorting applies to the desktop table only; mobile cards keep document order.
+type SortColumn = "totalValue" | "pl" | "dayChange"
+
 export function PortfolioHoldings({ holdings }: PortfolioHoldingsProps) {
   const [query, setQuery] = useState("")
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default")
 
   const filteredHoldings = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -30,6 +39,38 @@ export function PortfolioHoldings({ holdings }: PortfolioHoldingsProps) {
         h.company.toLowerCase().includes(q),
     )
   }, [holdings, query])
+
+  function handleSort(column: SortColumn) {
+    if (sortColumn !== column) {
+      setSortColumn(column)
+      setSortDirection("asc")
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc")
+    } else {
+      setSortDirection("default")
+      setSortColumn(null)
+    }
+  }
+
+  // Sorted view feeds the desktop table only; mobile cards use filteredHoldings.
+  const sortedHoldings = useMemo(() => {
+    if (!sortColumn || sortDirection === "default") return filteredHoldings
+    return [...filteredHoldings].sort((a, b) => {
+      let cmp = 0
+      switch (sortColumn) {
+        case "totalValue":
+          cmp = a.totalValue - b.totalValue
+          break
+        case "pl":
+          cmp = a.plDollar - b.plDollar
+          break
+        case "dayChange":
+          cmp = a.dayChangeDollar - b.dayChangeDollar
+          break
+      }
+      return sortDirection === "desc" ? -cmp : cmp
+    })
+  }, [filteredHoldings, sortColumn, sortDirection])
 
   return (
     <>
@@ -69,19 +110,40 @@ export function PortfolioHoldings({ holdings }: PortfolioHoldingsProps) {
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Avg Buy
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Total Value
+                <TableHead>
+                  <SortableHeader
+                    column="totalValue"
+                    activeColumn={sortColumn}
+                    direction={sortDirection}
+                    onSort={handleSort}
+                  >
+                    Total Value
+                  </SortableHeader>
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {"P&L $ (%)"}
+                <TableHead>
+                  <SortableHeader
+                    column="pl"
+                    activeColumn={sortColumn}
+                    direction={sortDirection}
+                    onSort={handleSort}
+                  >
+                    {"P&L $ (%)"}
+                  </SortableHeader>
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Day Change
+                <TableHead>
+                  <SortableHeader
+                    column="dayChange"
+                    activeColumn={sortColumn}
+                    direction={sortDirection}
+                    onSort={handleSort}
+                  >
+                    Day Change
+                  </SortableHeader>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredHoldings.map((h) => {
+              {sortedHoldings.map((h) => {
                 const plPositive = h.plDollar >= 0
                 const dayPositive = h.dayChangeDollar >= 0
                 return (
