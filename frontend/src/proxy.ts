@@ -46,11 +46,8 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return authRes
   }
 
-  // Allow login and signup pages without session
-  if (
-    request.nextUrl.pathname === "/login" ||
-    request.nextUrl.pathname === "/signup"
-  ) {
+  // Allow the public landing page (marketing + auth CTAs) without session
+  if (request.nextUrl.pathname === "/") {
     return authRes
   }
 
@@ -82,7 +79,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
 
   if (!session) {
     const { origin } = new URL(request.url)
-    return NextResponse.redirect(`${origin}/login`)
+    return NextResponse.redirect(`${origin}/`)
   }
 
   return authRes

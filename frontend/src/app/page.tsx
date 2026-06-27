@@ -1,11 +1,18 @@
-import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, BarChart3, Brain, TrendingUp } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { redirect } from "next/navigation"
+import { BarChart3, Brain, TrendingUp } from "lucide-react"
+import { auth0 } from "@/lib/auth0"
 
-export default function HomePage() {
+export default async function LandingPage() {
+  // Public front door. Logged-in users skip the marketing splash and go
+  // straight to the dashboard.
+  const session = await auth0.getSession()
+  if (session) {
+    redirect("/dashboard")
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center gap-8 py-16 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-10 px-4 py-16 text-center">
       <div className="flex flex-col items-center gap-3">
         <Image
           src="/icons/icon-192x192.png"
@@ -39,11 +46,22 @@ export default function HomePage() {
         </div>
       </div>
 
-      <Button asChild size="lg">
-        <Link href="/dashboard">
-          Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
-        </Link>
-      </Button>
+      {/* Auth CTAs. Plain anchors (not next/link) because /auth/* is handled by
+          the Auth0 middleware, not the App Router — these need a real navigation. */}
+      <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
+        <a
+          href="/auth/login?returnTo=/dashboard"
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Log in
+        </a>
+        <a
+          href="/auth/login?screen_hint=signup&returnTo=/onboarding"
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+        >
+          Sign up
+        </a>
+      </div>
     </div>
   )
 }

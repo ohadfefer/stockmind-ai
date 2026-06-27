@@ -145,7 +145,7 @@ function SidebarBody({
         )}
       >
         <Link
-          href="/"
+          href="/dashboard"
           onClick={onNavigate}
           aria-label="StockMind AI home"
           className="flex items-center gap-2"
