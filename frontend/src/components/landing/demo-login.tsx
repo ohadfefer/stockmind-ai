@@ -32,14 +32,6 @@ export function DemoLogin() {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <div className="bg-border h-px flex-1" />
-        <span className="text-muted-foreground text-xs tracking-wide uppercase">
-          or
-        </span>
-        <div className="bg-border h-px flex-1" />
-      </div>
-
       {/* Plain anchor (not next/link): /auth/* is handled by the Auth0
           middleware, so this needs a real navigation. */}
       <a
