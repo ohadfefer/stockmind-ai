@@ -2,6 +2,7 @@ import Image from "next/image"
 import { redirect } from "next/navigation"
 import { BarChart3, Brain, TrendingUp } from "lucide-react"
 import { auth0 } from "@/lib/auth0"
+import { DemoLogin } from "@/components/landing/demo-login"
 
 export default async function LandingPage() {
   // Public front door. Logged-in users skip the marketing splash and go
@@ -62,6 +63,8 @@ export default async function LandingPage() {
           Sign up
         </a>
       </div>
+
+      <DemoLogin />
     </div>
   )
 }
