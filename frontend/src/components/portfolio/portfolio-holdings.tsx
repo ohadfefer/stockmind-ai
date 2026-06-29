@@ -14,15 +14,16 @@ import {
   SortableHeader,
   type SortDirection,
 } from "@/components/ui/sortable-header"
-import { MobileDataCard } from "@/components/mobile/mobile-data-card"
-import { cn } from "@/lib/utils"
+import { MobileHoldings } from "@/components/mobile/mobile-holdings"
+import { TickerLogo } from "@/components/portfolio/ticker-logo"
 import type { Holding } from "@/services/portfolio/portfolio-service"
 
 interface PortfolioHoldingsProps {
   holdings: Holding[]
 }
 
-// Sorting applies to the desktop table only; mobile cards keep document order.
+// Sorting applies to the desktop table only; the mobile layout filters instead
+// (see MobileHoldings).
 type SortColumn = "totalValue" | "pl" | "dayChange"
 
 export function PortfolioHoldings({ holdings }: PortfolioHoldingsProps) {
@@ -212,108 +213,11 @@ export function PortfolioHoldings({ holdings }: PortfolioHoldingsProps) {
         </div>
       </div>
 
-      {/* Mobile cards. */}
-      <div className="flex flex-col gap-3 md:hidden">
-        {filteredHoldings.map((h) => {
-          const plPositive = h.plDollar >= 0
-          const dayPositive = h.dayChangeDollar >= 0
-          const plColor = plPositive ? "text-[#10B981]" : "text-[#EF4444]"
-          const dayColor = dayPositive ? "text-[#10B981]" : "text-[#EF4444]"
-          return (
-            <MobileDataCard key={h.ticker}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <TickerLogo logo={h.logo} ticker={h.ticker} />
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <p className="font-mono text-sm font-bold text-primary">
-                        {h.ticker}
-                      </p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        ${h.currentPrice.toFixed(2)}
-                      </p>
-                    </div>
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {h.company}
-                    </p>
-                  </div>
-                </div>
-                <p className="shrink-0 font-mono text-base font-bold text-foreground">
-                  ${h.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    P&L
-                  </p>
-                  <p className={cn("font-mono text-sm font-semibold", plColor)}>
-                    {plPositive ? "+" : ""}${h.plDollar.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p className={cn("font-mono text-xs", plColor)}>
-                    {plPositive ? "+" : ""}{h.plPercent.toFixed(1)}%
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Day
-                  </p>
-                  <p className={cn("font-mono text-sm font-semibold", dayColor)}>
-                    {dayPositive ? "+" : ""}${h.dayChangeDollar.toFixed(2)}
-                  </p>
-                  <p className={cn("font-mono text-xs", dayColor)}>
-                    ({dayPositive ? "+" : ""}{h.dayChangePercent.toFixed(2)}%)
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Shares
-                  </p>
-                  <p className="font-mono text-sm text-foreground">
-                    {h.shares.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Avg Buy
-                  </p>
-                  <p className="font-mono text-sm text-foreground">
-                    ${h.avgBuy.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            </MobileDataCard>
-          )
-        })}
-      </div>
+      {/* Mobile layout — own filter controls, see MobileHoldings. */}
+      <MobileHoldings holdings={filteredHoldings} />
       </>
       )}
     </>
   )
 }
 
-function TickerLogo({ logo, ticker }: { logo?: string; ticker: string }) {
-  return (
-    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-secondary">
-      {logo ? (
-        // Finnhub-hosted asset; using <img> avoids requiring each profile host
-        // in next.config remotePatterns.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={logo}
-          alt={ticker}
-          loading="lazy"
-          className="size-full object-cover"
-        />
-      ) : (
-        <span className="font-mono text-[10px] font-bold text-muted-foreground">
-          {ticker.slice(0, 3)}
-        </span>
-      )}
-    </div>
-  )
-}
