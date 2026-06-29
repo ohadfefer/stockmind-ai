@@ -7,11 +7,11 @@ import { toast } from "sonner"
 // Shared recruiter demo account. Auth0 Universal Login can prefill the email
 // via login_hint, but never the password (no such parameter, by design), so we
 // surface the password here as a one-click copy.
-const DEMO_EMAIL = "ohadfefer16+demo@gmail.com"
+const DEMO_EMAIL = "demo@getstockmind.com"
 const DEMO_PASSWORD = "demouser1!"
 
-// encodeURIComponent turns the Gmail plus-alias "+" into %2B (a bare "+" would
-// be read as a space) and "@" into %40 — both safe inside a query value.
+// encodeURIComponent escapes reserved characters (e.g. "@" → %40) so the email
+// is safe to drop into the query value.
 const DEMO_LOGIN_HREF = `/auth/login?login_hint=${encodeURIComponent(
   DEMO_EMAIL,
 )}&returnTo=/dashboard`

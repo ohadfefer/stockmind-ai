@@ -18,7 +18,7 @@ import { getDb } from "@/lib/db"
  */
 
 const DEMO_AUTH0_SUB = "auth0|6a3fa0b0dbd594d590a907c3"
-const DEMO_EMAIL = "ohadfefer16+demo@gmail.com"
+const DEMO_EMAIL = "demo@getstockmind.com"
 const DEMO_NAME = "Demo User"
 
 const DEPOSIT_AMOUNT = 100_000
