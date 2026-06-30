@@ -36,7 +36,7 @@ export default async function LandingPage() {
       {/* App logo — pinned to the page's top-left corner. No tile: the
           background is the page background, so only the horns (text-foreground
           strokes) are visible. */}
-      <div className="absolute left-6 top-6 z-20">
+      <div className="absolute left-6 top-6 z-20 hidden lg:block">
         <svg
           viewBox="0 0 512 512"
           className="size-12 text-foreground"

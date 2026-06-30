@@ -77,7 +77,7 @@ export default function OnboardingPage() {
         investorStyle,
         engagementCadence,
       })
-      router.push("/onboarding/connect")
+      router.push("/dashboard")
     } catch {
       setSubmitError("Something went wrong. Please try again.")
       setLoading(false)
