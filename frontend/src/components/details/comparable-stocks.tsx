@@ -57,7 +57,7 @@ export function ComparableStocks() {
                 <div
                   className={clsx(
                     "flex items-center gap-0.5 text-xs font-medium",
-                    stock.changePercent >= 0 ? "text-accent" : "text-destructive"
+                    stock.changePercent >= 0 ? "text-emerald-500" : "text-destructive"
                   )}
                 >
                   {stock.changePercent >= 0 ? (

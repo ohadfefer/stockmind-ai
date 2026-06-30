@@ -88,6 +88,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4's Preflight no longer sets `cursor: pointer` on buttons.
+     Restore it app-wide for enabled buttons and role="button" elements. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* Indeterminate top progress bar for the navigation overlay (see

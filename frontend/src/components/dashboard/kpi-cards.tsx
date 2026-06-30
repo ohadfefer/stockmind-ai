@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { TrendingUp, TrendingDown, LineChart, ArrowRight } from "lucide-react"
+import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react"
 import type { EtfQuote } from "@/services/dashboard/etf-quote-service"
 import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { PortfolioStats } from "@/services/position/portfolio-daily-value-service"
@@ -50,7 +50,6 @@ export function KPICards({
             <span className="text-sm font-medium text-muted-foreground">
               Portfolio vs. Market
             </span>
-            <LineChart className="size-5 text-muted-foreground" />
           </div>
           <p className="text-lg font-bold tracking-tight">
             <span className="font-mono text-foreground">

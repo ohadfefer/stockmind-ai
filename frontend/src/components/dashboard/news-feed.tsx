@@ -121,7 +121,7 @@ function NewsItemContent({
         {item.headline}
       </h3>
       {item.summary && (
-        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+        <p className="line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
           {item.summary}
         </p>
       )}

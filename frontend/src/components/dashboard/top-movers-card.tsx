@@ -46,17 +46,17 @@ export function TopMoversCard({
         >
           Top Movers
         </span>
-        <div className="flex shrink-0 rounded-md bg-muted p-0.5">
+        <div className="flex shrink-0 divide-x divide-border overflow-hidden rounded-md border border-border bg-card">
           {(["day", "all"] as const).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRange(r)}
-              className={`rounded font-medium transition-colors ${
+              className={`font-medium transition-colors ${
                 compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs"
               } ${
                 range === r
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
