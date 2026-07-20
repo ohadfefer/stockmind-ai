@@ -1,10 +1,23 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller"
 import { MarkdownMessage } from "@/components/ai/markdown-message"
+import {
+  MessageOutline,
+  type OutlineEntry,
+} from "@/components/conversation/message-outline"
+import { useMediaQuery } from "@/hooks/use-media-query"
 import type { ConversationMessage } from "@/services/ai/conversation-service"
 
 interface ChatPanelProps {
@@ -78,25 +91,22 @@ export function ChatPanel({
       mountedRef.current = false
     }
   }, [])
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  // Auto-scroll only when the user is already pinned to (or near) the bottom.
-  // If they've scrolled up to read history mid-stream, don't yank them down.
-  const pinnedToBottomRef = useRef(true)
-
-  function handleScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-    pinnedToBottomRef.current = distance < 80
-  }
-
-  useEffect(() => {
-    if (!pinnedToBottomRef.current) return
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    })
-  }, [messages, isStreaming])
+  // Each user turn is a scroll anchor, so the outline's jump targets and the
+  // scroller's current-position tracking key off the same ids.
+  const outlineEntries = useMemo<OutlineEntry[]>(
+    () =>
+      messages
+        .filter((m) => m.role === "user")
+        .map((m) => ({
+          id: m.key,
+          // Collapse newlines so a multi-line question still reads as one row.
+          label: m.content.replace(/\s+/g, " ").trim(),
+        })),
+    [messages],
+  )
+  // Tailwind's xl. Drives whether the outline mounts at all — see the rail
+  // below for why this can't just be a `hidden xl:block` class.
+  const isWideViewport = useMediaQuery("(min-width: 80rem)")
 
   // Auto-send when arriving via /conversation?prompt=… (e.g. Analyze button
   // on a details page). Strip the query before firing so a refresh during
@@ -124,9 +134,6 @@ export function ChatPanel({
       { role: "user", content, key: userKey },
       { role: "assistant", content: "", key: assistantKey },
     ])
-    // The user just sent something; force-scroll on the next paint
-    // even if they had scrolled up to read older messages.
-    pinnedToBottomRef.current = true
     setIsStreaming(true)
 
     try {
@@ -215,58 +222,100 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto py-4"
-      >
-        {messages.length === 0 ? (
-          <EmptyState
-            onPick={(p) => void send(p)}
-            disabled={isStreaming}
-          />
-        ) : (
-          <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
-            {messages.map((m) => (
-              <MessageBubble key={m.key} message={m} />
-            ))}
-            {isStreaming && messages[messages.length - 1]?.content === "" && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="size-2 animate-pulse rounded-full bg-primary" />
-                Thinking…
-              </div>
-            )}
+    // autoScroll keeps the view pinned to the bottom while streaming unless the
+    // user scrolls away; anchoring each user turn is what lets the outline jump
+    // between questions and report which one the reader is on.
+    <MessageScrollerProvider
+      autoScroll
+      defaultScrollPosition="last-anchor"
+      scrollMargin={12}
+    >
+      <div className="flex h-full flex-col">
+        <div className="relative flex min-h-0 flex-1">
+          <MessageScroller>
+            <MessageScrollerViewport>
+              <MessageScrollerContent className="mx-auto w-full max-w-[880px] py-4">
+                {messages.length === 0 ? (
+                  <EmptyState
+                    onPick={(p) => void send(p)}
+                    disabled={isStreaming}
+                  />
+                ) : (
+                  messages.map((m, i) => (
+                    <MessageScrollerItem
+                      key={m.key}
+                      messageId={m.key}
+                      scrollAnchor={m.role === "user"}
+                    >
+                      {isStreaming &&
+                      m.content === "" &&
+                      i === messages.length - 1 ? (
+                        <ThinkingIndicator />
+                      ) : (
+                        <MessageBubble message={m} />
+                      )}
+                    </MessageScrollerItem>
+                  ))
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+
+          {/* Mirrors the message column so the rail sits just outside it
+              rather than drifting to the window edge on wide screens. Below
+              xl the gutter is too narrow to clear the messages — the
+              scroll-to-bottom button covers that case instead. Gated in JS
+              rather than with `hidden xl:block` because mounting the outline
+              is what subscribes to the scroller's visibility tracking, which
+              runs an IntersectionObserver over every message; a CSS-hidden
+              rail would still pay for all of it on phones. */}
+          {isWideViewport && outlineEntries.length > 1 && (
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 w-full max-w-[880px] -translate-x-1/2">
+              <MessageOutline
+                entries={outlineEntries}
+                className="pointer-events-auto absolute top-1/2 -right-9 -translate-y-1/2"
+              />
+            </div>
+          )}
+        </div>
+
+        {error?.kind === "budget" && <BudgetCard error={error} />}
+        {error?.kind === "generic" && (
+          <div className="mx-auto mb-3 w-full max-w-[880px] rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+            {error.message}
           </div>
         )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="mx-auto flex w-full max-w-[880px] items-end gap-2 pt-3"
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                void send(input)
+              }
+            }}
+            placeholder="Ask about stocks, ETFs, your portfolio…"
+            rows={2}
+            disabled={isStreaming || error?.kind === "budget"}
+            className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-60"
+          />
+        </form>
       </div>
+    </MessageScrollerProvider>
+  )
+}
 
-      {error?.kind === "budget" && <BudgetCard error={error} />}
-      {error?.kind === "generic" && (
-        <div className="mx-auto mb-3 w-full max-w-[880px] rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
-          {error.message}
-        </div>
-      )}
-
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto flex w-full max-w-[880px] items-end gap-2 pt-3"
-      >
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              void send(input)
-            }
-          }}
-          placeholder="Ask about stocks, ETFs, your portfolio…"
-          rows={2}
-          disabled={isStreaming || error?.kind === "budget"}
-          className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-60"
-        />
-      </form>
+function ThinkingIndicator() {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <span className="size-2 animate-pulse rounded-full bg-primary" />
+      Thinking…
     </div>
   )
 }

@@ -4,6 +4,11 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* The palette below is dark-only (there's no light `.dark` counterpart), but
+     without this the browser assumes a light page and paints native UI to
+     match — light scrollbars, light autofill, light form controls — against a
+     near-black background. */
+  color-scheme: dark;
   --background: #0A0B0D;
   --foreground: #E8EAED;
   --card: #111318;
@@ -38,6 +43,11 @@
   --sidebar-border: #2A2D35;
   --sidebar-ring: #3B82F6;
   --header-height: 3.5rem;
+  /* Derived from --muted-foreground rather than hardcoded so the scrollbar
+     tracks the palette. Translucent so it reads consistently over both
+     --background and the lighter --card surfaces it scrolls against. */
+  --scrollbar-thumb: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  --scrollbar-track: transparent;
 }
 
 @theme inline {
@@ -81,9 +91,46 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* ui/message-scroller.tsx ships with these classes, but they aren't Tailwind
+   built-ins and the shadcn registry's definitions were never installed here,
+   so until now they silently did nothing. The thumb/track variants only set
+   custom properties — the `*` rule below turns those into a real
+   scrollbar-color. */
+
+/* Dissolves the bottom edge of the viewport while content remains below,
+   instead of cutting the last visible line off flat. The primitive drops
+   data-scrollable="end" while it's autoscrolling, so the fade stays off
+   during streaming and only appears once the reader scrolls away. */
+@utility scroll-fade-b {
+  &[data-scrollable~="end"] {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent);
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+@utility scrollbar-thumb-transparent {
+  --scrollbar-thumb: transparent;
+}
+
+@utility scrollbar-track-transparent {
+  --scrollbar-track: transparent;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Declared per-element instead of once on :root because inheritance
+       passes down the *resolved* color — an element overriding
+       --scrollbar-thumb (the utilities above) needs its own scrollbar-color
+       declaration for the override to take effect. */
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
   body {
     @apply bg-background text-foreground;
