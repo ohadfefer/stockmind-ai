@@ -43,9 +43,9 @@ frontend/src/
 ├── app/
 │   ├── layout.tsx        # Root layout (Auth0Provider, service-worker registration, Analytics)
 │   ├── manifest.ts       # PWA manifest (served at /manifest.webmanifest)
+│   ├── page.tsx          # Public landing at / (root layout only; redirects logged-in users to /dashboard)
 │   ├── (auth)/           # Centered layout: login, signup, onboarding
 │   └── (main)/           # App shell (sidebar + header)
-│       ├── page.tsx      # Public landing (marketing + auth CTAs)
 │       ├── dashboard/ portfolio/ watchlist/ news/ account/ settings/
 │       ├── details/[symbol]/
 │       └── api/          # Route handlers (see README → API)
@@ -67,8 +67,9 @@ Plain `.sql` files in `/migrations/` (`001`…`017`, `009` intentionally skipped
 
 ### Route Groups & Layouts
 
+- **`app/page.tsx`** — the public landing at `/` (top-level, root layout only — no sidebar/header). Redirects logged-in users to `/dashboard`.
 - **`(auth)`** — login, signup, onboarding. Centered layout, no sidebar/header.
-- **`(main)`** — app shell (sidebar + header). `/` is a public landing; all other pages require a session.
+- **`(main)`** — app shell (sidebar + header). Every page here requires a session.
 
 Route groups don't affect URLs (e.g., `(main)/portfolio/page.tsx` serves `/portfolio`).
 

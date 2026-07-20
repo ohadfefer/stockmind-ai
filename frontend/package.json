@@ -16,6 +16,7 @@
     "@ai-sdk/xai": "^3.0.83",
     "@auth0/nextjs-auth0": "^4.16.0",
     "@neondatabase/serverless": "^1.0.2",
+    "@shadcn/react": "^0.2.1",
     "@upstash/qstash": "^2.10.1",
     "@vercel/analytics": "^1.6.1",
     "ai": "^6.0.168",

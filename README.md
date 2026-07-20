@@ -438,8 +438,8 @@ StockMind AI was **migrated from Vercel to AWS**. It now runs as a container on 
 ### Request flow
 
 ```
-Browser ──HTTPS──▶ Cloudflare DNS (getstockmind.com)
-                      │
+Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
+                      │  only Cloudflare IPs are allowed into the ALB security group
                       ▼
             Application Load Balancer  (stockmind-alb)
               :80  ── 301 redirect ──▶ :443
@@ -464,7 +464,7 @@ Browser ──HTTPS──▶ Cloudflare DNS (getstockmind.com)
 | Container | `stockmind-app` |
 | Load balancer | `stockmind-alb` → `stockmind-alb-2082442465.us-east-1.elb.amazonaws.com` (internet-facing) |
 | Target group | `stockmind-tg` — IP targets, HTTP :3000, health check `GET /api/health` → 200 |
-| ALB security group | `stockmind-alb-sg` — 80/443 from `0.0.0.0/0` |
+| ALB security group | `stockmind-alb-sg` — 80/443 from Cloudflare IP ranges only (via a managed prefix list; the origin is not reachable directly) |
 | ECS security group | `stockmind-sg` — 3000 from `stockmind-alb-sg` only |
 | TLS cert | ACM (`getstockmind.com` + `www.getstockmind.com`), DNS-validated |
 | Secrets | SSM Parameter Store under `/stockmind/*` (SecureString) |
@@ -507,7 +507,7 @@ Non-secret config (`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `STRIPE_PRICE_ID`) is set 
 
 ### DNS & TLS
 
-`getstockmind.com` is registered and DNS-hosted on **Cloudflare**, pointing at the ALB. The ALB terminates TLS with an **ACM** certificate covering `getstockmind.com` and `www.getstockmind.com`; the `:80` listener 301-redirects to `:443`.
+`getstockmind.com` is registered and DNS-hosted on **Cloudflare** and **proxied** (orange-cloud) in front of the ALB, so all traffic passes through Cloudflare. The ALB security group only admits Cloudflare's published IP ranges (via a managed prefix list), so the raw ALB DNS is not reachable directly. The ALB terminates TLS with an **ACM** certificate covering `getstockmind.com` and `www.getstockmind.com`; Cloudflare's SSL/TLS mode is **Full (strict)**, and the `:80` listener 301-redirects to `:443`.
 
 ### Deploying manually
 
