@@ -36,63 +36,74 @@ interface UpdatePositionParams {
   fees: number
 }
 
+/**
+ * Applies one execution to the materialized position.
+ *
+ * Both branches are a single statement so the read and the write cannot be
+ * split by a concurrent trade. The previous SELECT-then-write shape had two
+ * distinct races: a lost update when the row existed (both writers overwrote
+ * the same row from the same stale read) and a phantom when it did not (two
+ * first buys of a symbol both saw "no row" and both inserted).
+ *
+ * Neither needs an isolation-level change. UNIQUE (account_id, symbol) already
+ * exists (migration 006), so ON CONFLICT DO UPDATE takes a row lock and
+ * re-reads the conflicting row; and a plain UPDATE that blocks on a concurrent
+ * writer re-evaluates its WHERE and SET against the new row version. Both are
+ * atomic at READ COMMITTED.
+ */
 export async function updatePosition(params: UpdatePositionParams): Promise<void> {
   const sql = getDb()
 
-  const rows = await sql`
-    SELECT quantity, average_cost_basis, realized_pnl
-    FROM positions
-    WHERE account_id = ${params.accountId} AND symbol = ${params.symbol}
-  `
-
   if (params.side === "buy") {
     const totalCost = params.quantity * params.price + params.commission + params.fees
-    const costPerShare = totalCost / params.quantity
 
-    if (rows.length === 0) {
-      // New position
-      await sql`
-        INSERT INTO positions (account_id, symbol, quantity, average_cost_basis, realized_pnl)
-        VALUES (${params.accountId}, ${params.symbol}, ${params.quantity}, ${costPerShare}, 0)
-      `
-    } else {
-      // Add to existing — recalculate weighted average cost basis
-      const existing = rows[0]
-      const oldQty = Number(existing.quantity)
-      const oldCost = Number(existing.average_cost_basis)
-      const newQty = oldQty + params.quantity
-      const newCost = (oldQty * oldCost + totalCost) / newQty
-
-      await sql`
-        UPDATE positions
-        SET quantity = ${newQty},
-            average_cost_basis = ${newCost},
-            updated_at = NOW()
-        WHERE account_id = ${params.accountId} AND symbol = ${params.symbol}
-      `
-    }
-    invalidatePositions(params.accountId)
+    // New holding and add-to-existing are the same statement. In DO UPDATE,
+    // positions.* is the committed post-lock row, so the weighted average is
+    // computed against whatever the other writer just left behind.
+    // realized_pnl is deliberately untouched: re-opening a closed position
+    // keeps the P&L already banked on it.
+    await sql`
+      INSERT INTO positions (account_id, symbol, quantity, average_cost_basis, realized_pnl)
+      VALUES (
+        ${params.accountId}::int,
+        ${params.symbol}::text,
+        ${params.quantity}::numeric(16,6),
+        (${totalCost}::numeric / ${params.quantity}::numeric)::numeric(16,6),
+        0
+      )
+      ON CONFLICT (account_id, symbol) DO UPDATE
+      SET quantity = positions.quantity + EXCLUDED.quantity,
+          average_cost_basis =
+            (positions.quantity * positions.average_cost_basis + ${totalCost}::numeric)
+            / (positions.quantity + EXCLUDED.quantity),
+          updated_at = NOW()
+    `
   } else {
-    // Sell — reduce quantity, realize P&L
-    if (rows.length === 0) return // nothing to sell
-
-    const existing = rows[0]
-    const oldQty = Number(existing.quantity)
-    const avgCost = Number(existing.average_cost_basis)
-    const oldPnl = Number(existing.realized_pnl)
-    const sellQty = Math.min(params.quantity, oldQty)
-    const pnl = (params.price - avgCost) * sellQty - params.commission - params.fees
-    const newQty = oldQty - sellQty
-
+    // Sell — reduce quantity, realize P&L.
+    //
+    // LEAST clamps to the shares actually held, evaluated server-side against
+    // the locked row rather than against a stale JS read. Every reference to
+    // quantity and average_cost_basis in SET resolves against the pre-update
+    // tuple, so the clamp and the P&L always agree with each other.
+    //
+    // quantity > 0 means a sell against a closed or missing position now
+    // touches nothing. It previously still charged commission and fees to
+    // realized_pnl for a trade that moved no shares.
     await sql`
       UPDATE positions
-      SET quantity = ${newQty},
-          realized_pnl = ${oldPnl + pnl},
+      SET quantity = quantity - LEAST(${params.quantity}::numeric, quantity),
+          realized_pnl = realized_pnl
+            + (${params.price}::numeric - average_cost_basis)
+              * LEAST(${params.quantity}::numeric, quantity)
+            - ${params.commission}::numeric - ${params.fees}::numeric,
           updated_at = NOW()
-      WHERE account_id = ${params.accountId} AND symbol = ${params.symbol}
+      WHERE account_id = ${params.accountId}::int
+        AND symbol = ${params.symbol}::text
+        AND quantity > 0
     `
-    invalidatePositions(params.accountId)
   }
+
+  invalidatePositions(params.accountId)
 }
 
 export async function getPositions(accountId: number): Promise<Position[]> {

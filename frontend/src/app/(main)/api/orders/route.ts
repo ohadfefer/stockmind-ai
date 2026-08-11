@@ -6,6 +6,9 @@ import { createOrder, cancelOrder } from "@/services/order-service"
 import { logAudit } from "@/services/audit-log-service"
 import { getClientIp } from "@/lib/request-ip"
 
+/** Mirrors the order_type CHECK constraint in migration 004. */
+const ORDER_TYPES = ["market", "limit", "stop", "stop_limit"]
+
 export async function POST(request: Request) {
   const session = await auth0.getSession()
   if (!session) {
@@ -19,6 +22,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
   }
 
+  // Everything below is validated server-side because the trade forms are not a
+  // trust boundary: the quantity on the desktop flow comes from a URL search
+  // param, and any of these fields can be set directly against this endpoint
+  // with a session cookie. A negative quantity in particular inverts the cash
+  // sign in recordTradeSettlement and credits the account.
+  const normalizedSymbol = String(symbol).trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(normalizedSymbol)) {
+    return NextResponse.json({ error: "Invalid symbol" }, { status: 400 })
+  }
+
+  if (side !== "buy" && side !== "sell") {
+    return NextResponse.json({ error: "side must be 'buy' or 'sell'" }, { status: 400 })
+  }
+
+  if (!ORDER_TYPES.includes(orderType)) {
+    return NextResponse.json(
+      { error: `orderType must be one of: ${ORDER_TYPES.join(", ")}` },
+      { status: 400 },
+    )
+  }
+
+  const parsedQuantity = Number(quantity)
+  if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    return NextResponse.json({ error: "quantity must be a positive number" }, { status: 400 })
+  }
+
+  const parsedFillPrice = Number(averageFillPrice)
+  if (!Number.isFinite(parsedFillPrice) || parsedFillPrice <= 0) {
+    return NextResponse.json(
+      { error: "averageFillPrice must be a positive number" },
+      { status: 400 },
+    )
+  }
+
   const userId = await getUserIdByAuth0Id(session.user.sub)
   if (!userId) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
@@ -28,11 +65,11 @@ export async function POST(request: Request) {
 
   const orderId = await createOrder({
     accountId,
-    symbol,
+    symbol: normalizedSymbol,
     side,
     orderType,
-    quantity: Number(quantity),
-    averageFillPrice: Number(averageFillPrice),
+    quantity: parsedQuantity,
+    averageFillPrice: parsedFillPrice,
     filledAt,
   })
 
@@ -42,11 +79,11 @@ export async function POST(request: Request) {
     action: "order_placed",
     details: {
       orderId,
-      symbol,
+      symbol: normalizedSymbol,
       side,
       orderType,
-      quantity: Number(quantity),
-      averageFillPrice: Number(averageFillPrice),
+      quantity: parsedQuantity,
+      averageFillPrice: parsedFillPrice,
     },
     ipAddress: getClientIp(request),
   })

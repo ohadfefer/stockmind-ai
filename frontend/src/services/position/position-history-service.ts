@@ -134,7 +134,7 @@ export async function snapshotAllPositions(): Promise<{
         SELECT cl.running_balance FROM cash_ledger cl
         WHERE cl.account_id = ph.account_id
           AND cl.created_at::date <= ph.date
-        ORDER BY cl.created_at DESC LIMIT 1
+        ORDER BY cl.created_at DESC, cl.id DESC LIMIT 1
       ), 0)::numeric(16,2),
       COALESCE((
         SELECT SUM(cl.amount) FROM cash_ledger cl

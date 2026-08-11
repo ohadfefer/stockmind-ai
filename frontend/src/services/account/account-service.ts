@@ -35,7 +35,7 @@ export async function getAccountHistory(accountId: number): Promise<HistoryEntry
       SELECT entry_type, amount, running_balance, description, created_at
       FROM cash_ledger
       WHERE account_id = ${accountId}
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
     `,
   ])
 
@@ -97,8 +97,12 @@ export async function getAccountDetails(userId: number): Promise<AccountDetails>
   const rows = await sql`
     SELECT a.id, a.account_number, a.currency, a.status,
            COALESCE(
+             -- MAX(id) rather than ORDER BY id DESC LIMIT 1 so the planner uses
+             -- idx_cash_ledger_account_id_desc instead of walking the PK
+             -- backward. See appendLedgerEntry in cash-ledger-service.ts.
              (SELECT running_balance FROM cash_ledger
-              WHERE account_id = a.id ORDER BY created_at DESC LIMIT 1),
+              WHERE account_id = a.id
+                AND id = (SELECT MAX(id) FROM cash_ledger WHERE account_id = a.id)),
              0
            ) AS running_balance
     FROM accounts a

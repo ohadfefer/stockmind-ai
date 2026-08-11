@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db"
+import { appendLedgerEntry } from "@/services/cash-ledger-service"
 
 export type TransferDirection = "deposit" | "withdrawal"
 export type TransferMethod = "bank_transfer" | "wire" | "internal"
@@ -75,22 +76,22 @@ export async function resolveTransfer(transferId: number): Promise<void> {
   const ledgerAmount = transfer.direction === "deposit" ? amount : -amount
   const entryType = transfer.direction === "deposit" ? "deposit" : "withdrawal"
 
-  // Get current balance
-  const balRows = await sql`
-    SELECT running_balance FROM cash_ledger
-    WHERE account_id = ${transfer.account_id}
-    ORDER BY created_at DESC LIMIT 1
-  `
-  const currentBalance = balRows.length > 0 ? Number(balRows[0].running_balance) : 0
-  const newBalance = currentBalance + ledgerAmount
+  // The status check above is a read-then-act across a network round trip, so
+  // two concurrent resolutions of the same transfer can both reach here.
+  // appendLedgerEntry is idempotent on (account, entry_type, transfer id), so
+  // the loser writes nothing rather than double-crediting the account.
+  await appendLedgerEntry({
+    accountId: transfer.account_id as number,
+    entryType,
+    amount: ledgerAmount,
+    referenceId: transferId,
+    description: entryType === "deposit" ? "Deposit" : "Withdrawal",
+  })
 
-  // Insert cash ledger entry and mark transfer completed
-  await sql`
-    INSERT INTO cash_ledger (account_id, entry_type, amount, running_balance, reference_id, description)
-    VALUES (${transfer.account_id}, ${entryType}, ${ledgerAmount}, ${newBalance}, ${transferId}, ${entryType === "deposit" ? "Deposit" : "Withdrawal"})
-  `
+  // Guarding on status makes this a compare-and-set, so completed_at is stamped
+  // once by the winner instead of by whichever duplicate resolution lands last.
   await sql`
     UPDATE transfers SET status = 'completed', completed_at = NOW()
-    WHERE id = ${transferId}
+    WHERE id = ${transferId} AND status = 'pending'
   `
 }
