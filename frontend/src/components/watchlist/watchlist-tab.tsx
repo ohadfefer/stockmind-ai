@@ -18,7 +18,7 @@ import {
   type SortDirection,
 } from "@/components/ui/sortable-header"
 import { useDetailsNavigation } from "@/components/navigation-loader"
-import { deleteStock } from "@/actions/watchlist"
+import { removeWatchlistItem, DEFAULT_WATCHLIST } from "@/actions/watchlist"
 import { cn } from "@/lib/utils"
 
 import type { WatchlistStockData } from "@/types/watchlist"
@@ -104,7 +104,7 @@ export function WatchlistTab({ stocks, watchlistId }: WatchlistTabProps) {
   async function handleDelete(ticker: string) {
     setRemovedTickers((prev) => new Set(prev).add(ticker))
     try {
-      await deleteStock(ticker, watchlistId)
+      await removeWatchlistItem(watchlistId ?? DEFAULT_WATCHLIST, ticker)
       router.refresh()
     } catch {
       setRemovedTickers((prev) => {

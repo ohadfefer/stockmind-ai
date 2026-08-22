@@ -1,6 +1,6 @@
 import { auth0 } from "@/lib/auth0"
 import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
+import { getWatchlists } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
 import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import {
@@ -22,11 +22,11 @@ export async function getDashboardWatchlistStocks(
     const userId = await getUserIdByAuth0Id(auth0Id)
     if (!userId) return []
 
-    const watchlists = await getUserWatchlistsWithCounts(userId)
+    const accountId = await getOrCreateDefaultAccount(userId)
+    const watchlists = await getWatchlists(accountId)
     const defaultWatchlistId = watchlists[0]?.id
     if (!defaultWatchlistId) return []
 
-    const accountId = await getOrCreateDefaultAccount(userId)
     const symbols = await getWatchlistSymbolsById(defaultWatchlistId, accountId)
     const limited = limit === undefined ? symbols : symbols.slice(0, limit)
 

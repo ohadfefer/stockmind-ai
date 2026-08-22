@@ -1,5 +1,5 @@
 import { resolveAccountContext } from "@/services/account/account-context"
-import { getUserWatchlistsWithCounts } from "@/services/watchlist/watchlist-crud-service"
+import { getWatchlists } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
 import {
   getCachedQuote,
@@ -76,7 +76,7 @@ export function loadWatchlistPageData(idParam?: number): WatchlistPageData {
 
   const watchlistsPromise = ctxPromise.then((ctx) =>
     ctx
-      ? getUserWatchlistsWithCounts(ctx.userId).catch(
+      ? getWatchlists(ctx.accountId).catch(
           logAndRethrow("watchlists fetch failed"),
         )
       : ([] as WatchlistInfo[]),

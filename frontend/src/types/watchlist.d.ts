@@ -1,13 +1,13 @@
 export type WatchlistInfo = {
   id: number
   name: string
-  stockCount: number
-}
-
-export type WatchlistWithStatus = {
-  id: number
-  name: string
-  hasSymbol: boolean
+  itemCount: number
+  /**
+   * Only present when the collection was queried with ?symbol=. The picker
+   * needs every list plus a per-list flag to render unchecked boxes, so the
+   * symbol annotates the results rather than filtering them.
+   */
+  containsSymbol?: boolean
 }
 
 export interface WatchlistStockData {

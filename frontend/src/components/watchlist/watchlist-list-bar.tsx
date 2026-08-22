@@ -77,7 +77,7 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
               <List className="size-3.5 md:size-4" />
               {wl.name}
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                {wl.stockCount}
+                {wl.itemCount}
               </span>
             </Link>
             {isActive && (

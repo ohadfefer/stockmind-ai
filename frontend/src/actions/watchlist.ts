@@ -1,72 +1,64 @@
-export async function addStock(symbol: string): Promise<{ following: boolean }> {
-  const res = await fetch("/api/watchlist", {
+import { apiFetch, apiSend, json } from "@/actions/http"
+import type { WatchlistInfo } from "@/types/watchlist"
+
+/** The General list, addressable without first fetching its id. */
+export const DEFAULT_WATCHLIST = "default"
+
+/** Every list on the account, each with its item count. */
+export function fetchWatchlists(): Promise<WatchlistInfo[]> {
+  return apiFetch<WatchlistInfo[]>("/api/watchlists")
+}
+
+/**
+ * Every list, each flagged with whether it already holds the symbol. Note this
+ * annotates rather than filters — the picker renders the unchecked lists too.
+ */
+export function fetchWatchlistsForSymbol(symbol: string): Promise<WatchlistInfo[]> {
+  return apiFetch<WatchlistInfo[]>(
+    `/api/watchlists?symbol=${encodeURIComponent(symbol)}`,
+  )
+}
+
+export function createWatchlist(name: string): Promise<{ id: number; name: string }> {
+  return apiFetch<{ id: number; name: string }>("/api/watchlists", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ symbol }),
+    ...json({ name }),
   })
-  if (!res.ok) throw new Error("Failed to add stock")
-  return res.json()
 }
 
-export async function deleteStock(symbol: string, watchlistId?: number): Promise<void> {
-  const res = await fetch("/api/watchlist", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ symbol, watchlistId }),
-  })
-  if (!res.ok) throw new Error("Failed to delete stock")
-}
-
-export type WatchlistEntry = {
-  id: number
-  name: string
-  hasSymbol: boolean
-}
-
-export async function fetchWatchlists(symbol: string): Promise<WatchlistEntry[]> {
-  const res = await fetch(`/api/watchlist/lists?symbol=${encodeURIComponent(symbol)}`)
-  if (!res.ok) throw new Error("Failed to fetch watchlists")
-  const data = await res.json()
-  return data.watchlists
-}
-
-export async function createWatchlist(name: string): Promise<{ id: number; name: string }> {
-  const res = await fetch("/api/watchlist/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  })
-  if (!res.ok) throw new Error("Failed to create watchlist")
-  return res.json()
-}
-
-export async function renameWatchlist(watchlistId: number, name: string): Promise<void> {
-  const res = await fetch("/api/watchlist/manage", {
+export function renameWatchlist(watchlistId: number, name: string): Promise<void> {
+  return apiSend(`/api/watchlists/${watchlistId}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ watchlistId, name }),
+    ...json({ name }),
   })
-  if (!res.ok) throw new Error("Failed to rename watchlist")
 }
 
-export async function deleteWatchlist(watchlistId: number): Promise<void> {
-  const res = await fetch("/api/watchlist/manage", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ watchlistId }),
-  })
-  if (!res.ok) throw new Error("Failed to delete watchlist")
+export function deleteWatchlist(watchlistId: number): Promise<void> {
+  return apiSend(`/api/watchlists/${watchlistId}`, { method: "DELETE" })
 }
 
-export async function toggleWatchlistItem(
-  watchlistId: number,
+/**
+ * Membership writes address the member URL directly, so adding and removing
+ * are two methods on one resource rather than one endpoint with an `add` flag.
+ * `watchlistId` accepts DEFAULT_WATCHLIST for the General list.
+ */
+export function addWatchlistItem(
+  watchlistId: number | typeof DEFAULT_WATCHLIST,
   symbol: string,
-  add: boolean
 ): Promise<void> {
-  const res = await fetch("/api/watchlist/lists", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ watchlistId, symbol, add }),
-  })
-  if (!res.ok) throw new Error("Failed to toggle watchlist item")
+  return apiSend(itemUrl(watchlistId, symbol), { method: "PUT" })
+}
+
+export function removeWatchlistItem(
+  watchlistId: number | typeof DEFAULT_WATCHLIST,
+  symbol: string,
+): Promise<void> {
+  return apiSend(itemUrl(watchlistId, symbol), { method: "DELETE" })
+}
+
+function itemUrl(
+  watchlistId: number | typeof DEFAULT_WATCHLIST,
+  symbol: string,
+): string {
+  return `/api/watchlists/${watchlistId}/items/${encodeURIComponent(symbol.toUpperCase())}`
 }

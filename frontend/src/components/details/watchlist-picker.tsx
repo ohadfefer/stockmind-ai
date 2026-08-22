@@ -14,11 +14,12 @@ import { Button } from "@/components/ui/button"
 import { ChevronsUpDown, Loader2, Plus } from "lucide-react"
 import { InlineNameInput } from "@/components/watchlist/inline-name-input"
 import {
-  fetchWatchlists,
-  toggleWatchlistItem,
+  fetchWatchlistsForSymbol,
+  addWatchlistItem,
+  removeWatchlistItem,
   createWatchlist,
-  type WatchlistEntry,
 } from "@/actions/watchlist"
+import type { WatchlistInfo } from "@/types/watchlist"
 
 export function WatchlistPicker({
   symbol,
@@ -27,30 +28,42 @@ export function WatchlistPicker({
   symbol: string
   onFollowingChange: (following: boolean) => void
 }) {
-  const [watchlists, setWatchlists] = useState<WatchlistEntry[]>([])
+  const [watchlists, setWatchlists] = useState<WatchlistInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
 
   useEffect(() => {
-    fetchWatchlists(symbol)
+    fetchWatchlistsForSymbol(symbol)
       .then(setWatchlists)
       .finally(() => setLoading(false))
   }, [symbol])
 
   async function handleToggle(watchlistId: number, currentlyHas: boolean) {
-    setWatchlists((prev) =>
-      prev.map((w) =>
-        w.id === watchlistId ? { ...w, hasSymbol: !currentlyHas } : w
+    const setContains = (value: boolean) =>
+      setWatchlists((prev) =>
+        prev.map((w) => (w.id === watchlistId ? { ...w, containsSymbol: value } : w))
       )
-    )
-    await toggleWatchlistItem(watchlistId, symbol, !currentlyHas)
+
+    setContains(!currentlyHas)
+    try {
+      // Two methods on one member URL rather than one call with an `add` flag,
+      // so the optimistic state above and the request say the same thing.
+      await (currentlyHas
+        ? removeWatchlistItem(watchlistId, symbol)
+        : addWatchlistItem(watchlistId, symbol))
+    } catch {
+      // Put the checkbox back. handleOpenChange reads this same array to tell
+      // the parent whether the symbol is still followed, so leaving a failed
+      // write flipped would propagate the wrong state to FollowButton too.
+      setContains(currentlyHas)
+    }
   }
 
   function handleOpenChange(isOpen: boolean) {
     setOpen(isOpen)
     if (!isOpen) {
-      const stillFollowing = watchlists.some((w) => w.hasSymbol)
+      const stillFollowing = watchlists.some((w) => w.containsSymbol)
       onFollowingChange(stillFollowing)
     }
   }
@@ -74,9 +87,9 @@ export function WatchlistPicker({
           watchlists.map((w) => (
             <DropdownMenuCheckboxItem
               key={w.id}
-              checked={w.hasSymbol}
+              checked={w.containsSymbol ?? false}
               onSelect={(e) => e.preventDefault()}
-              onCheckedChange={() => handleToggle(w.id, w.hasSymbol)}
+              onCheckedChange={() => handleToggle(w.id, w.containsSymbol ?? false)}
             >
               {w.name}
             </DropdownMenuCheckboxItem>
@@ -89,7 +102,7 @@ export function WatchlistPicker({
               placeholder="Watchlist name"
               onSave={async (name) => {
                 const created = await createWatchlist(name)
-                setWatchlists((prev) => [...prev, { id: created.id, name: created.name, hasSymbol: false }])
+                setWatchlists((prev) => [...prev, { id: created.id, name: created.name, itemCount: 0, containsSymbol: false }])
                 setIsCreating(false)
               }}
               onCancel={() => setIsCreating(false)}

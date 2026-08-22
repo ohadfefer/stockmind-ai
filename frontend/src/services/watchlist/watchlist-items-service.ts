@@ -21,6 +21,11 @@ export async function getWatchlistSymbolsById(
   return rows.map((r) => r.symbol as string)
 }
 
+/**
+ * Whether the symbol is in *any* of the user's lists — what the details page
+ * shows on the Follow button. Read directly by the server component; there is
+ * no endpoint for it, because a boolean is not a resource.
+ */
 export async function isFollowing(userId: number, symbol: string): Promise<boolean> {
   const sql = getDb()
   try {
@@ -36,30 +41,48 @@ export async function isFollowing(userId: number, symbol: string): Promise<boole
   }
 }
 
-export async function addToWatchlist(watchlistId: number, symbol: string): Promise<boolean> {
+/**
+ * Adds a symbol to a list this account owns. True when a row was created,
+ * false when it was already there — which is what lets PUT answer 201 vs 204
+ * and take its idempotency from the protocol rather than application code.
+ *
+ * The EXISTS guard scopes the write to the account even though callers check
+ * ownership first: zero rows here is ambiguous (not owned, or already
+ * present), so the route's separate check is what produces the 404, and this
+ * is the backstop that keeps a future caller from writing across accounts.
+ */
+export async function addToWatchlist(
+  watchlistId: number,
+  accountId: number,
+  symbol: string,
+): Promise<boolean> {
   const sql = getDb()
-  try {
-    await sql`
-      INSERT INTO watchlist_items (watchlist_id, symbol)
-      VALUES (${watchlistId}, ${symbol})
-      ON CONFLICT (watchlist_id, symbol) DO NOTHING
-    `
-    return true
-  } catch {
-    return false
-  }
+  const rows = await sql`
+    INSERT INTO watchlist_items (watchlist_id, symbol)
+    SELECT ${watchlistId}, ${symbol}
+    WHERE EXISTS (
+      SELECT 1 FROM watchlists
+      WHERE id = ${watchlistId} AND account_id = ${accountId}
+    )
+    ON CONFLICT (watchlist_id, symbol) DO NOTHING
+    RETURNING id
+  `
+  return rows.length > 0
 }
 
-export async function removeFromWatchlist(watchlistId: number, symbol: string): Promise<boolean> {
+/** Removes a symbol from a list this account owns. A no-op otherwise. */
+export async function removeFromWatchlist(
+  watchlistId: number,
+  accountId: number,
+  symbol: string,
+): Promise<void> {
   const sql = getDb()
-  try {
-    await sql`
-      DELETE FROM watchlist_items
-      WHERE watchlist_id = ${watchlistId} AND symbol = ${symbol}
-    `
-    return true
-  } catch {
-    return false
-  }
+  await sql`
+    DELETE FROM watchlist_items wi
+    USING watchlists w
+    WHERE wi.watchlist_id = w.id
+      AND w.id = ${watchlistId}
+      AND w.account_id = ${accountId}
+      AND wi.symbol = ${symbol}
+  `
 }
-
