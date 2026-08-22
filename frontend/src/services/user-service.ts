@@ -24,6 +24,12 @@ export async function insertUser(
   }
 }
 
+/**
+ * Best-effort lookup: a query failure is indistinguishable from a missing row,
+ * both returning null. Only use this where null genuinely means "skip" — e.g.
+ * proxy.ts's audit logging, which must never break a request. Anything that
+ * turns null into a user-visible status wants findUserIdByAuth0Id instead.
+ */
 export async function getUserIdByAuth0Id(auth0Id: string): Promise<number | null> {
   const sql = getDb()
   try {
@@ -32,6 +38,18 @@ export async function getUserIdByAuth0Id(auth0Id: string): Promise<number | null
   } catch {
     return null
   }
+}
+
+/**
+ * Same lookup, but a database failure throws instead of masquerading as a
+ * missing user. Callers that map null to 403 onboarding_required need this:
+ * swallowing here would tell an onboarded user to re-onboard on a Neon blip,
+ * and the client redirect would strand them on a page that also needs the DB.
+ */
+export async function findUserIdByAuth0Id(auth0Id: string): Promise<number | null> {
+  const sql = getDb()
+  const rows = await sql`SELECT id FROM users WHERE auth0_id = ${auth0Id}`
+  return rows[0]?.id ?? null
 }
 
 export async function isUserOnboarded(auth0Id: string): Promise<boolean> {
