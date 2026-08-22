@@ -4,8 +4,7 @@ import { Fragment, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CreditCard } from "lucide-react"
 import clsx from "clsx"
-import { Button } from "@/components/ui/button"
-import { cancelSubscriptionAtPeriodEnd, startCustomerPortal } from "@/actions/stripe"
+import { cancelSubscriptionAtPeriodEnd } from "@/actions/stripe"
 import type { UserSubscriptionView } from "@/services/stripe/subscription-service"
 import type {
   InvoiceSummary,
@@ -70,21 +69,6 @@ export function SubscriberPlan({
   const [isLoading, setIsLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  async function openPortal() {
-    try {
-      setIsLoading(true)
-      setActionError(null)
-      const { url } = await startCustomerPortal()
-      window.open(url, "_blank", "noopener,noreferrer")
-    } catch (err) {
-      console.error(err)
-      const detail = err instanceof Error ? err.message : "Please try again."
-      setActionError(`Could not open billing portal: ${detail}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   // We don't rethrow — letting the dialog auto-close lets the status banner
   // below render the message. The page is then refreshed so the server
   // component re-fetches subscription state and re-renders the renewal copy
@@ -120,37 +104,27 @@ export function SubscriberPlan({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-base font-semibold text-foreground">Pro plan</p>
-          {intervalLabel && (
-            <p className="text-sm text-foreground">{intervalLabel}</p>
-          )}
-          {renewalText && (
-            <p className="text-sm text-muted-foreground">{renewalText}</p>
-          )}
-        </div>
-        <Button variant="outline" onClick={openPortal} disabled={isLoading}>
-          Adjust plan
-        </Button>
+      <div className="flex flex-col gap-1">
+        <p className="text-base font-semibold text-foreground">Pro plan</p>
+        {intervalLabel && (
+          <p className="text-sm text-foreground">{intervalLabel}</p>
+        )}
+        {renewalText && (
+          <p className="text-sm text-muted-foreground">{renewalText}</p>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 border-t border-border pt-6">
         <h3 className="text-base font-semibold text-foreground">Payment</h3>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-sm text-foreground">
-            <CreditCard className="size-5 text-muted-foreground" />
-            {paymentMethod ? (
-              <span>
-                {formatCardBrand(paymentMethod.brand)} •••• {paymentMethod.last4}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">No card on file</span>
-            )}
-          </div>
-          <Button variant="outline" onClick={openPortal} disabled={isLoading}>
-            Update
-          </Button>
+        <div className="flex items-center gap-3 text-sm text-foreground">
+          <CreditCard className="size-5 text-muted-foreground" />
+          {paymentMethod ? (
+            <span>
+              {formatCardBrand(paymentMethod.brand)} •••• {paymentMethod.last4}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">No card on file</span>
+          )}
         </div>
       </div>
 

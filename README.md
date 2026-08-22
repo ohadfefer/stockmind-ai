@@ -17,7 +17,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - **News feed** — general market news and per-symbol company news.
 - **Account area** — balance, transfer history, and position history snapshots.
 - **Auth** — Auth0 login/signup with an onboarding step that captures the user's full name.
-- **Pro subscriptions** — Stripe-powered Checkout and Customer Portal for upgrading to StockMind Pro and managing billing (cancel, update card, view invoices); webhook-synced subscription state mirrored into Postgres.
+- **Pro subscriptions** — Stripe-powered Checkout for upgrading to StockMind Pro, with a first-party billing page (card on file, invoice history, cancel at period end); webhook-synced subscription state mirrored into Postgres.
 - **Installable PWA** — works as a Progressive Web App: installable to the home screen / desktop and launchable full-screen, with Web Push delivered through a service worker.
 
 ---
@@ -33,7 +33,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 **Backend & Data**
 - [Neon Serverless Postgres](https://neon.tech) via `@neondatabase/serverless`
 - [Auth0](https://auth0.com) via `@auth0/nextjs-auth0` v4
-- [Stripe](https://stripe.com) for subscription billing — Checkout, Customer Portal, and webhooks (`stripe` Node SDK)
+- [Stripe](https://stripe.com) for subscription billing — Checkout and webhooks (`stripe` Node SDK)
 - [Finnhub](https://finnhub.io) for live quotes, profiles, news, and market status
 - [FMP](https://financialmodelingprep.com) (currently gated behind an issue — see `src/app/(main)/dashboard/page.tsx`)
 - [xAI Grok](https://x.ai) (`grok-4-1-fast-reasoning`) via the [Vercel AI SDK](https://sdk.vercel.ai) (`ai` + `@ai-sdk/xai`) for the AI assistant and portfolio review
@@ -146,7 +146,7 @@ stockmind-ai/
         │       ├── details/[symbol]/  # Stock detail page
         │       ├── account/           # Balance, transfers, history
         │       ├── settings/          # User preferences (notifications, payments)
-        │       └── api/               # Route handlers (see API section; includes /api/health, /api/stripe/{checkout,portal,webhook})
+        │       └── api/               # Route handlers (see API section; includes /api/health, /api/stripe/{checkout,cancel,webhook})
         ├── components/
         │   ├── ui/           # shadcn/ui primitives — do not manually edit
         │   ├── dashboard/    # Dashboard widgets
@@ -164,7 +164,7 @@ stockmind-ai/
         │   ├── alerts/       # alerts-service, alert-checker-service, missed-alerts-service
         │   ├── dashboard/    # sector, index, and watchlist aggregates
         │   ├── position/     # position-service, position-history-service
-        │   ├── stripe/       # stripe-service, webhook-service, subscription-service, customer-portal-service
+        │   ├── stripe/       # stripe-service, webhook-service, subscription-service, billing-service, cancellation-service
         │   └── ...           # user, account, order, execution, transfer, stock, watchlist, push-subscription, notification
         ├── hooks/            # Custom React hooks (use-mobile, use-notifications, use-toast)
         ├── lib/              # auth0, db (Neon), finnhub, fmp, redis, format, utils
@@ -326,10 +326,11 @@ After Auth0 signup, the onboarding page calls:
 
 - `GET    /api/portfolio/summary` — running balance, total P&L, today's P&L, holdings with per-position weights.
 - `GET    /api/portfolio/trading-info` — info needed by the trade form.
-- `POST   /api/orders` — create a filled order.
+- `POST   /api/orders` — create a **pending** order (status defaults to `pending`; nothing is settled yet).
   Body: `{ symbol, side: "buy"|"sell", orderType, quantity, averageFillPrice, filledAt }`
-- `DELETE /api/orders` — cancel an order. Body: `{ orderId }`
-- `POST   /api/orders/execute` — record an execution against an existing order.
+- `PATCH  /api/orders` — cancel a pending order. Body: `{ orderId, status: "cancelled" }` (`status` must be `"cancelled"` — no other transition is supported).
+- `POST   /api/orders/execute` — settle a pending order: fills it at the current quote, then writes the execution, cash-ledger, and position rows.
+  Body: `{ orderId }` — the symbol, side, and quantity are read from the order row, not the request body.
 
 ### Transfers
 
@@ -366,7 +367,7 @@ After Auth0 signup, the onboarding page calls:
 ### Subscriptions / Billing
 
 - `POST /api/stripe/checkout` — start a Stripe Checkout session for the Pro plan. Returns `{ url }` to redirect to. Reuses the user's saved `stripe_customer_id` if present so returning subscribers don't get a duplicate Stripe Customer.
-- `POST /api/stripe/portal` — create a Stripe Customer Portal session (self-service card update / cancel / invoice history). Returns `{ url }`. Returns 400 if the user has not subscribed yet.
+- `POST /api/stripe/cancel` — schedule the caller's active subscription to cancel at `current_period_end`. Pro access is preserved until then. Writes `cancel_at_period_end` back locally so the settings page updates without waiting for the webhook echo; idempotent if a cancellation is already scheduled. Returns 400 if there is no active subscription.
 - `POST /api/stripe/webhook` — **Stripe webhook** (no Auth0 session; signature-verified via `STRIPE_WEBHOOK_SECRET`, pinned to the Node runtime to read the raw body). Handles `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`; mirrors state into `subscriptions` and flips `users.subscription_plan` in a single transaction.
 
 #### Local development

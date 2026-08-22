@@ -27,11 +27,10 @@ export interface InvoiceSummary {
 
 // Stripe Checkout (mode: subscription) attaches the card to the Customer and
 // sets it as the Subscription's default_payment_method, but does NOT touch
-// customer.invoice_settings.default_payment_method — that one only gets
-// populated when the user later updates their card via the Customer Portal.
-// So for the common case (a freshly-subscribed user) we have to look on the
-// subscription, then fall back to the customer-level default, then to any
-// attached card.
+// customer.invoice_settings.default_payment_method. With no Customer Portal
+// there's no in-app path that populates the customer-level default either, so
+// in practice the subscription lookup always wins. The remaining two tiers are
+// cheap fallbacks for cards attached out-of-band (e.g. from the Dashboard).
 export async function getDefaultPaymentMethod(
   stripeCustomerId: string,
   stripeSubscriptionId: string | null,

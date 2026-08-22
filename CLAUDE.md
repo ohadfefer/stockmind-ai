@@ -29,7 +29,7 @@ No automated test suite is configured yet.
 - **Database**: Neon Serverless Postgres (`@neondatabase/serverless`), project `misty-bread-61945131`
 - **Market data**: Finnhub (primary — quotes, search, profiles, news) + FMP (some dashboard widgets)
 - **AI**: xAI Grok via the Vercel AI SDK (`ai` + `@ai-sdk/xai`) — assistant + portfolio review
-- **Payments**: Stripe (Checkout, Customer Portal, webhooks) for Pro subscriptions
+- **Payments**: Stripe (Checkout, webhooks) for Pro subscriptions
 - **Jobs / webhooks**: Upstash QStash (signed) drives the alert checker and daily position snapshots
 - **Push**: `web-push` + VAPID keys, delivered through the PWA service worker
 - **Hosting**: Docker → Amazon ECR → ECS Fargate (ARM64) behind an ALB; CI/CD via GitHub Actions on push to `master` (see README → Deployment)
