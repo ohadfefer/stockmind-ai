@@ -52,12 +52,20 @@ export function useNotifications() {
     })
   }, [])
 
-  async function subscribe() {
+  /**
+   * Returns whether push can now be expected to work.
+   *
+   * Callers that act on the outcome — creating an alert, say — must use this
+   * rather than reading Notification.permission afterwards. The browser can
+   * grant permission and the *server* registration still fail, and that gap is
+   * how an alert gets created that can never fire.
+   */
+  async function subscribe(): Promise<boolean> {
     try {
       const permission = await Notification.requestPermission()
       if (permission !== "granted") {
         setStatus("denied")
-        return
+        return false
       }
 
       const registration = await navigator.serviceWorker.register("/sw.js")
@@ -70,8 +78,14 @@ export function useNotifications() {
 
       await subscribePush(subscription)
       setStatus("subscribed")
+      return true
     } catch {
-      setStatus("denied")
+      // "denied" is reserved for an actual browser block, because it drives
+      // copy telling the user to go fix their browser settings. A registration
+      // or network failure is retryable and that advice would be wrong, so it
+      // falls back to "prompt".
+      setStatus(Notification.permission === "denied" ? "denied" : "prompt")
+      return false
     }
   }
 

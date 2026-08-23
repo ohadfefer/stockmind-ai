@@ -1,92 +1,60 @@
-import { auth0 } from "@/lib/auth0"
-import { NextResponse } from "next/server"
-import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account/account-service"
-import { getAlerts, createAlert, deleteAlert, isValidSymbol, type AlertCondition } from "@/services/alerts/alerts-service"
+import { withAccount } from "@/lib/http/with-auth"
+import { created, invalid, unprocessable } from "@/lib/http/problem"
+import { isValidSymbol } from "@/lib/symbol"
+import { createAlert, type AlertCondition } from "@/services/alerts/alerts-service"
 import { getUpcomingEarnings } from "@/services/earnings-service"
 
-const validConditions: AlertCondition[] = ["price_above", "price_below", "earnings", "ai_signal"]
+const ALERT_CONDITIONS: AlertCondition[] = [
+  "price_above",
+  "price_below",
+  "earnings",
+  "ai_signal",
+]
 
-export async function GET() {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-
-  const accountId = await getOrCreateDefaultAccount(userId)
-  const alerts = await getAlerts(accountId)
-
-  return NextResponse.json({ alerts })
+function isAlertCondition(value: unknown): value is AlertCondition {
+  return typeof value === "string" && (ALERT_CONDITIONS as string[]).includes(value)
 }
 
-export async function POST(request: Request) {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+/**
+ * POST only. The alerts list has no GET because no client fetches it: the
+ * table is server-rendered from `getAlerts` in `portfolio-page-data.ts`, and an
+ * endpoint nothing calls is surface to secure and document for no one.
+ */
+export const POST = withAccount(async (request, { accountId }) => {
+  const body = (await request.json().catch(() => null)) as {
+    symbol?: unknown
+    condition?: unknown
+    targetValue?: unknown
+  } | null
 
-  const { symbol, condition, targetValue } = await request.json()
+  if (!isValidSymbol(body?.symbol)) return invalid("Invalid symbol")
+  if (!isAlertCondition(body?.condition)) return invalid("Invalid condition")
 
-  if (!isValidSymbol(symbol)) {
-    return NextResponse.json({ error: "Invalid symbol" }, { status: 400 })
-  }
-  if (!validConditions.includes(condition)) {
-    return NextResponse.json({ error: "Invalid condition" }, { status: 400 })
-  }
-
-  const upperSymbol = symbol.toUpperCase()
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-  const accountId = await getOrCreateDefaultAccount(userId)
+  const symbol = body.symbol.toUpperCase()
+  const condition = body.condition
 
   if (condition === "earnings") {
-    const upcoming = await getUpcomingEarnings(upperSymbol)
+    // 422 rather than 400: the request is well-formed, the symbol just has no
+    // scheduled report to hang an alert on.
+    const upcoming = await getUpcomingEarnings(symbol)
     if (!upcoming) {
-      return NextResponse.json(
-        { error: "No upcoming earnings date found for this symbol" },
-        { status: 422 },
+      return unprocessable(
+        "no_upcoming_earnings",
+        "No upcoming earnings date found for this symbol.",
       )
     }
-    const alert = await createAlert(accountId, upperSymbol, condition, null, upcoming.date)
-    return NextResponse.json(alert, { status: 201 })
+
+    const alert = await createAlert(accountId, symbol, condition, null, upcoming.date)
+    return created(`/api/alerts/${alert.id}`, alert)
   }
 
-  if (typeof targetValue !== "number" || targetValue <= 0) {
-    return NextResponse.json({ error: "targetValue must be a positive number" }, { status: 400 })
+  // Number.isFinite, not just > 0: NaN is a number and NaN <= 0 is false, so a
+  // bare comparison lets it through and Postgres rejects it as a NUMERIC.
+  const { targetValue } = body
+  if (typeof targetValue !== "number" || !Number.isFinite(targetValue) || targetValue <= 0) {
+    return invalid("targetValue must be a positive number")
   }
 
-  const alert = await createAlert(accountId, upperSymbol, condition, targetValue)
-  return NextResponse.json(alert, { status: 201 })
-}
-
-export async function DELETE(request: Request) {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const { alertId } = await request.json()
-  if (typeof alertId !== "number") {
-    return NextResponse.json({ error: "alertId is required" }, { status: 400 })
-  }
-
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-
-  const accountId = await getOrCreateDefaultAccount(userId)
-  const ok = await deleteAlert(accountId, alertId)
-  if (!ok) {
-    return NextResponse.json({ error: "Alert not found" }, { status: 404 })
-  }
-
-  return NextResponse.json({ deleted: true })
-}
+  const alert = await createAlert(accountId, symbol, condition, targetValue)
+  return created(`/api/alerts/${alert.id}`, alert)
+})

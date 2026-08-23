@@ -41,6 +41,18 @@ export interface ApiRequestInit extends RequestInit {
    * (e.g. 404 from GET /api/push-subscriptions/{id} meaning "not registered").
    */
   allowStatus?: number[]
+  /**
+   * Whether an auth failure may navigate the browser. Defaults to true, which
+   * is right for anything the user just clicked: they asked for something, and
+   * being sent to log in is a coherent answer.
+   *
+   * Set false for background work — polls, timers, prefetches. A 60s interval
+   * that redirects on expiry yanks the page out from under whatever the user
+   * is actually doing and discards unsent input. Those callers should observe
+   * the expiry (the ApiError is still thrown) and let the next deliberate
+   * action be what routes to login.
+   */
+  redirectOnAuthFailure?: boolean
 }
 
 function redirectTo(path: string) {
@@ -75,14 +87,14 @@ export async function apiRequest(
   path: string,
   init: ApiRequestInit = {},
 ): Promise<Response> {
-  const { allowStatus = [], ...requestInit } = init
+  const { allowStatus = [], redirectOnAuthFailure = true, ...requestInit } = init
   const res = await fetch(path, requestInit)
 
   if (res.ok) {
     // A 2xx that isn't JSON means the proxy bounced us to an HTML page.
     const contentType = res.headers.get("content-type") ?? ""
     if (res.status !== 204 && contentType.includes("text/html")) {
-      redirectTo("/auth/login")
+      if (redirectOnAuthFailure) redirectTo("/auth/login")
       throw new ApiError(401, "unauthenticated", "Session expired")
     }
     return res
@@ -92,10 +104,14 @@ export async function apiRequest(
 
   const error = await toApiError(res)
 
-  if (error.status === 401) {
-    redirectTo("/auth/login")
-  } else if (error.status === 403 && error.code === "onboarding_required") {
-    redirectTo("/onboarding")
+  // Both branches are auth failures, so one flag gates both: a background
+  // caller that must not navigate must not navigate to /onboarding either.
+  if (redirectOnAuthFailure) {
+    if (error.status === 401) {
+      redirectTo("/auth/login")
+    } else if (error.status === 403 && error.code === "onboarding_required") {
+      redirectTo("/onboarding")
+    }
   }
 
   throw error

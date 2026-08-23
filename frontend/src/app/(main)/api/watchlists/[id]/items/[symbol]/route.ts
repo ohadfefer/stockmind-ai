@@ -1,12 +1,11 @@
 import { withAccount } from "@/lib/http/with-auth"
 import { created, invalid, noContent, notFound } from "@/lib/http/problem"
+import { SYMBOL_RE } from "@/lib/symbol"
 import { resolveWatchlistId } from "@/services/watchlist/watchlist-crud-service"
 import {
   addToWatchlist,
   removeFromWatchlist,
 } from "@/services/watchlist/watchlist-items-service"
-
-const SYMBOL_RE = /^[A-Z][A-Z0-9.-]{0,9}$/
 
 type Params = { id: string; symbol: string }
 

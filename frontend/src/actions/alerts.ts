@@ -1,55 +1,70 @@
+import { ApiError, apiFetch, apiRequest, apiSend, json } from "@/actions/http"
 import type { StockAlert } from "@/services/alerts/alerts-service"
 import type { MissedAlert } from "@/services/alerts/missed-alerts-service"
 import type { UpcomingEarnings } from "@/services/earnings-service"
 
-export async function fetchAlerts(): Promise<StockAlert[]> {
-  const res = await fetch("/api/alerts")
-  if (!res.ok) throw new Error("Failed to fetch alerts")
-  const data = await res.json()
-  return data.alerts
-}
-
-export async function createAlert(
+export function createAlert(
   symbol: string,
   condition: string,
   targetValue: number | null,
-) {
-  const res = await fetch("/api/alerts", {
+): Promise<StockAlert> {
+  return apiFetch<StockAlert>("/api/alerts", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ symbol, condition, targetValue }),
+    ...json({ symbol, condition, targetValue }),
   })
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error(data.error ?? "Failed to create alert")
+}
+
+export function deleteAlert(alertId: number): Promise<void> {
+  return apiSend(`/api/alerts/${alertId}`, { method: "DELETE" })
+}
+
+/**
+ * 404 is an answer here, not a failure: a symbol with no scheduled report has
+ * no upcoming-earnings resource, and the dialog renders that as a note rather
+ * than an error. Anything else still throws.
+ *
+ * Only *our* 404 counts. Next answers an unrouted path with a 404 too, so a
+ * renamed or moved endpoint would otherwise read as "no earnings scheduled"
+ * for every symbol, forever, with nothing logged. The problem+json content
+ * type is what separates a real answer from a routing mistake.
+ */
+export async function fetchUpcomingEarnings(
+  symbol: string,
+): Promise<UpcomingEarnings | null> {
+  const res = await apiRequest(
+    `/api/stocks/upcoming-earnings?symbol=${encodeURIComponent(symbol)}`,
+    { allowStatus: [404] },
+  )
+
+  if (res.status === 404) {
+    const contentType = res.headers.get("content-type") ?? ""
+    if (!contentType.includes("application/problem+json")) {
+      throw new ApiError(
+        404,
+        "route_missing",
+        "Endpoint not found",
+        "/api/stocks/upcoming-earnings did not answer with problem+json",
+      )
+    }
+    return null
   }
-  return res.json()
+
+  return (await res.json()) as UpcomingEarnings
 }
 
-export async function fetchUpcomingEarnings(symbol: string): Promise<UpcomingEarnings | null> {
-  const res = await fetch(`/api/alerts/upcoming-earnings?symbol=${encodeURIComponent(symbol)}`)
-  if (!res.ok) throw new Error("Failed to fetch upcoming earnings")
-  const data = await res.json()
-  return data.upcoming
-}
-
-export async function deleteAlertAction(alertId: number): Promise<void> {
-  const res = await fetch("/api/alerts", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ alertId }),
+/**
+ * Polled on a 60s interval from the header, so it runs on every page. It must
+ * not redirect on an expired session: the caller is a timer, not the user, and
+ * navigating away would discard whatever they were in the middle of. The
+ * ApiError still throws; the component swallows it and tries again next tick.
+ */
+export function fetchMissedAlerts(): Promise<MissedAlert[]> {
+  return apiFetch<MissedAlert[]>("/api/missed-alerts", {
+    redirectOnAuthFailure: false,
   })
-  if (!res.ok) throw new Error("Failed to delete alert")
 }
 
-export async function fetchMissedAlerts(): Promise<MissedAlert[]> {
-  const res = await fetch("/api/alerts/missed")
-  if (!res.ok) throw new Error("Failed to fetch missed alerts")
-  const data = await res.json()
-  return data.alerts
-}
-
-export async function dismissMissedAlerts(): Promise<void> {
-  const res = await fetch("/api/alerts/missed", { method: "DELETE" })
-  if (!res.ok) throw new Error("Failed to dismiss missed alerts")
+/** Emptying the collection is the dismissal — there is no per-alert read flag. */
+export function dismissMissedAlerts(): Promise<void> {
+  return apiSend("/api/missed-alerts", { method: "DELETE" })
 }

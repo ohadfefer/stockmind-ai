@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { createAlert, fetchUpcomingEarnings } from "@/actions/alerts"
+import { ApiError } from "@/actions/http"
 import { useNotifications } from "@/hooks/use-notifications"
 import { describeEarningsHour, type UpcomingEarnings } from "@/services/earnings-service"
 import { parseIsoDateLocal } from "@/lib/utils"
@@ -49,6 +50,7 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   const [earnings, setEarnings] = useState<UpcomingEarnings | null>(null)
   const [earningsLoading, setEarningsLoading] = useState(false)
   const [earningsError, setEarningsError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const { status: notifStatus, subscribe } = useNotifications()
 
   function handleOpenChange(next: boolean) {
@@ -58,6 +60,7 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
       setTargetValue("")
       setEarnings(null)
       setEarningsError(null)
+      setSubmitError(null)
     }
   }
 
@@ -101,15 +104,35 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   function handleSubmit() {
     if (!condition) return
     if (condition !== "earnings" && !targetValue) return
+    setSubmitError(null)
     startTransition(async () => {
       if (notifStatus !== "subscribed") {
-        await subscribe()
-        // After subscribe(), if permission was denied the status stays non-subscribed.
-        // We check Notification.permission directly since hook state may not have updated yet.
-        if (Notification.permission !== "granted") return
+        // The boolean, not Notification.permission: the browser can grant
+        // permission while the server-side registration fails, and creating the
+        // alert then would leave one that silently never fires.
+        const subscribed = await subscribe()
+        if (!subscribed) {
+          setSubmitError(
+            Notification.permission === "granted"
+              ? "Couldn't turn on notifications. Please try again."
+              : "Allow notifications in your browser to receive this alert.",
+          )
+          return
+        }
       }
       const value = condition === "earnings" ? null : Number(targetValue)
-      await createAlert(symbol, condition, value)
+      try {
+        await createAlert(symbol, condition, value)
+      } catch (err) {
+        // problem+json detail is written to be shown; anything else is either a
+        // network failure or a shape we don't recognise, so it gets generic copy.
+        setSubmitError(
+          err instanceof ApiError
+            ? err.message
+            : "Couldn't create the alert. Please try again.",
+        )
+        return
+      }
       handleOpenChange(false)
     })
   }
@@ -218,6 +241,8 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
             Enable notifications in your browser settings to receive alerts.
           </p>
         )}
+
+        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 
         <DialogFooter>
           <Button

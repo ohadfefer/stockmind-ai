@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ConfirmDelete } from "@/components/ui/confirm-delete"
-import { deleteAlertAction } from "@/actions/alerts"
+import { deleteAlert } from "@/actions/alerts"
 import type { StockAlert, AlertCondition, AlertStatus } from "@/services/alerts/alerts-service"
 import { parseIsoDateLocal } from "@/lib/utils"
 
@@ -110,7 +110,7 @@ export function AlertsTab({ alertsPromise }: AlertsTabProps) {
   async function handleDelete(alertId: number) {
     setRemovedIds((prev) => new Set(prev).add(alertId))
     try {
-      await deleteAlertAction(alertId)
+      await deleteAlert(alertId)
       router.refresh()
     } catch {
       setRemovedIds((prev) => {

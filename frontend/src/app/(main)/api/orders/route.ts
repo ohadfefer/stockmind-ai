@@ -5,6 +5,7 @@ import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import { createOrder, cancelOrder } from "@/services/order-service"
 import { logAudit } from "@/services/audit-log-service"
 import { getClientIp } from "@/lib/request-ip"
+import { SYMBOL_RE } from "@/lib/symbol"
 
 /** Mirrors the order_type CHECK constraint in migration 004. */
 const ORDER_TYPES = ["market", "limit", "stop", "stop_limit"]
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   // with a session cookie. A negative quantity in particular inverts the cash
   // sign in recordTradeSettlement and credits the account.
   const normalizedSymbol = String(symbol).trim().toUpperCase()
-  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(normalizedSymbol)) {
+  if (!SYMBOL_RE.test(normalizedSymbol)) {
     return NextResponse.json({ error: "Invalid symbol" }, { status: 400 })
   }
 

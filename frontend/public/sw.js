@@ -8,8 +8,12 @@ self.addEventListener("push", (event) => {
   const title = data.title ?? "StockMind Alert"
   const options = {
     body: data.body ?? "",
-    icon: "/icon-dark-32x32.png",
-    badge: "/icon-dark-32x32.png",
+    // The StockMind mark on its dark plate — legible on light and dark alike.
+    icon: "/icons/notification-icon-32x32.png",
+    // Android masks the badge by alpha and ignores colour, so this one is the
+    // mark alone on transparency: the icon's opaque plate would mask to a
+    // solid square with the bull invisible inside it.
+    badge: "/icons/notification-badge-32x32.png",
     data: { url: data.url },
   }
 
