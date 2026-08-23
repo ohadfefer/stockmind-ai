@@ -120,11 +120,22 @@ export async function claimPendingOrder(
   }
 }
 
-export async function cancelOrder(orderId: number, accountId: number): Promise<void> {
+/**
+ * Cancels a pending order, reporting whether it actually cancelled one.
+ *
+ * False covers every miss the same way — no such id, another account's order,
+ * or one that already filled or cancelled — because distinguishing them would
+ * turn the endpoint into an existence oracle. It used to return void, so the
+ * route answered `{ success: true }` even when the UPDATE matched nothing and
+ * a cancel raced against a fill looked like it had worked.
+ */
+export async function cancelOrder(orderId: number, accountId: number): Promise<boolean> {
   const sql = getDb()
-  await sql`
+  const rows = await sql`
     UPDATE orders
     SET status = 'cancelled', cancelled_at = NOW()
     WHERE id = ${orderId} AND account_id = ${accountId} AND status = 'pending'
+    RETURNING id
   `
+  return rows.length > 0
 }

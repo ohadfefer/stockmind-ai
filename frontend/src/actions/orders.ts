@@ -1,3 +1,5 @@
+import { apiFetch, apiSend, json } from "@/actions/http"
+
 export interface SubmitOrderParams {
   symbol: string
   side: "buy" | "sell"
@@ -7,38 +9,30 @@ export interface SubmitOrderParams {
   filledAt: string
 }
 
-export async function submitOrder(params: SubmitOrderParams): Promise<{ orderId: number }> {
-  const res = await fetch("/api/orders", {
+export function submitOrder(params: SubmitOrderParams): Promise<{ id: number }> {
+  return apiFetch<{ id: number }>("/api/orders", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+    ...json(params),
   })
-  if (!res.ok) throw new Error("Failed to submit order")
-  return res.json()
 }
 
-export interface ExecuteOrderParams {
-  orderId: number
-  symbol: string
-  side: "buy" | "sell"
-  quantity: number
-}
-
-export async function cancelOrder(orderId: number): Promise<void> {
-  const res = await fetch("/api/orders", {
+/**
+ * Cancellation is a status transition on the order, not a delete — the row
+ * stays and lands in a terminal state. A 409 here means it stopped being
+ * pending, which in practice means it filled first.
+ */
+export function cancelOrder(orderId: number): Promise<void> {
+  return apiSend(`/api/orders/${orderId}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orderId, status: "cancelled" }),
+    ...json({ status: "cancelled" }),
   })
-  if (!res.ok) throw new Error("Failed to cancel order")
 }
 
-export async function executeOrder(params: ExecuteOrderParams): Promise<{ executionId: number }> {
-  const res = await fetch("/api/orders/execute", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  })
-  if (!res.ok) throw new Error("Failed to execute order")
-  return res.json()
+/**
+ * Settling the order creates an execution under it. The id is the whole
+ * request — symbol, side and quantity used to ride along in the body and were
+ * never read, since the server takes those from the order row.
+ */
+export function executeOrder(orderId: number): Promise<void> {
+  return apiSend(`/api/orders/${orderId}/executions`, { method: "POST" })
 }

@@ -5,21 +5,14 @@ import { useRouter } from "next/navigation"
 import { Play, Loader2 } from "lucide-react"
 import { executeOrder } from "@/actions/orders"
 
-interface ExecuteOrderButtonProps {
-  orderId: number
-  symbol: string
-  side: "buy" | "sell"
-  quantity: number
-}
-
-export function ExecuteOrderButton({ orderId, symbol, side, quantity }: ExecuteOrderButtonProps) {
+export function ExecuteOrderButton({ orderId }: { orderId: number }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
   async function handleExecute() {
     setLoading(true)
     try {
-      await executeOrder({ orderId, symbol, side, quantity })
+      await executeOrder(orderId)
       router.refresh()
     } catch {
       setLoading(false)

@@ -96,12 +96,7 @@ export default async function OrdersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-2">
-                      <ExecuteOrderButton
-                        orderId={order.id}
-                        symbol={order.symbol}
-                        side={order.side as "buy" | "sell"}
-                        quantity={Number(order.quantity)}
-                      />
+                      <ExecuteOrderButton orderId={order.id} />
                       <CancelOrderButton orderId={order.id} />
                     </div>
                   </td>
@@ -157,12 +152,7 @@ export default async function OrdersPage() {
               </div>
 
               <div className="flex items-center gap-2 border-t border-border pt-3">
-                <ExecuteOrderButton
-                  orderId={order.id}
-                  symbol={order.symbol}
-                  side={order.side as "buy" | "sell"}
-                  quantity={Number(order.quantity)}
-                />
+                <ExecuteOrderButton orderId={order.id} />
                 <CancelOrderButton orderId={order.id} />
               </div>
             </MobileDataCard>
