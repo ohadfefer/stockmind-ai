@@ -3,6 +3,22 @@ import { appendLedgerEntry } from "@/services/cash-ledger-service"
 
 export type TransferDirection = "deposit" | "withdrawal"
 export type TransferMethod = "bank_transfer" | "wire" | "internal"
+export type TransferStatus = "pending" | "completed" | "failed" | "reversed"
+
+/** Mirror the CHECK constraints in migration 008, for route-level validation. */
+export const TRANSFER_DIRECTIONS: readonly TransferDirection[] = ["deposit", "withdrawal"]
+export const TRANSFER_METHODS: readonly TransferMethod[] = ["bank_transfer", "wire", "internal"]
+
+export interface Transfer {
+  id: number
+  direction: TransferDirection
+  amount: number
+  method: TransferMethod
+  status: TransferStatus
+  description: string | null
+  initiatedAt: string
+  completedAt: string | null
+}
 
 export const TRANSFER_COOLDOWN_HOURS = 72
 
@@ -25,6 +41,10 @@ interface CreateTransferParams {
  * Excludes failed/reversed transfers so a user isn't penalized for a system
  * failure. The check is anchored to initiated_at because the ledger entry
  * isn't written until resolveTransfer runs ~10s later.
+ *
+ * Descriptive only — this is what the UI and the 429 body report, not what
+ * stops a second transfer. Enforcement lives inside createTransfer's INSERT,
+ * because anything read here is stale by the time the caller acts on it.
  */
 export async function getTransferCooldown(accountId: number): Promise<TransferCooldown> {
   const sql = getDb()
@@ -50,14 +70,81 @@ export async function getTransferCooldown(accountId: number): Promise<TransferCo
   }
 }
 
-export async function createTransfer(params: CreateTransferParams): Promise<number> {
+/**
+ * Inserts the transfer, or returns null if the account is inside its cooldown.
+ *
+ * The gate is part of the INSERT rather than a SELECT the caller runs first.
+ * The two-statement version was a check-then-act across a network round trip:
+ * two concurrent POSTs both read a clear cooldown, both passed, and both
+ * inserted, so the 72h limit only ever bound a serial caller. As one statement
+ * the second request sees the first's row through NOT EXISTS and writes
+ * nothing.
+ *
+ * The predicate mirrors getTransferCooldown exactly — same status filter, same
+ * window — because the two must agree on what "in cooldown" means. This one is
+ * the enforcement point; that one is now only descriptive.
+ *
+ * The window is multiplied out rather than interpolated into an INTERVAL
+ * literal: a parameter inside quotes is not a parameter. Every parameter is
+ * cast explicitly because INSERT ... SELECT does not infer parameter types
+ * from the target columns the way INSERT ... VALUES does — an uncast $n in a
+ * SELECT list resolves to text, and text into NUMERIC is not a cast Postgres
+ * will make on its own. idx_transfers_account_initiated (migration 020)
+ * supports the predicate; status still needs the heap, so it is not an
+ * index-only scan.
+ */
+export async function createTransfer(params: CreateTransferParams): Promise<number | null> {
   const sql = getDb()
   const rows = await sql`
     INSERT INTO transfers (account_id, direction, amount, method, description)
-    VALUES (${params.accountId}, ${params.direction}, ${params.amount}, ${params.method}, ${params.description ?? null})
+    SELECT ${params.accountId}::int, ${params.direction}::text, ${params.amount}::numeric,
+           ${params.method}::text, ${params.description ?? null}::text
+    WHERE NOT EXISTS (
+      SELECT 1 FROM transfers
+      WHERE account_id = ${params.accountId}
+        AND status IN ('pending', 'completed')
+        AND initiated_at > NOW() - (${TRANSFER_COOLDOWN_HOURS}::int * INTERVAL '1 hour')
+    )
     RETURNING id
   `
-  return rows[0].id as number
+  return (rows[0]?.id as number | undefined) ?? null
+}
+
+/**
+ * One transfer, scoped to the account that owns it.
+ *
+ * Scoping in the WHERE clause rather than comparing account_id afterwards is
+ * what collapses "not yours" into the same null as "not there", so the 404 the
+ * route returns can't be used to probe which transfer ids exist.
+ *
+ * amount is NUMERIC, which the driver hands back as a string to preserve
+ * precision. Number() here keeps the JSON shape consistent with every other
+ * money field the API returns — the same split that createAlert had to fix in
+ * step 2, caught before it shipped this time.
+ */
+export async function getTransfer(
+  transferId: number,
+  accountId: number,
+): Promise<Transfer | null> {
+  const sql = getDb()
+  const rows = await sql`
+    SELECT id, direction, amount, method, status, description, initiated_at, completed_at
+    FROM transfers
+    WHERE id = ${transferId} AND account_id = ${accountId}
+  `
+  if (rows.length === 0) return null
+
+  const row = rows[0]
+  return {
+    id: row.id as number,
+    direction: row.direction as TransferDirection,
+    amount: Number(row.amount),
+    method: row.method as TransferMethod,
+    status: row.status as TransferStatus,
+    description: (row.description as string | null) ?? null,
+    initiatedAt: (row.initiated_at as Date).toISOString(),
+    completedAt: row.completed_at ? (row.completed_at as Date).toISOString() : null,
+  }
 }
 
 export async function resolveTransfer(transferId: number): Promise<void> {

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import {
+  fetchTransfer,
   fetchTransferCooldown,
   submitTransfer,
   TransferCooldownError,
@@ -30,6 +31,19 @@ import {
 
 type TransferDirection = "deposit" | "withdrawal"
 type TransferMethod = "bank_transfer" | "wire" | "internal"
+
+/**
+ * The server resolves a transfer ~10s after accepting it. Polling the 202's
+ * Location every 1.5s closes the dialog when the transfer actually reaches a
+ * terminal state instead of after a fixed wait, and the deadline is the
+ * backstop for the case that made the old fixed wait a guess: resolveTransfer
+ * runs in an in-process setTimeout, so a task restart drops it and the
+ * transfer stays pending forever.
+ */
+const POLL_INTERVAL_MS = 1_500
+const POLL_DEADLINE_MS = 20_000
+
+type Settlement = "settled" | "timed_out" | "cancelled"
 
 interface AccountTransferProps {
   currency: string
@@ -65,7 +79,8 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
   const [isPending, setIsPending] = useState(false)
   const [nextAllowedAt, setNextAllowedAt] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [settlementWarning, setSettlementWarning] = useState(false)
+  const unmountedRef = useRef(false)
 
   const symbol = currency === "USD" ? "$" : currency
   const nextAllowedMs = nextAllowedAt ? new Date(nextAllowedAt).getTime() : 0
@@ -83,8 +98,14 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
     return () => window.removeEventListener("beforeunload", handler)
   }, [isPending])
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current)
+  // Reset on mount as well as setting on unmount: StrictMode mounts, unmounts
+  // and remounts in dev, and a ref that only ever flips to true would leave the
+  // second mount unable to poll at all.
+  useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
+    }
   }, [])
 
   // Load the cooldown state on mount so the button reflects server truth.
@@ -110,34 +131,80 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
     return () => clearInterval(id)
   }, [cooldownActive])
 
+  /**
+   * Resolves once the transfer leaves "pending", or once the deadline passes.
+   * A failed poll is swallowed rather than ending the wait: a dropped request
+   * mid-settlement says nothing about the transfer, and giving up on it would
+   * close the dialog while the money is still in flight.
+   *
+   * Returns the outcome rather than void. "timed_out" is a real answer, not an
+   * absence of one — the transfer was still pending on the last poll that got
+   * through, which is what happens when resolveTransfer's in-process timer is
+   * lost to a task restart. Discarding that would put the user back where the
+   * old fixed 11s wait left them: a dialog that closes and a balance that
+   * silently did not move.
+   */
+  async function waitForSettlement(transferId: number): Promise<Settlement> {
+    const deadline = Date.now() + POLL_DEADLINE_MS
+
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      if (unmountedRef.current) return "cancelled"
+
+      try {
+        const transfer = await fetchTransfer(transferId)
+        if (transfer.status !== "pending") return "settled"
+      } catch {
+        // Transient — keep polling until the deadline.
+      }
+      if (unmountedRef.current) return "cancelled"
+    }
+
+    return "timed_out"
+  }
+
   async function handleSubmit() {
     const parsed = parseFloat(amount)
     if (!parsed || parsed <= 0) return
 
     setSubmitting(true)
+    setSettlementWarning(false)
+    let transferId: number
     try {
-      await submitTransfer({ direction, amount: parsed, method, description: description || undefined })
+      const transfer = await submitTransfer({
+        direction,
+        amount: parsed,
+        method,
+        description: description || undefined,
+      })
+      transferId = transfer.id
       setAmount("")
       setDescription("")
       setIsPending(true)
       // Optimistically lock the next-transfer window so the UI matches the
       // server's 72h gate without waiting for the cooldown re-fetch.
       setNextAllowedAt(new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString())
-      timerRef.current = setTimeout(() => {
-        setIsPending(false)
-        fetchTransferCooldown()
-          .then((c) => setNextAllowedAt(c.nextAllowedAt))
-          .catch(() => {})
-        router.refresh()
-      }, 11_000)
     } catch (err) {
       if (err instanceof TransferCooldownError) {
         setNextAllowedAt(err.nextAllowedAt)
       }
       // TODO: toast error
+      return
     } finally {
       setSubmitting(false)
     }
+
+    const outcome = await waitForSettlement(transferId)
+    // Still the ref, not outcome === "cancelled": the component can unmount
+    // during the final in-flight poll, after the loop's last check.
+    if (unmountedRef.current) return
+
+    setIsPending(false)
+    setSettlementWarning(outcome === "timed_out")
+    fetchTransferCooldown()
+      .then((c) => setNextAllowedAt(c.nextAllowedAt))
+      .catch(() => {})
+    router.refresh()
   }
 
   return (
@@ -261,6 +328,12 @@ export function AccountTransfer({ currency }: AccountTransferProps) {
               ? `Available in ${formatCooldownRemaining(cooldownRemainingMs)}`
               : `${direction === "deposit" ? "Deposit" : "Withdraw"} Funds`}
           </Button>
+          {settlementWarning && (
+            <p className="text-center text-xs text-amber-600 dark:text-amber-500">
+              Your {direction} is taking longer than usual. It will appear in
+              your balance once it clears.
+            </p>
+          )}
           {cooldownActive && nextAllowedAt && (
             <p className="text-center text-xs text-muted-foreground">
               Transfers are limited to one every 72 hours. Next transfer

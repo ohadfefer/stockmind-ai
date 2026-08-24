@@ -1,63 +1,94 @@
-import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
-import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account/account-service"
+import { withAccount } from "@/lib/http/with-auth"
+import { invalid, problem } from "@/lib/http/problem"
 import {
   createTransfer,
   getTransferCooldown,
   resolveTransfer,
+  TRANSFER_DIRECTIONS,
+  TRANSFER_METHODS,
+  type TransferDirection,
+  type TransferMethod,
 } from "@/services/transfer-service"
 import { logAudit } from "@/services/audit-log-service"
 import { getClientIp } from "@/lib/request-ip"
 
-export async function POST(request: Request) {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+/**
+ * 202, not 201: the transfer exists the moment this returns, but it is
+ * `pending` and the money has not moved. resolveTransfer runs ~10s later and
+ * writes the ledger entry. Location points at the transfer so the client can
+ * poll it to the terminal state instead of guessing at a fixed delay, which is
+ * exactly the status monitor RFC 9110 §15.3.3 asks a 202 to provide.
+ */
+export const POST = withAccount(async (request, { userId, accountId }) => {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return invalid("Body must be a JSON object")
 
-  const body = await request.json()
   const { direction, amount, method, description } = body
 
-  if (!direction || !amount || !method) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+  // direction and method land in columns with CHECK constraints (migration
+  // 008). Unvalidated, a bad value reaches Postgres as a constraint violation,
+  // which the withAccount guard turns into an opaque 500 rather than naming
+  // the field the caller got wrong.
+  if (!TRANSFER_DIRECTIONS.includes(direction as TransferDirection)) {
+    return invalid(`direction must be one of: ${TRANSFER_DIRECTIONS.join(", ")}`)
   }
 
-  if (Number(amount) <= 0) {
-    return NextResponse.json({ error: "Amount must be positive" }, { status: 400 })
+  if (!TRANSFER_METHODS.includes(method as TransferMethod)) {
+    return invalid(`method must be one of: ${TRANSFER_METHODS.join(", ")}`)
   }
 
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
+  // Number.isFinite, not `> 0` alone: Number("abc") is NaN, and every
+  // comparison against NaN is false, so a non-numeric amount slipped past the
+  // old `Number(amount) <= 0` check straight into a NUMERIC column. Same bug
+  // targetValue had on /api/alerts before step 2.
+  const parsedAmount = Number(amount)
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    return invalid("amount must be a positive number")
   }
 
-  const accountId = await getOrCreateDefaultAccount(userId)
-
-  const cooldown = await getTransferCooldown(accountId)
-  if (cooldown.remainingMs > 0) {
-    return NextResponse.json(
-      {
-        error: "Transfer cooldown active",
-        nextAllowedAt: cooldown.nextAllowedAt,
-        remainingMs: cooldown.remainingMs,
-      },
-      { status: 429 },
-    )
+  if (description !== undefined && description !== null && typeof description !== "string") {
+    return invalid("description must be a string")
   }
 
+  // No cooldown pre-check: createTransfer applies the window inside its INSERT,
+  // so the gate and the write are one statement. Reading it here first and
+  // acting on the result was a check-then-act across a round trip — two
+  // concurrent posts both saw a clear cooldown and both got a transfer.
   const transferId = await createTransfer({
     accountId,
-    direction,
-    amount: Number(amount),
-    method,
+    direction: direction as TransferDirection,
+    amount: parsedAmount,
+    method: method as TransferMethod,
     description: description || undefined,
   })
+
+  if (transferId === null) {
+    // Only reachable when the INSERT's gate rejected the row, so this read is
+    // purely to describe the state — it cannot let a transfer through however
+    // stale it is. nextAllowedAt and remainingMs ride along as RFC 9457
+    // extension members rather than a bespoke body, so the shape stays
+    // problem+json and TransferCooldownError still reads both off
+    // ApiError.extra.
+    const cooldown = await getTransferCooldown(accountId)
+    return problem(
+      429,
+      "transfer_cooldown_active",
+      "Transfer cooldown active",
+      "Only one transfer is allowed every 72 hours.",
+      { nextAllowedAt: cooldown.nextAllowedAt, remainingMs: cooldown.remainingMs },
+    )
+  }
 
   const ipAddress = getClientIp(request)
   const initiatedAction = direction === "deposit" ? "deposit_initiated" : "withdrawal_initiated"
   const completedAction = direction === "deposit" ? "deposit_completed" : "withdrawal_completed"
-  const auditDetails = { transferId, amount: Number(amount), method, description: description || null }
+  const auditDetails = {
+    transferId,
+    amount: parsedAmount,
+    method,
+    description: description || null,
+  }
 
   await logAudit({
     userId,
@@ -83,5 +114,8 @@ export async function POST(request: Request) {
     }
   }, 10_000)
 
-  return NextResponse.json({ transferId })
-}
+  return NextResponse.json(
+    { id: transferId, status: "pending" },
+    { status: 202, headers: { Location: `/api/transfers/${transferId}` } },
+  )
+})

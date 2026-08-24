@@ -56,11 +56,36 @@ type WrappedHandler<P> = (
 ) => Promise<Response>
 
 /**
+ * Path segments long enough to be an opaque token are replaced before logging.
+ *
+ * The push subscription id is base64url of the endpoint — ~360 characters that
+ * decode straight back to a live device capability — and it lives in the path,
+ * so logging the path verbatim would put it in CloudWatch. Dropping the query
+ * string alone used to be enough, back when that endpoint arrived as
+ * ?endpoint=; it stopped being enough the moment the resource became
+ * addressable.
+ *
+ * A length rule rather than a list of sensitive routes: a list has to be
+ * updated by whoever adds the next identifier-bearing path, and forgetting is
+ * silent. Every id this app actually puts in a path is short — integers and
+ * ticker symbols — so they stay legible for debugging, and anything long
+ * enough to be a token is redacted whether or not someone thought about it.
+ */
+const MAX_LOGGABLE_SEGMENT = 64
+
+function redactPath(pathname: string): string {
+  return pathname
+    .split("/")
+    .map((segment) => (segment.length > MAX_LOGGABLE_SEGMENT ? "<redacted>" : segment))
+    .join("/")
+}
+
+/**
  * Runs a resolve-then-handle thunk, converting anything it throws into a
- * generic 500. Only the path is logged, never the full URL: identifiers live
- * in the path and query string — the Web Push endpoint most of all — and those
- * do not belong in CloudWatch. The error itself is logged and never returned,
- * because raw Postgres errors name constraints and leak the schema.
+ * generic 500. Only the path is logged, never the full URL, and identifier-
+ * shaped segments are redacted out of it — see redactPath. The error itself is
+ * logged and never returned, because raw Postgres errors name constraints and
+ * leak the schema.
  */
 async function guard(
   label: string,
@@ -71,7 +96,7 @@ async function guard(
     return await produce()
   } catch (err) {
     const { pathname } = new URL(request.url)
-    console.error(`[${label}] ${request.method} ${pathname} failed:`, err)
+    console.error(`[${label}] ${request.method} ${redactPath(pathname)} failed:`, err)
     return internal()
   }
 }

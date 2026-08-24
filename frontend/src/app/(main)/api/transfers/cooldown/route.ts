@@ -1,21 +1,23 @@
-import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
-import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account/account-service"
+import { withUser } from "@/lib/http/with-auth"
+import { getDefaultAccountId } from "@/services/account/account-service"
 import { getTransferCooldown } from "@/services/transfer-service"
 
-export async function GET() {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+/**
+ * Stays a sub-resource of the collection rather than moving under {id}: the
+ * cooldown is a property of the account's transfer history, not of any one
+ * transfer. Next matches literal segments before dynamic ones, so this keeps
+ * winning over [id] and "cooldown" never reaches that handler.
+ *
+ * withUser + getDefaultAccountId, not withAccount — this is a read fired on
+ * mount of the account panel, and getOrCreateDefaultAccount writes. An account
+ * that doesn't exist has made no transfers, so its cooldown is the zero state.
+ */
+export const GET = withUser(async (_request, { userId }) => {
+  const accountId = await getDefaultAccountId(userId)
+  if (accountId === null) {
+    return NextResponse.json({ lastInitiatedAt: null, nextAllowedAt: null, remainingMs: 0 })
   }
 
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-
-  const accountId = await getOrCreateDefaultAccount(userId)
-  const cooldown = await getTransferCooldown(accountId)
-  return NextResponse.json(cooldown)
-}
+  return NextResponse.json(await getTransferCooldown(accountId))
+})
