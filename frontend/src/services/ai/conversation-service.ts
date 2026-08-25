@@ -101,47 +101,49 @@ export async function setConversationTitle(
   `
 }
 
-// Account-scoped rename — the WHERE clause is the authz check, so a
-// hostile caller can't rename someone else's thread by guessing the id.
-// updated_at is intentionally not bumped: rename is metadata, not new
-// activity, and we don't want it to jump to the top of the list.
-export async function renameConversationForAccount(
+export interface ConversationPatch {
+  /** Absent leaves the current title; the caller validates length. */
+  title?: string
+  /**
+   * true stamps pinned_at = NOW() so the row sorts to the very top of the
+   * pinned section, false clears it, absent leaves it.
+   */
+  pinned?: boolean
+}
+
+// Account-scoped metadata update — the WHERE clause is the authz check, so a
+// hostile caller can't rename or pin someone else's thread by guessing the id.
+//
+// One statement rather than one per field: PATCH may carry both, and two
+// UPDATEs would let a rename land while the pin failed. Absent fields are
+// bound as NULL and read as "leave alone" — pinned arrives as a 'pin'/'unpin'
+// text discriminator rather than a boolean because NULL is already spoken for
+// by "absent", and because every other bound parameter in this codebase is
+// int, text or numeric.
+//
+// updated_at is intentionally not bumped: title and pin are metadata, not new
+// activity, and neither should jump the row to the top of the history list.
+export async function updateConversationForAccount(
   conversationId: number,
   accountId: number,
-  title: string,
+  patch: ConversationPatch,
 ): Promise<boolean> {
   const sql = getDb()
+  const title = patch.title ?? null
+  const pinAction =
+    patch.pinned === undefined ? null : patch.pinned ? "pin" : "unpin"
+
   const rows = await sql`
     UPDATE conversations
-    SET title = ${title}
+    SET title = COALESCE(${title}::text, title),
+        pinned_at = CASE
+          WHEN ${pinAction}::text = 'pin' THEN NOW()
+          WHEN ${pinAction}::text = 'unpin' THEN NULL
+          ELSE pinned_at
+        END
     WHERE id = ${conversationId} AND account_id = ${accountId}
     RETURNING id
   `
-  return rows.length > 0
-}
-
-// `pinned` true → stamp pinned_at = NOW() so the row sorts to the very top
-// of the pinned section. false → clear pinned_at. updated_at is NOT touched
-// (pinning is metadata, not new activity).
-export async function setConversationPinForAccount(
-  conversationId: number,
-  accountId: number,
-  pinned: boolean,
-): Promise<boolean> {
-  const sql = getDb()
-  const rows = pinned
-    ? await sql`
-        UPDATE conversations
-        SET pinned_at = NOW()
-        WHERE id = ${conversationId} AND account_id = ${accountId}
-        RETURNING id
-      `
-    : await sql`
-        UPDATE conversations
-        SET pinned_at = NULL
-        WHERE id = ${conversationId} AND account_id = ${accountId}
-        RETURNING id
-      `
   return rows.length > 0
 }
 

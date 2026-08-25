@@ -1,16 +1,23 @@
 import { auth0 } from "@/lib/auth0"
 import { findUserIdByAuth0Id } from "@/services/user-service"
 import { getOrCreateDefaultAccount } from "@/services/account/account-service"
-import { internal, onboardingRequired, unauthenticated } from "@/lib/http/problem"
+import {
+  internal,
+  onboardingRequired,
+  payloadTooLarge,
+  unauthenticated,
+} from "@/lib/http/problem"
+import { PayloadTooLargeError } from "@/lib/http/read-json-body"
 
 /**
  * Route-handler auth wrappers.
  *
- * Generalises the resolveAccountId() helper that was hand-rolled in
- * api/conversation/route.ts, so the session → userId → accountId ladder is one
- * import instead of four re-typed lines per handler. Three wrappers rather than
- * one flag, because each rung costs a DB round trip and getOrCreateDefaultAccount
- * *writes* — read-only routes must not provision an account as a side effect.
+ * Generalises the resolveAccountId() helper that used to be hand-rolled in
+ * api/conversation/route.ts — since migrated and deleted — so the
+ * session → userId → accountId ladder is one import instead of four re-typed
+ * lines per handler. Three wrappers rather than one flag, because each rung
+ * costs a DB round trip and getOrCreateDefaultAccount *writes* — read-only
+ * routes must not provision an account as a side effect.
  *
  *   withAuth    — session only
  *   withUser    — + userId
@@ -86,6 +93,11 @@ function redactPath(pathname: string): string {
  * shaped segments are redacted out of it — see redactPath. The error itself is
  * logged and never returned, because raw Postgres errors name constraints and
  * leak the schema.
+ *
+ * One thrown type is answered rather than swallowed: an oversized request body
+ * is the caller's doing and has a status that says so. Handling it here keeps
+ * the size rule out of every handler, the same way the session and onboarding
+ * rules already live in the wrappers rather than in the routes.
  */
 async function guard(
   label: string,
@@ -95,6 +107,11 @@ async function guard(
   try {
     return await produce()
   } catch (err) {
+    // Not logged: the 413 is the whole signal, it carries no diagnostic detail
+    // beyond the status, and logging it would hand anyone sending oversized
+    // bodies a way to flood the logs alongside the memory they were denied.
+    if (err instanceof PayloadTooLargeError) return payloadTooLarge(err.limit)
+
     const { pathname } = new URL(request.url)
     console.error(`[${label}] ${request.method} ${redactPath(pathname)} failed:`, err)
     return internal()

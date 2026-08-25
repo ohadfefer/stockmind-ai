@@ -18,6 +18,12 @@ import {
   type OutlineEntry,
 } from "@/components/conversation/message-outline"
 import { useMediaQuery } from "@/hooks/use-media-query"
+import { ApiError } from "@/actions/http"
+import {
+  AiBudgetExceededError,
+  sendConversationMessage,
+  startConversation,
+} from "@/actions/conversation"
 import type { ConversationMessage } from "@/services/ai/conversation-service"
 
 interface ChatPanelProps {
@@ -136,54 +142,37 @@ export function ChatPanel({
     ])
     setIsStreaming(true)
 
+    // The server persists the user message before it opens the stream, so the
+    // moment response headers arrive that message exists server-side whatever
+    // happens next. The rollback below keys off this rather than deleting a
+    // question that would reappear on the next load.
+    let userMessagePersisted = false
+
     try {
-      const res = await fetch("/api/conversation/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          activeConversationId != null
-            ? { content, conversationId: activeConversationId }
-            : { content },
-        ),
-      })
+      // The two endpoints the server splits this across: a brand-new chat
+      // creates its thread and streams the first turn in one request, an
+      // existing one posts into the thread it already has an id for.
+      const turn =
+        activeConversationId == null
+          ? await startConversation(content)
+          : await sendConversationMessage(activeConversationId, content)
+      userMessagePersisted = true
 
-      if (res.status === 402) {
-        const data = (await res.json()) as { spent: number; budget: number }
-        setError({ kind: "budget", spent: data.spent, budget: data.budget })
-        // Drop the optimistically-added pair by key, so we don't accidentally
-        // remove later messages if state has changed underneath us.
-        setMessages((prev) =>
-          prev.filter((m) => m.key !== userKey && m.key !== assistantKey),
-        )
-        return
-      }
-      if (!res.ok || !res.body) {
-        const text = await res.text().catch(() => "")
-        setError({
-          kind: "generic",
-          message: text || "Something went wrong. Please try again.",
-        })
-        setMessages((prev) =>
-          prev.filter((m) => m.key !== userKey && m.key !== assistantKey),
-        )
-        return
-      }
-
-      // First send of a new chat: server lazily created the row and echoes
-      // the id back. Adopt it so subsequent sends reuse the same thread, and
-      // sync the URL so a refresh keeps the user in this conversation.
+      // First send of a new chat: the server created the row and named it on
+      // the way back. Adopt the id so subsequent sends reuse the same thread,
+      // and sync the URL so a refresh keeps the user in this conversation.
       // Use history.replaceState (not router.replace) so we don't trigger an
       // RSC refetch of this same page while the response is still streaming.
       if (activeConversationId == null && mountedRef.current) {
-        const idHeader = res.headers.get("X-Conversation-Id")
-        const newId = idHeader != null ? Number(idHeader) : NaN
-        if (Number.isInteger(newId) && newId > 0) {
-          setActiveConversationId(newId)
-          window.history.replaceState(null, "", `/conversation?id=${newId}`)
-        }
+        setActiveConversationId(turn.conversationId)
+        window.history.replaceState(
+          null,
+          "",
+          `/conversation?id=${turn.conversationId}`,
+        )
       }
 
-      const reader = res.body.getReader()
+      const reader = turn.stream.getReader()
       const decoder = new TextDecoder()
       let acc = ""
       while (true) {
@@ -199,17 +188,52 @@ export function ChatPanel({
           return next
         })
       }
+
+      // An upstream model failure reaches us as a clean, empty stream: the AI
+      // SDK turns it into an `error` part and `textStream` drops those, so
+      // nothing faults and the read loop just ends. A turn that produced no
+      // text is a failed turn, and without this it rendered as a blank bubble
+      // with no explanation. The server declines to persist it for the same
+      // reason, so dropping the placeholder here leaves the two in agreement.
+      if (!acc.trim()) {
+        setError({
+          kind: "generic",
+          message: "The assistant didn't respond. Please try again.",
+        })
+        setMessages((prev) => prev.filter((m) => m.key !== assistantKey))
+        return
+      }
     } catch (err) {
       // Reader/setState calls on an unmounted component are no-ops; nothing
       // to clean up beyond logging.
       if (!mountedRef.current) return
-      console.error(err)
-      setError({
-        kind: "generic",
-        message: "Network error. Please try again.",
-      })
+
+      if (err instanceof AiBudgetExceededError) {
+        // Expected state, not a fault: the card explains it and offers the
+        // upgrade, so it isn't logged.
+        setError({ kind: "budget", spent: err.spent, budget: err.budget })
+      } else {
+        console.error(err)
+        setError({
+          kind: "generic",
+          // ApiError.message is the problem+json detail, which is written to
+          // be shown. Anything else is a transport failure.
+          message:
+            err instanceof ApiError
+              ? err.message
+              : "Network error. Please try again.",
+        })
+      }
+
+      // Roll back by key, so we don't accidentally remove later messages if
+      // state has changed underneath us. The question itself only goes if it
+      // never reached the server — once the stream opened it is already in
+      // conversation_messages, and removing it here would hide a message that
+      // comes back on reload.
       setMessages((prev) =>
-        prev.filter((m) => m.key !== userKey && m.key !== assistantKey),
+        userMessagePersisted
+          ? prev.filter((m) => m.key !== assistantKey)
+          : prev.filter((m) => m.key !== userKey && m.key !== assistantKey),
       )
     } finally {
       if (mountedRef.current) setIsStreaming(false)

@@ -1,28 +1,33 @@
-import { NextResponse } from "next/server"
 import { streamText, type ModelMessage } from "ai"
 import { xai } from "@ai-sdk/xai"
-import { auth0 } from "@/lib/auth0"
-import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getAccountDetails } from "@/services/account/account-service"
 import { getPortfolioSummary } from "@/services/portfolio/portfolio-service"
-import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 import {
   appendUserMessage,
-  createConversation,
-  getConversationOwner,
   loadModelMessages,
   persistAssistantMessage,
 } from "@/services/ai/conversation-service"
-import {
-  assertCanStartTurn,
-  BudgetExceededError,
-} from "@/services/ai/budget-service"
 import { buildXaiUsage } from "@/services/ai/xai-cost"
+import { toLoggableModelError } from "@/services/ai/model-error"
 import { maybeAutoTitleConversation } from "@/services/ai/conversation-title-service"
+
+/**
+ * One assistant turn — everything the two routes that can produce one share.
+ *
+ * POST /api/conversations starts a thread and streams its first turn; POST
+ * /api/conversations/{id}/messages streams every turn after. They differ only
+ * in where the conversation id comes from and what status the response
+ * carries, so the model config, the system prompt and the usage accounting
+ * live here instead of being copied into both handlers — the system prompt
+ * most of all, where two copies would drift and the assistant would answer
+ * differently on turn one than on turn two.
+ */
 
 const MODEL_ID = "grok-4-1-fast-reasoning"
 const HISTORY_LIMIT = 10
 const MAX_OUTPUT_TOKENS = 600
+
+/** Caps one turn's prompt cost. Both routes validate against it. */
+export const MAX_MESSAGE_LENGTH = 4000
 
 const SYSTEM_PROMPT = [
   "You are StockMind AI, a research assistant focused exclusively on stocks, ETFs, indices, and personal investing.",
@@ -41,79 +46,39 @@ const SYSTEM_PROMPT = [
   "- If the next system message contains the user's portfolio snapshot, use it when answering questions about \"my portfolio\".",
 ].join("\n")
 
-interface PostBody {
-  content?: unknown
-  conversationId?: unknown
+/**
+ * Trims a submitted message and reports whether it is sendable at all.
+ *
+ * Empty and over-length collapse into one null because the routes answer both
+ * with the same 400 naming the rule — the client never branches on which one
+ * it broke, and one message that states the constraint beats two that don't.
+ */
+export function normalizeMessageContent(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > MAX_MESSAGE_LENGTH) return null
+  return trimmed
 }
 
-export async function POST(req: Request) {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+export interface ConversationTurnParams {
+  userId: number
+  accountId: number
+  runningBalance: number
+  conversationId: number
+  content: string
+  /** The request's signal, so a client disconnect stops the upstream call. */
+  abortSignal: AbortSignal
+}
 
-  const body = (await req.json().catch(() => ({}))) as PostBody
-  const content = typeof body.content === "string" ? body.content.trim() : ""
-  if (!content) {
-    return NextResponse.json({ error: "Empty message" }, { status: 400 })
-  }
-  if (content.length > 4000) {
-    return NextResponse.json({ error: "Message too long" }, { status: 400 })
-  }
-
-  const requestedConversationId =
-    typeof body.conversationId === "number" &&
-    Number.isInteger(body.conversationId) &&
-    body.conversationId > 0
-      ? body.conversationId
-      : null
-
-  const [subscription, userId] = await Promise.all([
-    getSubscriptionForAuth0Id(session.user.sub),
-    getUserIdByAuth0Id(session.user.sub),
-  ])
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-  const plan = subscription?.plan ?? "free"
-
-  try {
-    await assertCanStartTurn(userId, plan)
-  } catch (err) {
-    if (err instanceof BudgetExceededError) {
-      return NextResponse.json(
-        {
-          error: "ai_budget_exceeded",
-          spent: err.spent,
-          budget: err.budget,
-        },
-        { status: 402 },
-      )
-    }
-    throw err
-  }
-
-  const account = await getAccountDetails(userId)
-  if (!account) {
-    return NextResponse.json({ error: "Account not found" }, { status: 404 })
-  }
-
-  // Resolve target conversation. If the client passed an id, use it but only
-  // after verifying it belongs to this account — without that check, anyone
-  // could write into anyone else's thread by guessing an integer. Collapse
-  // missing-vs-not-yours into one 404 so the endpoint isn't an existence oracle.
-  // No id → first send of a brand-new chat. Create the row lazily here so
-  // a bare /conversation visit never leaves an empty conversation behind.
-  let conversationId: number
-  if (requestedConversationId != null) {
-    const owner = await getConversationOwner(requestedConversationId)
-    if (!owner || owner.accountId !== account.id) {
-      return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
-    }
-    conversationId = requestedConversationId
-  } else {
-    conversationId = (await createConversation(account.id)).id
-  }
+/**
+ * Persists the user message, then starts the assistant stream.
+ *
+ * Returns the streamText result rather than a Response so the caller owns the
+ * status line: the create route answers 201 with a Location, the messages
+ * route answers a plain 200.
+ */
+export async function streamConversationTurn(params: ConversationTurnParams) {
+  const { userId, accountId, runningBalance, conversationId, content } = params
 
   // Persist user message before streaming so it survives a disconnect.
   await appendUserMessage(conversationId, content)
@@ -121,7 +86,7 @@ export async function POST(req: Request) {
   // Fetch portfolio snapshot in parallel with loading message history.
   const [history, portfolioSnapshot] = await Promise.all([
     loadModelMessages(conversationId, HISTORY_LIMIT),
-    buildPortfolioSnapshotMessage(account.id, account.running_balance),
+    buildPortfolioSnapshotMessage(accountId, runningBalance),
   ])
 
   const messages: ModelMessage[] = [
@@ -130,17 +95,29 @@ export async function POST(req: Request) {
     ...history,
   ]
 
-  const result = streamText({
+  return streamText({
     model: xai(MODEL_ID),
     messages,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     // Abort the upstream xAI request if the client disconnects, so we
     // don't keep paying for tokens nobody is reading.
-    abortSignal: req.signal,
+    abortSignal: params.abortSignal,
     onError: ({ error }) => {
-      console.error("conversation streamText error:", error)
+      // Never the raw error — see toLoggableModelError for what it would carry.
+      console.error(
+        `conversation streamText error [conversation ${conversationId}]:`,
+        toLoggableModelError(error),
+      )
     },
     onFinish: async ({ text, usage, providerMetadata, response }) => {
+      // A provider failure closes the stream with no text at all: the SDK
+      // converts it into an `error` part and `textStream` drops those, so the
+      // turn ends clean and empty rather than faulting. Persisting that would
+      // write an empty assistant row — a blank bubble on every future load of
+      // the thread — and would auto-title the conversation off a turn that
+      // never happened. The client reports the failure off the same signal.
+      if (!text.trim()) return
+
       const normalized = buildXaiUsage({
         usage,
         responseBody: response.body,
@@ -165,12 +142,6 @@ export async function POST(req: Request) {
         firstUserMessage: content,
       })
     },
-  })
-
-  return result.toTextStreamResponse({
-    // Always echo the id so the client can adopt it after a lazy first-send
-    // create (and keep its activeConversationId in sync on re-sends).
-    headers: { "X-Conversation-Id": String(conversationId) },
   })
 }
 

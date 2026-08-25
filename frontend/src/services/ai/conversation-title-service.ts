@@ -3,6 +3,7 @@ import { xai } from "@ai-sdk/xai"
 import { getDb } from "@/lib/db"
 import { recordAiUsage } from "@/services/ai/budget-service"
 import { buildXaiUsage } from "@/services/ai/xai-cost"
+import { toLoggableModelError } from "@/services/ai/model-error"
 import { setConversationTitle } from "@/services/ai/conversation-service"
 
 const TITLE_MODEL_ID = "grok-4-1-fast-reasoning"
@@ -46,7 +47,12 @@ export async function maybeAutoTitleConversation(
       try {
         title = await generateTitle(params.firstUserMessage, params.userId)
       } catch (err) {
-        console.error("conversation title generation failed:", err)
+        // Raw provider errors carry the prompt, which wraps the user's first
+        // message — see toLoggableModelError.
+        console.error(
+          "conversation title generation failed:",
+          toLoggableModelError(err),
+        )
       }
     }
 

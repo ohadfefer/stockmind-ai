@@ -85,6 +85,16 @@ export function conflict(code: string, detail: string): NextResponse {
   return problem(409, code, "Conflict", detail)
 }
 
+/** Request body blew the size cap before it could be parsed — see readJsonBody. */
+export function payloadTooLarge(limit: number): NextResponse {
+  return problem(
+    413,
+    "payload_too_large",
+    "Payload too large",
+    `Request body must be at most ${limit} bytes.`,
+  )
+}
+
 /** Upstream (Finnhub, xAI, Stripe) failed or returned something unusable. */
 export function badGateway(detail: string): NextResponse {
   return problem(502, "upstream_failed", "Upstream request failed", detail)
