@@ -4,6 +4,8 @@ import { logAudit } from "@/services/audit-log-service"
 import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getDefaultAccountId } from "@/services/account/account-service"
 import { getClientIp } from "@/lib/request-ip"
+import { isPublicApiRoute } from "@/lib/http/public-routes"
+import { unauthenticated } from "@/lib/http/problem"
 
 async function logAuthEvent(
   request: NextRequest,
@@ -51,26 +53,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return authRes
   }
 
-  // Allow the health check route (used by the load balancer / container probe)
-  if (request.nextUrl.pathname === "/api/health") {
-    return authRes
-  }
-
-  // Allow cron job routes (secured by CRON_SECRET in the route handler)
-  if (request.nextUrl.pathname.startsWith("/api/jobs/")) {
-    return authRes
-  }
-
-  // Allow QStash webhook routes (secured by signature verification in the route handler)
-  if (
-    request.nextUrl.pathname === "/api/alerts/check" ||
-    request.nextUrl.pathname === "/api/alerts/check-earnings"
-  ) {
-    return authRes
-  }
-
-  // Allow Stripe webhook (secured by Stripe signature verification in the route handler)
-  if (request.nextUrl.pathname === "/api/stripe/webhook") {
+  // Allow the routes that carry their own authentication — the health probe,
+  // the CRON_SECRET job, the QStash webhooks and the Stripe webhook. The list
+  // lives in lib/http/public-routes so this gate and check-route-auth.mjs read
+  // the same array and cannot drift.
+  //
+  // This used to allow the whole "/api/jobs/" prefix. Exact paths only now: a
+  // prefix exempts every future route in that subtree from both this gate and
+  // the guard script, so the next job endpoint would ship publicly reachable
+  // without anyone making an auth decision about it.
+  if (isPublicApiRoute(request.nextUrl.pathname)) {
     return authRes
   }
 
@@ -78,6 +70,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const session = await auth0.getSession(request)
 
   if (!session) {
+    // An API path answers 401 problem+json; only a page navigation redirects.
+    // A 302 to the landing page turned every expired-session XHR into a
+    // 200 text/html the client then tried to parse as JSON — a silent failure
+    // at best, and on the chat stream it rendered the landing page's markup
+    // into the assistant bubble. Identical body to the route wrappers'
+    // unauthenticated(), so apiRequest cannot tell the two apart.
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return unauthenticated()
+    }
+
     const { origin } = new URL(request.url)
     return NextResponse.redirect(`${origin}/`)
   }

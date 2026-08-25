@@ -29,12 +29,15 @@ function TradeForm() {
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [tradingInfo, setTradingInfo] = useState<TradingInfo | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [tradingInfoFailed, setTradingInfoFailed] = useState(false)
   const [debouncedSymbol, setDebouncedSymbol] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const holdingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    fetchTradingInfo().then(setTradingInfo)
+    fetchTradingInfo()
+      .then(setTradingInfo)
+      .catch(() => setTradingInfoFailed(true))
   }, [])
 
   // Debounce the symbol used for holding display
@@ -59,15 +62,35 @@ function TradeForm() {
       return
     }
 
+    // Clearing the timer only cancels a fetch that has not started. Once it
+    // has, the symbol can change while the request is in flight, and the late
+    // response would paint the old symbol's price — with the spinner off, so
+    // it reads as settled rather than stale. The controller cancels that too,
+    // and doubles as the unmount guard.
+    const controller = new AbortController()
+
     setQuoteLoading(true)
     debounceRef.current = setTimeout(async () => {
-      const data = await fetchQuote(trimmed)
-      setQuote(data && data.c !== 0 ? data : null)
-      setQuoteLoading(false)
+      try {
+        const data = await fetchQuote(trimmed, { signal: controller.signal })
+        // Finnhub answers an unknown ticker with 200 and a zeroed quote, so
+        // c === 0 is "no such symbol", not an error.
+        setQuote(data.c !== 0 ? data : null)
+      } catch (e) {
+        // A superseded request must not clear the quote: the run that replaced
+        // it owns that, and has already set it.
+        if (e instanceof DOMException && e.name === "AbortError") return
+        setQuote(null)
+      } finally {
+        // Same reasoning for the spinner, and it covers the abort path too —
+        // finally runs before the return above completes.
+        if (!controller.signal.aborted) setQuoteLoading(false)
+      }
     }, 1000)
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      controller.abort()
     }
   }, [symbol])
 
@@ -75,9 +98,14 @@ function TradeForm() {
     const trimmed = symbol.trim()
     if (!trimmed) return
     setQuoteLoading(true)
-    const data = await fetchQuote(trimmed)
-    setQuote(data && data.c !== 0 ? data : null)
-    setQuoteLoading(false)
+    try {
+      const data = await fetchQuote(trimmed)
+      setQuote(data.c !== 0 ? data : null)
+    } catch {
+      setQuote(null)
+    } finally {
+      setQuoteLoading(false)
+    }
   }
 
   // When the form mounts already populated (e.g. editing back from the
@@ -110,11 +138,23 @@ function TradeForm() {
     if (!canContinue) return
     setValidationError(null)
 
+    // Without cash and positions the checks below would read 0 for both and
+    // report "insufficient funds" / "you hold no shares" — a specific, wrong
+    // reason for a failure that is actually ours.
+    if (!tradingInfo) {
+      setValidationError(
+        tradingInfoFailed
+          ? "Could not load your cash balance and holdings. Reload the page and try again."
+          : "Still loading your cash balance and holdings — try again in a moment.",
+      )
+      return
+    }
+
     const qty = Number(quantity)
 
     if (action === "buy") {
       const cost = estimatedValue ?? 0
-      const cash = tradingInfo?.cashBalance ?? 0
+      const cash = tradingInfo.cashBalance
       if (cost > cash) {
         setValidationError(
           `Insufficient funds. Order value $${cost.toLocaleString("en-US", { minimumFractionDigits: 2 })} exceeds available cash $${cash.toLocaleString("en-US", { minimumFractionDigits: 2 })}.`

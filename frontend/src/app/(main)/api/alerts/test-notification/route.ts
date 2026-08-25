@@ -1,25 +1,28 @@
-import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
-import { getUserIdByAuth0Id } from "@/services/user-service"
-import { getOrCreateDefaultAccount } from "@/services/account/account-service"
+import { withAccount } from "@/lib/http/with-auth"
+import { unprocessable } from "@/lib/http/problem"
 import { getSubscriptionsForAccount } from "@/services/push-subscription-service"
 import { sendPushNotification } from "@/services/notification-service"
 
-export async function POST() {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-
-  const accountId = await getOrCreateDefaultAccount(userId)
+/**
+ * The API's one deliberate RPC exception: an action, not a resource. There is
+ * no "test notification" entity to create, and nothing in the app calls this —
+ * it exists to be hit with curl when verifying that a device's push
+ * registration actually delivers, which is otherwise only observable by
+ * waiting for a real alert to trigger.
+ *
+ * withAccount because the subscriptions hang off the account, and a caller
+ * testing push has an account by definition.
+ */
+export const POST = withAccount(async (_request, { accountId }) => {
   const subscriptions = await getSubscriptionsForAccount(accountId)
   if (subscriptions.length === 0) {
-    return NextResponse.json({ error: "No push subscriptions found" }, { status: 404 })
+    // 422, not 404: the route exists and the request was well formed, there is
+    // just nothing registered to send to. Same shape as no_upcoming_earnings.
+    return unprocessable(
+      "no_push_subscriptions",
+      "This account has no registered push subscriptions.",
+    )
   }
 
   const payload = {
@@ -28,6 +31,9 @@ export async function POST() {
     url: "/details/aapl",
   }
 
+  // Individually caught so one dead subscription does not suppress delivery to
+  // the caller's other devices — the point of the endpoint is to see which
+  // ones arrive.
   await Promise.all(
     subscriptions.map((sub) =>
       sendPushNotification(sub, payload).catch((err) => {
@@ -37,4 +43,4 @@ export async function POST() {
   )
 
   return NextResponse.json({ sent: subscriptions.length })
-}
+})

@@ -34,8 +34,14 @@ export function PortfolioTab({ summaryPromise, reviewPromise }: PortfolioTabProp
   // should still see the latest close, so we refetch on tab refocus.
   useEffect(() => {
     async function refresh() {
-      const updated = await fetchPortfolioSummary()
-      if (updated) setSummary(updated)
+      try {
+        setSummary(await fetchPortfolioSummary())
+      } catch {
+        // A failed tick is allowed to pass quietly: the numbers already on
+        // screen stay, and the next tick corrects them. The action disables
+        // the auth redirect for the same reason — a 60s interval must not
+        // navigate away from whatever the user is doing.
+      }
     }
 
     function onVisibilityChange() {

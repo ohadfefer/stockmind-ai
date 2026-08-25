@@ -1,25 +1,20 @@
-import { auth0 } from "@/lib/auth0"
 import { NextResponse } from "next/server"
-import { getUserIdByAuth0Id } from "@/services/user-service"
+import { withUser } from "@/lib/http/with-auth"
 import { getAccountDetails } from "@/services/account/account-service"
 import { getPortfolioSummary } from "@/services/portfolio/portfolio-service"
 
-export async function GET() {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  }
-
+/**
+ * withUser + getAccountDetails rather than withAccount: the summary needs the
+ * cash balance as well as the account id, and getAccountDetails resolves both
+ * in one call — withAccount would provision the account and then this would
+ * provision it again. Same pairing as the conversation turn routes.
+ *
+ * The old handler's `if (!account) return 404` was unreachable:
+ * getAccountDetails returns AccountDetails, not AccountDetails | null.
+ */
+export const GET = withUser(async (_request, { userId }) => {
   const account = await getAccountDetails(userId)
-  if (!account) {
-    return NextResponse.json({ error: "Account not found" }, { status: 404 })
-  }
-
-  const summary = await getPortfolioSummary(account.id, account.running_balance)
-  return NextResponse.json(summary)
-}
+  return NextResponse.json(
+    await getPortfolioSummary(account.id, account.running_balance),
+  )
+})

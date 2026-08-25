@@ -1,21 +1,25 @@
-import { finnhubFetch } from "@/lib/finnhub"
 import { NextResponse } from "next/server"
+import { withAuth } from "@/lib/http/with-auth"
+import { badGateway, invalid } from "@/lib/http/problem"
+import { isValidSymbol } from "@/lib/symbol"
+import { finnhubFetch } from "@/lib/finnhub"
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const symbol = searchParams.get("symbol")
-
-  if (!symbol) {
-    return NextResponse.json({ error: "symbol is required" }, { status: 400 })
-  }
+/**
+ * withAuth, not withAccount — a market-data read must not provision an
+ * account as a side effect. Same call as /api/stocks/upcoming-earnings.
+ *
+ * A Finnhub failure is 502, not 500: the request was fine and nothing here
+ * went wrong, so a caller that retries is doing the right thing. The old
+ * handler answered 500 for both, which told the client to give up.
+ */
+export const GET = withAuth(async (request) => {
+  const symbol = new URL(request.url).searchParams.get("symbol")
+  if (!isValidSymbol(symbol)) return invalid("Invalid symbol")
 
   try {
-    const quote = await finnhubFetch("/quote", { symbol })
-    return NextResponse.json(quote)
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to fetch quote" },
-      { status: 500 }
-    )
+    return NextResponse.json(await finnhubFetch("/quote", { symbol: symbol.toUpperCase() }))
+  } catch (err) {
+    console.error(`[stocks/quote] Finnhub failed for ${symbol}:`, err)
+    return badGateway("Could not fetch a quote for that symbol.")
   }
-}
+})

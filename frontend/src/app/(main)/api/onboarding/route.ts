@@ -1,5 +1,6 @@
-import { auth0 } from "@/lib/auth0"
-import { NextResponse } from "next/server"
+import { withAuth } from "@/lib/http/with-auth"
+import { invalid, noContent } from "@/lib/http/problem"
+import { readJsonBody } from "@/lib/http/read-json-body"
 import { insertUser } from "@/services/user-service"
 import { createDefaultAccount, getDefaultAccountId } from "@/services/account/account-service"
 import { logAudit } from "@/services/audit-log-service"
@@ -82,66 +83,63 @@ function validate(body: unknown): OnboardingPayload | string {
   }
 }
 
-export async function POST(request: Request) {
-  const session = await auth0.getSession()
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
+/**
+ * withAuth, deliberately — this is the route that *creates* the users row, so
+ * withUser would 403 onboarding_required and make onboarding unreachable. It
+ * is the one endpoint in the app where "no user row yet" is the normal state.
+ *
+ * Errors thrown below reach guard, which logs them and returns problem+json
+ * 500; the hand-rolled try/catch that used to do that is gone.
+ */
+export const POST = withAuth(async (request, { session }) => {
   const { sub: auth0Id, email, picture } = session.user
-  if (!email) {
-    return NextResponse.json({ error: "Session missing email" }, { status: 400 })
-  }
+  if (!email) return invalid("Session is missing an email address")
 
-  const body = await request.json().catch(() => null)
-  const parsed = validate(body)
-  if (typeof parsed === "string") {
-    return NextResponse.json({ error: parsed }, { status: 400 })
-  }
+  const parsed = validate(await readJsonBody(request))
+  if (typeof parsed === "string") return invalid(parsed)
 
-  try {
-    const { userId, wasCreated } = await insertUser({
-      auth0Id,
-      email,
-      fullName: parsed.fullName,
-      imageUrl: picture ?? null,
-    })
+  const { userId, wasCreated } = await insertUser({
+    auth0Id,
+    email,
+    fullName: parsed.fullName,
+    imageUrl: picture ?? null,
+  })
 
-    let accountId: number | null = null
-    if (wasCreated) {
-      try {
-        accountId = await createDefaultAccount(userId)
-      } catch (err) {
-        console.error("Failed to create default account for user", userId, err)
-      }
-    } else {
-      accountId = await getDefaultAccountId(userId)
+  let accountId: number | null = null
+  if (wasCreated) {
+    // Swallowed on purpose: a missing account is recoverable — every read path
+    // provisions one lazily — and failing onboarding over it would strand the
+    // user on a form they have already filled in correctly.
+    try {
+      accountId = await createDefaultAccount(userId)
+    } catch (err) {
+      console.error("[onboarding] Failed to create default account for user", userId, err)
     }
+  } else {
+    accountId = await getDefaultAccountId(userId)
+  }
 
-    await upsertUserProfile({
+  await upsertUserProfile({
+    userId,
+    experienceLevel: parsed.experienceLevel,
+    motivation: parsed.motivation,
+    interests: parsed.interests,
+    investorStyle: parsed.investorStyle,
+    engagementCadence: parsed.engagementCadence,
+  })
+
+  await markUserOnboarded(userId)
+
+  if (wasCreated) {
+    await logAudit({
       userId,
-      experienceLevel: parsed.experienceLevel,
-      motivation: parsed.motivation,
-      interests: parsed.interests,
-      investorStyle: parsed.investorStyle,
-      engagementCadence: parsed.engagementCadence,
+      accountId,
+      action: "signup",
+      details: { fullName: parsed.fullName },
+      ipAddress: getClientIp(request),
     })
-
-    await markUserOnboarded(userId)
-
-    if (wasCreated) {
-      await logAudit({
-        userId,
-        accountId,
-        action: "signup",
-        details: { fullName: parsed.fullName },
-        ipAddress: getClientIp(request),
-      })
-    }
-
-    return NextResponse.json({ status: "saved" })
-  } catch (error) {
-    console.error("Failed to save onboarding:", error)
-    return NextResponse.json({ error: "Failed to save onboarding" }, { status: 500 })
   }
-}
+
+  // The only caller redirects on success and reads nothing back.
+  return noContent()
+})

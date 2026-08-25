@@ -1,13 +1,17 @@
-import type { FinnhubQuote, FinnhubProfile } from "@/services/stock/stock-service"
+import { apiFetch, type ApiRequestInit } from "@/actions/http"
+import type { FinnhubQuote } from "@/services/stock/stock-service"
 
-export async function fetchQuote(symbol: string): Promise<FinnhubQuote | null> {
-  const res = await fetch(`/api/stocks/quote?symbol=${encodeURIComponent(symbol)}`)
-  if (!res.ok) return null
-  return res.json()
-}
-
-export async function fetchProfile(symbol: string): Promise<FinnhubProfile | null> {
-  const res = await fetch(`/api/stocks/profile?symbol=${encodeURIComponent(symbol)}`)
-  if (!res.ok) return null
-  return res.json()
+/**
+ * `init` exists for the caller's AbortSignal: the trade forms fire this on a
+ * debounce as the user types, and a superseded request that lands late would
+ * otherwise paint the previous symbol's price over the current one.
+ */
+export async function fetchQuote(
+  symbol: string,
+  init?: ApiRequestInit,
+): Promise<FinnhubQuote> {
+  return apiFetch<FinnhubQuote>(
+    `/api/stocks/quote?symbol=${encodeURIComponent(symbol)}`,
+    init,
+  )
 }

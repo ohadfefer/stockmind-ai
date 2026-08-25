@@ -1,22 +1,36 @@
-import { NextResponse } from "next/server"
+import { withAuth } from "@/lib/http/with-auth"
+import { internal, invalid } from "@/lib/http/problem"
+import { isValidSymbol } from "@/lib/symbol"
 import WebSocket from "ws"
 
 export const runtime = "nodejs"
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const symbol = searchParams.get("symbol")
-
-  if (!symbol) {
-    return NextResponse.json({ error: "symbol is required" }, { status: 400 })
-  }
+/**
+ * Server-sent trade ticks, proxied off Finnhub's websocket.
+ *
+ * withAuth, not withAccount — market data, no account state. EventSource
+ * cannot set headers but does send same-origin cookies, so the session
+ * reaches the wrapper the same way it does on any other route; a 401 surfaces
+ * to the client as `onerror`, which LivePrice already handles by closing.
+ *
+ * The stream body is deliberately outside guard's reach: guard only covers
+ * producing the Response, and everything below happens after it is returned.
+ *
+ * KNOWN BUG, left alone on purpose: `cleanup()` on the error path is followed
+ * by controller.close(), and the ws "close" handler then closes it a second
+ * time — a process-level uncaughtException on every navigation away from
+ * /details/[symbol]. It is unrelated to the auth sweep and wants its own commit.
+ */
+export const GET = withAuth(async (request) => {
+  const symbol = new URL(request.url).searchParams.get("symbol")
+  if (!isValidSymbol(symbol)) return invalid("Invalid symbol")
 
   const apiKey = process.env.FINNHUB_API_KEY
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "FINNHUB_API_KEY not configured" },
-      { status: 500 }
-    )
+    // Logged, not returned: naming the missing variable tells an unauthenticated
+    // prober how the deployment is configured.
+    console.error("[stocks/trades] FINNHUB_API_KEY is not set")
+    return internal()
   }
 
   const encoder = new TextEncoder()
@@ -76,4 +90,4 @@ export async function GET(request: Request) {
       Connection: "keep-alive",
     },
   })
-}
+})

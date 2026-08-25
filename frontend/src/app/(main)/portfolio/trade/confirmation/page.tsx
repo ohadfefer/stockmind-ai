@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Suspense } from "react"
+import { ApiError } from "@/actions/http"
 import { fetchQuote } from "@/actions/stock-data"
 import { submitOrder } from "@/actions/orders"
 
@@ -42,7 +43,7 @@ function ConfirmationContent() {
     setError(null)
     try {
       const quote = await fetchQuote(symbol)
-      if (!quote || quote.c === 0) {
+      if (quote.c === 0) {
         setError("Unable to fetch current price. Please try again.")
         setSubmitting(false)
         return
@@ -58,8 +59,13 @@ function ConfirmationContent() {
       })
 
       router.push("/portfolio/orders")
-    } catch {
-      setError("Failed to submit order. Please try again.")
+    } catch (err) {
+      // ApiError.message is the problem+json detail — "Insufficient shares",
+      // "Market is closed" and the rest are worth showing verbatim rather
+      // than flattening into one "please try again".
+      setError(
+        err instanceof ApiError ? err.message : "Failed to submit order. Please try again.",
+      )
       setSubmitting(false)
     }
   }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 
+import { apiFetch } from "@/actions/http"
+
 export interface SymbolSearchResult {
   description: string
   displaySymbol: string
@@ -28,12 +30,15 @@ export function useSymbolSearch() {
     const timeout = setTimeout(async () => {
       setIsLoading(true)
       try {
-        const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`, {
-          signal: controller.signal,
-        })
-        const data = await res.json()
+        const data = await apiFetch<{ result?: SymbolSearchResult[] }>(
+          `/api/stocks/search?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal },
+        )
         setResults((data.result || []).slice(0, 5))
       } catch (e) {
+        // An aborted request is the next keystroke arriving, not a failure —
+        // leave the current results up rather than blanking the dropdown
+        // between characters.
         if (!(e instanceof DOMException && e.name === "AbortError")) {
           setResults([])
         }

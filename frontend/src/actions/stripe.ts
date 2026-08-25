@@ -1,22 +1,10 @@
+import { apiFetch, apiSend } from "@/actions/http"
+
 export async function startSubscriptionCheckout(): Promise<{ url: string }> {
-  const res = await fetch("/api/stripe/checkout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? `Checkout request failed (${res.status})`)
-  }
-  return res.json()
+  return apiFetch<{ url: string }>("/api/stripe/checkout", { method: "POST" })
 }
 
+/** 204 on success, including when the cancellation was already scheduled. */
 export async function cancelSubscriptionAtPeriodEnd(): Promise<void> {
-  const res = await fetch("/api/stripe/cancel", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? `Cancel request failed (${res.status})`)
-  }
+  await apiSend("/api/stripe/cancel", { method: "POST" })
 }
