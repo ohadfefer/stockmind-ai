@@ -88,7 +88,7 @@ npm install
 #    This file is gitignored — never commit it.
 
 # 4. Run database migrations against your Neon database
-#    Apply each file in /migrations in order (001 → 013).
+#    Apply each file in /migrations in order (001 → 028; 009 does not exist).
 #    They are plain SQL — run them via psql, the Neon SQL editor,
 #    or any Postgres client.
 
@@ -97,7 +97,7 @@ npm run dev
 # → http://localhost:3000
 ```
 
-On first login you'll be routed through `/onboarding` to capture your name, which calls `POST /api/auth/insert-user` and inserts a row into `users`. A default brokerage account is created lazily the first time you access a feature that needs one.
+On first login you'll be routed through `/onboarding` to capture your name and investing profile, which calls `POST /api/onboarding` and inserts rows into `users` and `user_profiles` plus a default brokerage account. If that account creation fails it is not fatal — every read path provisions one lazily.
 
 ---
 
@@ -110,24 +110,16 @@ stockmind-ai/
 │   └── workflows/
 │       └── deploy.yml        # CI/CD — build ARM64 image, push to ECR, roll ECS service
 ├── migrations/               # Plain .sql files — schema of record (run manually)
-│   ├── 001_create_users.sql
-│   ├── 002_create_accounts.sql
-│   ├── 003_create_cash_ledger.sql
-│   ├── 004_create_orders.sql
-│   ├── 005_create_executions.sql
-│   ├── 006_create_positions.sql
-│   ├── 007_create_position_history.sql
-│   ├── 008_create_transfers.sql
-│   ├── 010_create_watchlists.sql
-│   ├── 011_create_stock_alerts.sql
-│   ├── 012_create_push_subscriptions.sql
-│   ├── 013_create_missed_alerts.sql
-│   └── 017_add_subscriptions.sql
+│   ├── 001_create_users.sql  # …through 028, applied in filename order.
+│   └── ...                   # 009 does not exist; the gap is historical.
 └── frontend/                 # Next.js app — all code lives here
     ├── Dockerfile            # Multi-stage build → Next.js standalone image (ARM64, non-root)
     ├── .dockerignore         # Keeps secrets (.env*) and build artifacts out of the image
     ├── next.config.ts        # standalone output + baseline security headers
     ├── vercel.json           # Empty ({}) — legacy; scheduled jobs now run via QStash
+    ├── scripts/
+    │   ├── check-route-auth.mjs  # prebuild gate — every API method must use an auth wrapper
+    │   └── seed-demo.ts          # Reseeds the shared demo account
     ├── public/
     │   ├── sw.js             # Service worker for Web Push
     │   └── ...               # Icons, placeholder assets
@@ -135,10 +127,11 @@ stockmind-ai/
         ├── proxy.ts          # Next.js 16 proxy — Auth0 middleware + route protection
         ├── app/
         │   ├── layout.tsx    # Root layout (Auth0Provider, Vercel Analytics)
+        │   ├── page.tsx      # Public landing at / — redirects logged-in users to /dashboard
+        │   ├── manifest.ts   # PWA manifest, served at /manifest.webmanifest
         │   ├── globals.css
         │   ├── (auth)/       # Centered layout — login, signup, onboarding
         │   └── (main)/       # Dashboard shell — sidebar + header
-        │       ├── page.tsx           # Landing / home
         │       ├── dashboard/         # Main dashboard
         │       ├── portfolio/         # Holdings, orders, trade, alerts tabs
         │       ├── watchlist/         # Watchlists
@@ -146,7 +139,8 @@ stockmind-ai/
         │       ├── details/[symbol]/  # Stock detail page
         │       ├── account/           # Balance, transfers, history
         │       ├── settings/          # User preferences (notifications, payments)
-        │       └── api/               # Route handlers (see API section; includes /api/health, /api/stripe/{checkout,cancel,webhook})
+        │       ├── conversation/      # AI assistant chat
+        │       └── api/               # Route handlers — see API Documentation
         ├── components/
         │   ├── ui/           # shadcn/ui primitives — do not manually edit
         │   ├── dashboard/    # Dashboard widgets
@@ -158,7 +152,7 @@ stockmind-ai/
         │   ├── settings/     # Settings form (notifications, payments)
         │   ├── sidebar.tsx
         │   └── header.tsx
-        ├── actions/          # Client-side API call functions (named exports)
+        ├── actions/          # Client-side API calls (named exports), all via actions/http.ts
         ├── services/         # Server-side data-fetching functions
         │   ├── ai/           # xAI/Grok conversation, portfolio-review, title, cost services
         │   ├── alerts/       # alerts-service, alert-checker-service, missed-alerts-service
@@ -167,7 +161,8 @@ stockmind-ai/
         │   ├── stripe/       # stripe-service, webhook-service, subscription-service, billing-service, cancellation-service
         │   └── ...           # user, account, order, execution, transfer, stock, watchlist, push-subscription, notification
         ├── hooks/            # Custom React hooks (use-mobile, use-notifications, use-toast)
-        ├── lib/              # auth0, db (Neon), finnhub, fmp, redis, format, utils
+        ├── lib/              # auth0, db (Neon), finnhub, fmp, format, symbol, push-endpoint, utils
+        │   └── http/         # problem.ts (RFC 9457), with-auth.ts, public-routes.ts, read-json-body.ts
         ├── types/            # Ambient type declarations
         └── styles/           # Additional global styles
 ```
@@ -177,7 +172,8 @@ stockmind-ai/
 These conventions come from `CLAUDE.md` — please follow them when adding code:
 
 - **Services** — server-side data fetching lives in `src/services/<domain>-service.ts`, not inside page files. Pages import from services and focus on rendering.
-- **Actions** — client-side API calls (POST, DELETE, etc.) live in `src/actions/<domain>.ts` as named functions (e.g. `createAlert`, `submitOrder`, `dismissMissedAlerts`). Components call these instead of making inline `fetch` calls.
+- **Actions** — client-side API calls (POST, DELETE, etc.) live in `src/actions/<domain>.ts` as named functions (e.g. `createAlert`, `submitOrder`, `dismissMissedAlerts`). Components call these instead of making inline `fetch` calls, and the actions themselves go through `apiFetch`/`apiSend` in `src/actions/http.ts` rather than bare `fetch` — see [API Documentation → Conventions](#conventions-1).
+- **Route handlers** — every exported method wraps itself in `withAuth`, `withUser` or `withAccount`, and returns errors through the `src/lib/http/problem.ts` helpers. `npm run prebuild` fails the build otherwise.
 - **shadcn/ui** — add components via `npx shadcn@latest add <name>` from `frontend/`. Do not manually edit files in `src/components/ui/`.
 - **Path alias** — `@/*` maps to `frontend/src/*`.
 - **Route groups** — `(auth)` and `(main)` do not affect URLs; they only scope layouts.
@@ -189,11 +185,15 @@ These conventions come from `CLAUDE.md` — please follow them when adding code:
 Run from `frontend/`:
 
 ```bash
-npm run dev      # Start the Next.js dev server on localhost:3000
-npm run build    # Production build
-npm run start    # Start the production build
-npm run lint     # Run ESLint
+npm run dev        # Start the Next.js dev server on localhost:3000
+npm run build      # Production build (runs prebuild first)
+npm run prebuild   # Route-auth gate — fails if any API method skips an auth wrapper
+npm run start      # Start the production build
+npm run lint       # Run ESLint
+npm run seed:demo  # Reseed the shared demo account
 ```
+
+`prebuild` runs `scripts/check-route-auth.mjs`, which walks every `route.ts` under `src/app/(main)/api/` and asserts each exported HTTP method is wrapped in `withAuth`/`withUser`/`withAccount`, unless its path is listed in `src/lib/http/public-routes.ts`. It checks **methods, not files** — a file whose `GET` is wrapped and whose newly added `DELETE` is a bare `export async function` is exactly the mistake worth catching. It also flags an allowlisted path with no route file behind it, so the exemption list cannot accumulate entries a future route would silently inherit. `npm run build` runs inside the Docker build, so the gate is part of the image.
 
 <!-- TODO: No automated test suite or `npm test` script is configured yet. Add unit/integration tests and document the command here. -->
 
@@ -288,87 +288,175 @@ High-level model:
 - **missed_alerts** — triggered alerts the user hasn't acknowledged, dismissed when the bell dropdown is read.
 - **subscriptions** — Stripe-mirrored billing rows (one per Stripe subscription). `users.subscription_plan` and `users.stripe_customer_id` are denormalized for hot-path reads; the table is the audit trail synced from webhooks.
 
-<!-- TODO: Migration 009 is intentionally skipped in the filename sequence — confirm whether this is a historical gap or a pending migration and document it here. -->
+There is no migration `009`. No file with that prefix exists anywhere in the repository's history — it is a numbering gap, not a deleted or pending migration.
 
 ---
 
 ## API Documentation
 
-All route handlers live under `frontend/src/app/(main)/api/`. Session-protected routes require a valid Auth0 session (see `proxy.ts`); public-but-signed routes are called out explicitly. All JSON responses are `application/json`.
+All route handlers live under `frontend/src/app/(main)/api/`. The API is resource-shaped: collections are plural nouns, identifiers live in the path rather than the request body, and the method carries the verb. Read three endpoints and you can predict the rest.
+
+### Conventions
+
+**Identifiers in the path.** `DELETE /api/alerts/42`, not `DELETE /api/alerts { alertId: 42 }`. Every handler that takes an id scopes its SQL by `account_id` as well, so a guessed or borrowed id matches zero rows rather than someone else's data.
+
+**Status codes carry meaning.**
+
+| Code | Used for |
+| --- | --- |
+| `200` | A read, or a write whose updated representation the caller needs. |
+| `201` | Something was created. Carries `Location` except where the request URI already names it (`PUT`), or the created resource has no URL of its own (`POST /api/orders/{id}/executions`). |
+| `202` | Accepted but not finished — only `POST /api/transfers`. `Location` points at a status monitor. |
+| `204` | Success with nothing to say — deletes, and writes whose caller reads no body. |
+
+**One error shape.** Every session-protected route returns [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json`:
+
+```json
+{
+  "type": "https://getstockmind.com/problems/order_not_pending",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The order is no longer pending, so it cannot be cancelled.",
+  "code": "order_not_pending"
+}
+```
+
+`code` is the stable machine-readable discriminator — clients switch on it, never on `title` or `detail`. `type` is derived from `code` so the two cannot drift. Extension members (`nextAllowedAt`, `spent`, …) ride alongside for the errors that carry data. Helpers live in `src/lib/http/problem.ts`.
+
+| `code` | Status | Meaning |
+| --- | --- | --- |
+| `invalid_request` | 400 | Missing field, wrong type, unparseable body. |
+| `unauthenticated` | 401 | No session cookie, or it expired. |
+| `ai_budget_exceeded` | 402 | AI allowance spent. Extensions: `spent`, `budget`. |
+| `onboarding_required` | 403 | Valid session, no `users` row yet. Client routes to `/onboarding`. |
+| `not_found` | 404 | Missing — or not the caller's. The two are deliberately indistinguishable. |
+| `order_not_pending` | 409 | The order already filled or was cancelled. |
+| `subscription_active` | 409 | Already subscribed; checkout refused before Stripe charges anything. |
+| `no_active_subscription` | 409 | Nothing to cancel. |
+| `payload_too_large` | 413 | Body exceeded 64 KiB. Only on routes that read through `readJsonBody` — see below. |
+| `no_upcoming_earnings` | 422 | Well-formed, but the symbol has no scheduled report. |
+| `no_push_subscriptions` | 422 | Well-formed, but no device is registered to receive a push. |
+| `transfer_cooldown_active` | 429 | Inside the 72h window. Extensions: `nextAllowedAt`, `remainingMs`. |
+| `internal_error` | 500 | Unhandled. The cause is logged server-side, never returned. |
+| `upstream_failed` | 502 | Finnhub/xAI/Stripe failed or returned something unusable. Retryable. |
+
+**Authentication is per route, not just at the edge.** Every handler is wrapped in one of three ladders from `src/lib/http/with-auth.ts`, and `npm run prebuild` (`scripts/check-route-auth.mjs`) fails the build if any exported method is not:
+
+- `withAuth` — session only.
+- `withUser` — resolves `userId`; returns `onboarding_required` when there is no `users` row.
+- `withAccount` — resolves `accountId`, **provisioning the default account if absent**.
+
+Provisioning is a property of the resolver rather than the wrapper, which is the part worth knowing when adding a route: `withAccount` and `getAccountDetails` both call `getOrCreateDefaultAccount` and write, while `getDefaultAccountId` returns `null` for an account that doesn't exist. Reads that run on a timer or on mount take the last of those — `/api/missed-alerts`, `/api/transfers/cooldown` and `GET /api/push-subscriptions/{id}` — so a 60s poll never conjures an account and a watchlist for a user who never asked for one. `GET /api/watchlists` and the two `/api/portfolio/*` reads provision on purpose: it is how a first-visit user gets their default list and cash balance.
+
+The only handlers exempt from a wrapper are the five self-authenticating routes listed in `src/lib/http/public-routes.ts`, which verify a signature or shared secret themselves.
+
+**Body size is capped where it is read through `readJsonBody`.** `src/lib/http/read-json-body.ts` streams and counts bytes, aborting past 64 KiB — `request.json()` buffers the whole body before any field-level check can run, and Next caps Server Actions and proxy-read bodies but not a route handler, with no ALB limit either. The auth wrapper answers the resulting `PayloadTooLargeError` with `413`, so the size rule lives beside the session and onboarding rules rather than being re-typed in every handler. **It is not yet universal:** the three conversation routes and `/api/onboarding` use it; the seven other write routes still call `request.json()` directly.
+
+**Clients go through `src/actions/http.ts`.** `apiFetch` / `apiSend` / `apiRequest` check `res.ok`, parse the problem body into a thrown `ApiError` (`status`, `code`, `detail`, `extra`), and route a `401`/`onboarding_required` to the right page. Background pollers opt out of the navigation with `redirectOnAuthFailure: false`.
 
 ### Authentication
 
 Auth0 v4 SDK auto-registers the standard routes under `/auth/*`:
 
-- `GET  /auth/login` — start login
-- `GET  /auth/logout` — end session
-- `GET  /auth/callback` — Auth0 callback
-- `GET  /auth/profile` — current user profile
+- `GET /auth/login` — start login
+- `GET /auth/logout` — end session
+- `GET /auth/callback` — Auth0 callback
+- `GET /auth/profile` — current user profile
 
-After Auth0 signup, the onboarding page calls:
+An unauthenticated request is handled by `proxy.ts`: page navigations get a `307` to `/`, but anything under `/api/*` gets the same `401 unauthenticated` problem+json a handler would return — so an expired session during an XHR is indistinguishable from any other auth failure, instead of arriving as `200 text/html`.
 
-- `POST /api/auth/insert-user` — upsert the user record.
-  Body: `{ "fullName": string }` · Response: `{ "status": "saved" }`
+### Onboarding
 
-### Market Data (Finnhub proxies)
+- `POST /api/onboarding` → **204**. Creates the `users` row, the default account, and the profile; marks onboarding complete.
+  Body: `{ fullName, experienceLevel, motivation, interests: string[], investorStyle, engagementCadence }`
+  The one route on `withAuth` rather than `withUser` — it is what *creates* the user row, so "no user row yet" is its normal state.
 
-- `GET /api/market/status?exchange=US`
-- `GET /api/stocks/quote?symbol=AAPL`
-- `GET /api/stocks/search?q=apple`
-- `GET /api/stocks/profile?symbol=AAPL`
-- `GET /api/stocks/market-cap?symbol=AAPL`
-- `GET /api/stocks/trades?symbol=AAPL`
-- `GET /api/news/market?category=general&minId=<id>`
-- `GET /api/news/company?symbol=AAPL&from=YYYY-MM-DD&to=YYYY-MM-DD`
-- `GET /api/sectors/performance`
+### Market data (Finnhub proxies)
 
-### Portfolio & Orders
+All on `withAuth`: market data is not account state, and a quote lookup must not provision an account as a side effect. An upstream failure is `502`, not `500`.
 
-- `GET    /api/portfolio/summary` — running balance, total P&L, today's P&L, holdings with per-position weights.
-- `GET    /api/portfolio/trading-info` — info needed by the trade form.
-- `POST   /api/orders` — create a **pending** order (status defaults to `pending`; nothing is settled yet).
-  Body: `{ symbol, side: "buy"|"sell", orderType, quantity, averageFillPrice, filledAt }`
-- `PATCH  /api/orders` — cancel a pending order. Body: `{ orderId, status: "cancelled" }` (`status` must be `"cancelled"` — no other transition is supported).
-- `POST   /api/orders/execute` — settle a pending order: fills it at the current quote, then writes the execution, cash-ledger, and position rows.
-  Body: `{ orderId }` — the symbol, side, and quantity are read from the order row, not the request body.
+- `GET /api/stocks/quote?symbol=AAPL` → Finnhub quote payload.
+- `GET /api/stocks/search?q=apple` → symbol search. `q` is required and capped at 64 characters.
+- `GET /api/stocks/trades?symbol=AAPL` → **`text/event-stream`** of live trade ticks, proxied off Finnhub's websocket. Consumed by `EventSource`, which sends same-origin cookies but cannot set headers; a `401` surfaces as `onerror`.
+- `GET /api/stocks/upcoming-earnings?symbol=AAPL` → the next scheduled report. **404** when the symbol has nothing on the calendar — callers that treat that as normal opt in with `allowStatus: [404]`.
+
+### Portfolio
+
+- `GET /api/portfolio/summary` → `{ runningBalance, portfolioValue, totalPL, totalPLPercent, todayPL, todayPLPercent, holdings[], marketOpen }`. Polled every 60s while the US market is open.
+- `GET /api/portfolio/trading-info` → `{ cashBalance, positions: [{ symbol, quantity }] }` — what the trade form needs for its affordability checks.
+
+### Orders
+
+- `POST /api/orders` → **201** `{ id }`, `Location: /api/orders/{id}`. Creates a **pending** order; nothing settles yet.
+  Body: `{ symbol, side: "buy"|"sell", orderType: "market"|"limit"|"stop"|"stop_limit", quantity, averageFillPrice, filledAt }`
+  Every field is re-validated server-side — the trade forms are not a trust boundary, and a negative quantity would invert the cash sign at settlement.
+- `PATCH /api/orders/{id}` → `{ id, status: "cancelled" }`. Body: `{ "status": "cancelled" }` — the only supported transition. Cancellation is a status change rather than a `DELETE` because the row survives it.
+  **409 `order_not_pending`** for every miss, including an id that does not exist or is not the caller's: splitting out a `404` would answer "does this id exist" for ids the caller does not own, and 409 is the useful answer for the case that actually happens — cancelling an order that just filled.
+- `POST /api/orders/{id}/executions` → **201** `{ id }` (the execution id). Settles the order at the current quote, then writes the execution, cash-ledger and position rows.
+  The body is ignored entirely; the symbol, side and quantity come from the order row. No `Location`: the created resource is an execution, and executions have no URL of their own, so pointing at the parent order would name a different resource than the one created (RFC 9110 §15.3.2).
+
+There is no `GET` on either collection — `/portfolio/orders` renders server-side from `getOrdersByAccountId`.
 
 ### Transfers
 
-- `POST /api/transfers` — create a deposit or withdrawal. Resolves asynchronously (~10s simulated processing).
+- `POST /api/transfers` → **202** `{ id, status: "pending" }`, `Location: /api/transfers/{id}`.
   Body: `{ direction: "deposit"|"withdrawal", amount, method, description? }`
+  202 rather than 201: the transfer row exists, but the money has not moved — resolution runs ~10s later. `Location` is the status monitor RFC 9110 §15.3.3 asks a 202 to provide, and the account panel polls it until `status` leaves `pending` rather than waiting a fixed delay.
+  **429 `transfer_cooldown_active`** when inside the 72h window. The gate lives inside the `INSERT` itself, so two concurrent posts cannot both find a clear window.
+- `GET /api/transfers/{id}` → `{ id, direction, amount, method, status, description, initiatedAt, completedAt }`
+- `GET /api/transfers/cooldown` → `{ lastInitiatedAt, nextAllowedAt, remainingMs }`. A property of the account's transfer history, not of any one transfer, so it stays a sibling of the collection.
 
 ### Watchlists
 
-- `GET    /api/watchlist?symbol=AAPL` — is the symbol in the user's default list?
-- `POST   /api/watchlist` — add a symbol to the default list. Body: `{ symbol }`
-- `DELETE /api/watchlist` — remove a symbol. Body: `{ symbol, watchlistId? }`
-- `GET    /api/watchlist/lists?symbol=AAPL` — which of the user's lists contain the symbol.
-- `POST   /api/watchlist/lists` — add/remove a symbol from a specific list. Body: `{ watchlistId, symbol, add: boolean }`
-- `POST   /api/watchlist/create` — create a new watchlist.
-- `PATCH  /api/watchlist/manage` — rename a watchlist. Body: `{ watchlistId, name }`
-- `DELETE /api/watchlist/manage` — delete a watchlist. Body: `{ watchlistId }`
+`{id}` accepts the literal **`default`**, which resolves to the account's *oldest* list — deliberately not the one named "General", since every list can be renamed and deleted. That is what lets `/details/[symbol]` follow a stock without first fetching a list id.
+
+- `GET /api/watchlists[?symbol=AAPL]` → `[{ id, name, itemCount, containsSymbol? }]`
+  `?symbol=` **annotates** each row rather than filtering: the picker has to render the lists that *don't* hold the symbol as unchecked boxes, so a parameter that dropped those rows would be a filter wearing an annotation's name.
+- `POST /api/watchlists` → **201** `{ id, name }`, `Location: /api/watchlists/{id}`. Body: `{ name }` (≤ 60 chars).
+- `PATCH /api/watchlists/{id}` → `{ id, name }`. Body: `{ name }`.
+- `DELETE /api/watchlists/{id}` → **204**. Cascades to the list's items.
+- `PUT /api/watchlists/{id}/items/{symbol}` → **201** + `Location` when the symbol is new to the list, **204** when it was already there. Membership is a resource the client can name, so re-adding is idempotent because `PUT` is — not because the handler special-cases it.
+- `DELETE /api/watchlists/{id}/items/{symbol}` → **204**, whether or not the symbol was there. Only the list itself missing earns a 404.
 
 ### Alerts
 
-- `GET    /api/alerts` — list alerts for the current account.
-- `POST   /api/alerts` — create an alert. Body: `{ symbol, condition: "price_above"|"price_below"|"earnings"|"ai_signal", targetValue }`
-- `DELETE /api/alerts` — delete an alert. Body: `{ alertId }`
-- `GET    /api/alerts/missed` — list triggered-but-unseen alerts.
-- `DELETE /api/alerts/missed` — dismiss all missed alerts for the current account.
-- `POST   /api/alerts/test-notification` — send a test push notification to the current user.
-- `POST   /api/alerts/check` — **QStash webhook** (no Auth0 session; signature-verified via `QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`). Evaluates every active price alert, atomically claims triggered rows, sends pushes, reverts alerts whose every push failed, and records `missed_alerts` for the rest.
+- `POST /api/alerts` → **201** with the created alert, `Location: /api/alerts/{id}`.
+  Body: `{ symbol, condition: "price_above"|"price_below"|"earnings"|"ai_signal", targetValue }`
+  `targetValue` must be a positive finite number; it is omitted for `earnings`, which instead resolves the symbol's next report date. **422 `no_upcoming_earnings`** when there isn't one — the request was well formed, the symbol just has nothing to hang an alert on.
+- `DELETE /api/alerts/{id}` → **204**. A non-integer segment and another account's id both get the same 404.
+- `GET /api/missed-alerts` → `[{ id, symbol, condition, target_value, triggered_price, created_at }]` — triggered alerts the user hasn't acknowledged. Polled every 60s by the header bell.
+- `DELETE /api/missed-alerts` → **204**. `DELETE` on a collection URI empties it: the "seen them, clear the badge" action.
 
-### Push Subscriptions
+Missed alerts are their own collection rather than a `?status=` filter on `/api/alerts` because they are a separate table (migration 013) with a different shape — `triggered_price`, and no `status` or `earnings_date` — so one filtered collection would have to return two row types.
 
-- `POST   /api/push-subscription` — register a browser subscription.
-  Body: `{ endpoint, p256dh, auth }` · Endpoint host is validated against an allowlist (FCM, Mozilla, WNS, Apple).
-- `DELETE /api/push-subscription` — remove a subscription. Body: `{ endpoint }`
+There is no `GET /api/alerts`: the alerts table is server-rendered from `getAlerts`, and nothing fetches it over HTTP.
+
+### Push subscriptions
+
+`{id}` is **base64url of the subscription's endpoint URL** (`src/lib/push-endpoint.ts`). A hash would have needed a new column and a migration before a row could be looked up, and being one-way would have made the host allowlist unrepeatable once the endpoint left the client. The decoder re-encodes and compares before accepting an id, because Buffer's base64url decoder silently drops unrecognised characters — without that round trip, several distinct ids would name one subscription.
+
+- `PUT /api/push-subscriptions/{id}` → **201** when the row is new, **204** when it already existed and the keys were refreshed (browsers rotate `p256dh`/`auth` for the same endpoint, which is an update, not a create).
+  Body: `{ p256dh, auth }` · The decoded endpoint host must be on the allowlist (FCM, Mozilla, WNS, Apple) — otherwise it is an attacker-supplied URL that `web-push` would later POST to from inside the network.
+- `DELETE /api/push-subscriptions/{id}` → **204** whether or not a row was there.
+- `GET /api/push-subscriptions/{id}` → **204** registered, **404** not registered. No body: the row's contents are exactly what must never be echoed back.
+
+An id that doesn't decode to an allowlisted endpoint is **400, not 404** — deliberately breaking with the alerts precedent. The client treats a problem+json 404 from the `GET` as authority to call `sub.unsubscribe()`, so a 404 must always mean "we looked and you have none", never "we could not read the id".
+
+### AI conversations
+
+- `POST /api/conversations` → **201** whose body is a **text stream**, plus `Location: /api/conversations/{id}` and `X-Conversation-Id: {id}`.
+  Body: `{ content }` (non-empty, ≤ 4000 characters)
+  The documented oddity. The tidier alternative — plain `201 { id }`, then a second POST to say something — puts a blocking round trip in front of the first token of every new chat, which is the one place in the app where time-to-first-token is the whole experience. The id still reaches the client via the header, because the body is occupied. Creation stays lazy, so visiting `/conversation` writes nothing and the history list never fills with empty threads.
+- `POST /api/conversations/{id}/messages` → **200**, streaming the reply. Every turn after the first. No `Location` and no `X-Conversation-Id` — the id is the path the caller chose.
+- `PATCH /api/conversations/{id}` → **204**. Body: `{ title?, pinned? }` — two independent optional fields, not a flag that switches the operation. Send either or both; a single `UPDATE` applies them so a two-field patch cannot half-apply. An empty patch is a 400.
+- `DELETE /api/conversations/{id}` → **204**. Cascades to the thread's messages; the AI usage ledger is unaffected.
+
+Both POSTs return **402 `ai_budget_exceeded`** (extensions `spent`, `budget`) when the caller's AI allowance is spent — 402 Payment Required is literal here, since the block clears by upgrading.
 
 ### Subscriptions / Billing
 
-- `POST /api/stripe/checkout` — start a Stripe Checkout session for the Pro plan. Returns `{ url }` to redirect to. Reuses the user's saved `stripe_customer_id` if present so returning subscribers don't get a duplicate Stripe Customer.
-- `POST /api/stripe/cancel` — schedule the caller's active subscription to cancel at `current_period_end`. Pro access is preserved until then. Writes `cancel_at_period_end` back locally so the settings page updates without waiting for the webhook echo; idempotent if a cancellation is already scheduled. Returns 400 if there is no active subscription.
-- `POST /api/stripe/webhook` — **Stripe webhook** (no Auth0 session; signature-verified via `STRIPE_WEBHOOK_SECRET`, pinned to the Node runtime to read the raw body). Handles `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`; mirrors state into `subscriptions` and flips `users.subscription_plan` in a single transaction.
+- `POST /api/stripe/checkout` → `{ url }` to redirect to. Reuses the saved `stripe_customer_id` so returning subscribers don't get a duplicate Stripe Customer. **409 `subscription_active`** if one is already active — refused *before* creating the session, otherwise Stripe charges the card and the webhook upsert later trips on the partial unique index.
+- `POST /api/stripe/cancel` → **204**. Schedules the active subscription to cancel at `current_period_end`; Pro access is preserved until then. Writes `cancel_at_period_end` back locally so the settings page updates without waiting for the webhook echo. An already-scheduled cancellation is also 204 — it is the state the caller asked for. **409 `no_active_subscription`** when there is nothing to cancel.
 
 #### Local development
 
@@ -380,36 +468,62 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 
 Copy the `whsec_...` it prints into `STRIPE_WEBHOOK_SECRET` in `frontend/.env.local`. Trigger lifecycle events with e.g. `stripe trigger checkout.session.completed` or `stripe trigger customer.subscription.deleted`.
 
-### Health
+### Public routes
 
-- `GET /api/health` — unauthenticated liveness probe returning `{ "status": "ok" }`. Used by the ALB target group health check and the container `HEALTHCHECK`. Does no I/O, so a slow dependency never marks the task unhealthy.
+The five paths in `src/lib/http/public-routes.ts` are reachable without an Auth0 session because each verifies its own caller. That array is the single source of truth for both the proxy allowlist and the build-time guard script, so the two cannot drift. It holds **exact paths only** — a prefix like `/api/jobs/` would silently exempt every future route in that subtree.
 
-### Scheduled Jobs
+- `GET /api/health` — liveness probe returning `{ "status": "ok" }`. Used by the ALB target group and the container `HEALTHCHECK`. Does no I/O, so a slow dependency never marks the task unhealthy.
+- `GET /api/jobs/snapshot-positions` — scheduled job; `Authorization: Bearer ${CRON_SECRET}`. Writes a daily `position_history` row for every open position. Driven by an Upstash QStash schedule on `30 21 * * 1-5` (weekdays 21:30 UTC, after US market close).
+- `POST /api/alerts/check` — QStash webhook; Upstash signature verified against `QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`. Evaluates every active price alert, atomically claims triggered rows, sends pushes, reverts alerts whose every push failed, and records `missed_alerts` for the rest.
+- `POST /api/alerts/check-earnings` — QStash webhook, same signature scheme. Triggers earnings alerts whose report date has arrived.
+- `POST /api/stripe/webhook` — Stripe webhook; signature verified against `STRIPE_WEBHOOK_SECRET`, pinned to the Node runtime so the raw body can be read verbatim. Handles `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`; mirrors state into `subscriptions` and flips `users.subscription_plan` in a single transaction.
 
-- `GET /api/jobs/snapshot-positions` — **scheduled job** (auth via `Authorization: Bearer ${CRON_SECRET}`). Writes a daily row to `position_history` for every open position. Triggered by an Upstash QStash schedule on `30 21 * * 1-5` (weekdays 21:30 UTC, after US market close). This previously ran on Vercel Cron via `frontend/vercel.json`, which is now empty (`{}`).
+### Documented exceptions
 
-### Example
+Three, each deliberate:
+
+1. **`POST /api/alerts/test-notification`** — the API's one RPC endpoint. It is an action, not a resource: there is no "test notification" entity to create. Sends a canned push to every subscription on the caller's account and returns `{ sent: n }`; **422 `no_push_subscriptions`** when there are none. Nothing in the app calls it — it exists to be hit with `curl` when verifying that a device's registration actually delivers, which is otherwise only observable by waiting for a real alert to fire.
+2. **`POST /api/stripe/checkout` and `POST /api/stripe/cancel`** keep their verb-in-path shape. There is no Checkout Session or cancellation resource this app owns — Stripe does — so there is nothing here to name. They use the auth wrappers and problem+json like everything else.
+3. **The five public routes return `{ "error": "..." }`, not problem+json.** Their consumers are QStash, Stripe and a cron secret: none parse the body, all switch on status, and Stripe surfaces the raw body in its dashboard, where a `type` URL pointing at a page that doesn't exist would be worse than a plain string.
+
+### Examples
 
 ```bash
 # Create a price alert (session cookie required)
-curl -X POST http://localhost:3000/api/alerts \
+curl -i -X POST http://localhost:3000/api/alerts \
   -H 'Content-Type: application/json' \
   -b cookies.txt \
   -d '{"symbol":"AAPL","condition":"price_above","targetValue":200}'
+# → 201 Created
+#   Location: /api/alerts/57
+
+# Add a symbol to the default watchlist — idempotent
+curl -i -X PUT http://localhost:3000/api/watchlists/default/items/NVDA -b cookies.txt
+# → 201 Created on the first call, 204 No Content on the second
+
+# Cancel a pending order
+curl -i -X PATCH http://localhost:3000/api/orders/128 \
+  -H 'Content-Type: application/json' \
+  -b cookies.txt \
+  -d '{"status":"cancelled"}'
+# → 200, or 409 with code "order_not_pending" if it already filled
 ```
+
+For status assertions the UI can't show (`201`/`202`/`204`/`Location`), copy the session cookie out of devtools into `cookies.txt` and use `curl -i -b cookies.txt` as above.
 
 ---
 
 ## Background Jobs
 
-Two recurring processes drive most of the "live" behavior:
+Three recurring processes drive most of the "live" behavior:
 
-1. **Alert checker** — `POST /api/alerts/check` is triggered by an Upstash QStash schedule. The handler verifies the Upstash signature, fetches current quotes for every active alert's symbol, and atomically transitions matching rows to `triggered`. Alerts whose push notifications all fail are reverted to `active`; successful ones are mirrored into `missed_alerts` so the user sees them in the bell dropdown.
-2. **Position snapshots** — `GET /api/jobs/snapshot-positions` is triggered by an Upstash QStash schedule every weekday at 21:30 UTC (`30 21 * * 1-5`, after US market close). It writes a `position_history` row per open position so the portfolio charts have an end-of-day anchor. This used to run on Vercel Cron; after the move to AWS, `vercel.json` is empty and QStash drives it by calling the public app URL with the `CRON_SECRET` bearer token.
+1. **Price alert checker** — `POST /api/alerts/check` is triggered by an Upstash QStash schedule. The handler verifies the Upstash signature, fetches current quotes for every active price alert's symbol, and atomically transitions matching rows to `triggered`. Alerts whose push notifications all fail are reverted to `active`; successful ones are mirrored into `missed_alerts` so the user sees them in the bell dropdown.
+2. **Earnings alert checker** — `POST /api/alerts/check-earnings`, same QStash signature scheme. Claims every active `earnings` alert whose `earnings_date` has arrived, pushes it, and mirrors it into `missed_alerts`. Split from the price checker because it is date-driven rather than quote-driven and needs no market-data call at all.
+3. **Position snapshots** — `GET /api/jobs/snapshot-positions` is triggered by an Upstash QStash schedule every weekday at 21:30 UTC (`30 21 * * 1-5`, after US market close). It writes a `position_history` row per open position so the portfolio charts have an end-of-day anchor. This used to run on Vercel Cron; after the move to AWS, `vercel.json` is empty and QStash drives it by calling the public app URL with the `CRON_SECRET` bearer token.
 
-Both jobs run by having QStash call the public app URL on the ALB — there is no AWS-native scheduler (EventBridge) involved.
+All three run by having QStash call the public app URL on the ALB — there is no AWS-native scheduler (EventBridge) involved. They are the only routes reachable without an Auth0 session besides `/api/health`, and each verifies its own caller; see [API Documentation → Public routes](#public-routes).
 
-<!-- TODO: Document how to configure the QStash schedule/destination pointing at /api/alerts/check (URL, HTTP method, frequency) so a new contributor can wire it up from scratch. -->
+<!-- TODO: The QStash schedules live only in the Upstash console — no cadence for the two alert checkers is recorded in this repo. Document their destination URLs, HTTP methods and frequencies so a new contributor can wire them up from scratch. -->
 
 ---
 
@@ -533,7 +647,7 @@ aws ecs update-service --cluster stockmind-cluster \
 ### Database & scheduled jobs
 
 - Apply any pending `/migrations/*.sql` to the Neon database alongside the deploy.
-- The background jobs run on **QStash schedules** that call the public app URL — point them at `https://getstockmind.com/api/alerts/check` and `https://getstockmind.com/api/jobs/snapshot-positions` (the latter with the `CRON_SECRET` bearer token). See [Background Jobs](#background-jobs).
+- The background jobs run on **QStash schedules** that call the public app URL — point them at `https://getstockmind.com/api/alerts/check`, `https://getstockmind.com/api/alerts/check-earnings`, and `https://getstockmind.com/api/jobs/snapshot-positions` (the last with the `CRON_SECRET` bearer token). See [Background Jobs](#background-jobs).
 
 ---
 
