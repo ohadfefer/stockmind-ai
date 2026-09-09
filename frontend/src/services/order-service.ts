@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db"
+import { getDb, type SqlTag } from "@/lib/db"
 
 export interface CreateOrderParams {
   accountId: number
@@ -91,18 +91,25 @@ export async function getPendingOrder(
  *    caller settles the terms the order was actually placed with rather than
  *    whatever the request body claimed.
  *
- * Deliberately marks the order filled *before* the money moves. The reverse
- * order risks settling one order twice, which duplicates cash; this way a crash
- * mid-settlement leaves a filled order with no ledger row — visible to the
- * invariant checker and repairable. Neither is ideal: the real fix is a single
- * transaction spanning the whole pipeline, tracked separately.
+ * Runs on the caller's tag, and the caller is expected to be inside a
+ * transaction that also writes the execution, the ledger entry and the
+ * position. It used to be the first of five separate transactions, which is why
+ * the ordering below was load-bearing: claiming first risked leaving a filled
+ * order with no ledger row, claiming last risked settling one order twice. With
+ * the whole pipeline in one transaction neither half-state can be observed, and
+ * a failed claim must *throw* rather than return — a plain return would commit
+ * whatever ran before it.
+ *
+ * The compare-and-set still matters inside the transaction. It is what makes a
+ * replay of a settlement that already committed a no-op: the second caller
+ * finds no pending row, so it books nothing.
  */
 export async function claimPendingOrder(
+  sql: SqlTag,
   orderId: number,
   accountId: number,
   fillPrice: number,
 ): Promise<OrderTerms | null> {
-  const sql = getDb()
   const rows = await sql`
     UPDATE orders
     SET status = 'filled',

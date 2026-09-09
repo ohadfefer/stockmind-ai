@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db"
+import { getDb, type SqlTag } from "@/lib/db"
 
 export interface Position {
   id: number
@@ -49,11 +49,21 @@ interface UpdatePositionParams {
  * exists (migration 006), so ON CONFLICT DO UPDATE takes a row lock and
  * re-reads the conflicting row; and a plain UPDATE that blocks on a concurrent
  * writer re-evaluates its WHERE and SET against the new row version. Both are
- * atomic at READ COMMITTED.
+ * atomic at READ COMMITTED. Running them at SERIALIZABLE, as the executions
+ * route now does, costs nothing but the occasional false-positive 40001 the
+ * caller's retry absorbs.
+ *
+ * Does not invalidate the positions cache — the caller must, once its
+ * transaction has committed. Invalidating from here would fire while the write
+ * is still uncommitted, and a getPositions starting in the gap between the two
+ * would read pre-trade rows and cache them for the full TTL. The positionsEpoch
+ * guard cannot help: it protects a read already in flight at the moment of
+ * invalidation, not one that begins after it.
  */
-export async function updatePosition(params: UpdatePositionParams): Promise<void> {
-  const sql = getDb()
-
+export async function updatePosition(
+  sql: SqlTag,
+  params: UpdatePositionParams,
+): Promise<void> {
   if (params.side === "buy") {
     const totalCost = params.quantity * params.price + params.commission + params.fees
 
@@ -102,8 +112,6 @@ export async function updatePosition(params: UpdatePositionParams): Promise<void
         AND quantity > 0
     `
   }
-
-  invalidatePositions(params.accountId)
 }
 
 export async function getPositions(accountId: number): Promise<Position[]> {
