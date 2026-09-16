@@ -248,6 +248,15 @@ npm run seed:demo  # Reseed the shared demo account
 | `QSTASH_CURRENT_SIGNING_KEY` | Current signing key used to verify inbound QStash calls. |
 | `QSTASH_NEXT_SIGNING_KEY`    | Next signing key for seamless rotation.                  |
 
+### Upstash Redis
+
+| Variable                   | Description                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `UPSTASH_REDIS_REST_URL`   | REST endpoint of the Upstash Redis database (used by `@upstash/redis`).     |
+| `UPSTASH_REDIS_REST_TOKEN` | REST token for that database (server only).                                 |
+
+Provisioned locally and in SSM ahead of the Redis integration; no app code reads them yet.
+
 ### Web Push Notifications
 
 | Variable                      | Description                                                                           |
@@ -616,7 +625,7 @@ Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
 
 The runtime secrets are stored in **SSM Parameter Store** as `SecureString` under `/stockmind/*` and referenced by the task definition's `secrets` block, so they're injected as env vars at container start and never baked into the image:
 
-`APP_BASE_URL`, `AUTH0_SECRET`, `AUTH0_CLIENT_SECRET`, `CRON_SECRET`, `DATABASE_URL`, `FINNHUB_API_KEY`, `FMP_API_KEY`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VAPID_PRIVATE_KEY`, `XAI_API_KEY`.
+`APP_BASE_URL`, `AUTH0_SECRET`, `AUTH0_CLIENT_SECRET`, `CRON_SECRET`, `DATABASE_URL`, `FINNHUB_API_KEY`, `FMP_API_KEY`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `VAPID_PRIVATE_KEY`, `XAI_API_KEY`.
 
 Non-secret config (`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `STRIPE_PRICE_ID`) is set as plaintext `environment` entries on the task definition. Changing a secret means updating its SSM value and forcing a new deployment so the container re-reads it.
 
