@@ -38,6 +38,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - [FMP](https://financialmodelingprep.com) (currently gated behind an issue — see `src/app/(main)/dashboard/page.tsx`)
 - [xAI Grok](https://x.ai) (`grok-4-1-fast-reasoning`) via the [Vercel AI SDK](https://sdk.vercel.ai) (`ai` + `@ai-sdk/xai`) for the AI assistant and portfolio review
 - [Upstash QStash](https://upstash.com/qstash) for signed, scheduled webhooks that drive the background jobs (alert checker + position snapshots)
+- [Upstash Redis](https://upstash.com/redis) via `@upstash/redis` (REST) as the shared market-data cache — quotes, profiles, market status; see [Caching](#caching)
 - [web-push](https://github.com/web-push-libs/web-push) + VAPID keys for browser push notifications
 - [@vercel/analytics](https://vercel.com/docs/analytics) for page analytics
 
@@ -66,6 +67,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
   - Finnhub API key
   - [xAI](https://x.ai) API key (powers the Grok-based AI assistant and portfolio review)
   - Upstash QStash (signing keys, plus a schedule for the background jobs)
+  - Upstash Redis database (the free tier is plenty) for the market-data cache — optional: without it the app falls back to calling Finnhub on every render
   - VAPID key pair for Web Push (generate with `npx web-push generate-vapid-keys`)
   - Stripe account (test mode is sufficient for local dev) and the [Stripe CLI](https://stripe.com/docs/stripe-cli) for forwarding webhooks to localhost
   - For deployment: an AWS account (ECR, ECS/Fargate, ALB, ACM, SSM) and [Docker](https://www.docker.com) to build images — optional for local dev
@@ -161,7 +163,7 @@ stockmind-ai/
         │   ├── stripe/       # stripe-service, webhook-service, subscription-service, billing-service, cancellation-service
         │   └── ...           # user, account, order, execution, transfer, stock, watchlist, push-subscription, notification
         ├── hooks/            # Custom React hooks (use-mobile, use-notifications, use-toast)
-        ├── lib/              # auth0, db (Neon), finnhub, fmp, format, symbol, push-endpoint, utils
+        ├── lib/              # auth0, db (Neon), redis (Upstash), finnhub, fmp, format, symbol, push-endpoint, utils
         │   └── http/         # problem.ts (RFC 9457), with-auth.ts, public-routes.ts, read-json-body.ts
         ├── types/            # Ambient type declarations
         └── styles/           # Additional global styles
@@ -255,7 +257,7 @@ npm run seed:demo  # Reseed the shared demo account
 | `UPSTASH_REDIS_REST_URL`   | REST endpoint of the Upstash Redis database (used by `@upstash/redis`).     |
 | `UPSTASH_REDIS_REST_TOKEN` | REST token for that database (server only).                                 |
 
-Provisioned locally and in SSM ahead of the Redis integration; no app code reads them yet.
+Back the shared market-data cache — see [Caching](#caching). Both are optional: the cache fails open, so with them unset (or pointing at a dead database) the app still serves every page, just with a Finnhub call per render.
 
 ### Web Push Notifications
 
@@ -298,6 +300,41 @@ High-level model:
 - **subscriptions** — Stripe-mirrored billing rows (one per Stripe subscription). `users.subscription_plan` and `users.stripe_customer_id` are denormalized for hot-path reads; the table is the audit trail synced from webhooks.
 
 There is no migration `009`. No file with that prefix exists anywhere in the repository's history — it is a numbering gap, not a deleted or pending migration.
+
+---
+
+## Caching
+
+Market data is cached in **Upstash Redis** over its REST API (`@upstash/redis`), so every request, every poll and every ECS task reads one shared copy instead of each container warming its own from Finnhub. `src/lib/redis.ts` owns the client and the fail-open wrapper; `src/services/stock/quote-cache.ts` is the only module that reads or writes it.
+
+### Fail-open by construction
+
+Nothing in the cache is a source of truth. Every operation goes through `redisTry(label, op)`, which turns **any** failure — timeout, network, Upstash error, missing credentials — into `undefined`, and `undefined` reads exactly like a miss: the caller goes to Finnhub and the page renders either way. `null` stays reserved for "key not found".
+
+Three details make that cheap during an outage:
+
+- **A 2s budget per command, with one retry inside it.** The SDK evaluates the `signal` function once while building the request and shares that signal across the retry, and an abort rethrows instead of retrying — so a lookup is capped at ~2s end to end, and the retry only buys a second try at a fast failure like a dropped socket. A cache read must never wait longer than the Finnhub call it is trying to avoid. (Left at the SDK default it would be 6 attempts with exponential backoff — ~4.3s of sleeping on top of the attempts themselves.)
+- **A 15s process-local breaker.** After a failure, Redis is skipped entirely for 15 seconds, so an outage costs one timeout per window rather than one per lookup, and logs once instead of one stack trace per symbol.
+- **Lazy client.** `getRedis()` builds on first use, like `getDb()` — `next build` imports route modules without the runtime env, and a top-level client would throw on the missing URL. The single shared instance also matters for throughput: the SDK auto-pipelines per client, so the 2N GETs a dashboard render issues in one tick leave as one HTTP request.
+
+### Keys
+
+| Key | Value | Expiry (`EX`) | Treated as fresh for |
+| --- | ----- | ------------- | -------------------- |
+| `market-status:US` | `{ isOpen, fetchedAt }` | 1 h | 30 s |
+| `quote:{SYMBOL}` | `{ quote, marketWasOpen, fetchedAt }` | 7 d — but 5 min for a zeroed quote | 60 s while the market is open; 3 h while closed, and only if the snapshot was itself taken while closed |
+| `profile:{SYMBOL}` | `{ profile, fetchedAt }` | 7 d | 24 h |
+
+**Freshness comes from `fetchedAt`, not from the key's expiry.** The two can't be collapsed. The closed-market rule turns on *how* the snapshot was taken (`marketWasOpen`) and not just how old it is, and a Finnhub failure falls back to whatever is cached *however old it is* — so an entry has to outlive the window in which it counts as fresh. The `EX` values are a garbage-collection ceiling for symbols nobody looks at any more, nothing else.
+
+**Why a closed-market quote still ages out after 3 h.** `marketWasOpen` alone can't carry the decision: a snapshot taken after Monday's close still reads as "taken while closed" on Tuesday evening, so without an age bound it would be served in place of Tuesday's close for as long as the key lived, whenever nobody happened to load that symbol during Tuesday's session. Nothing else writes `quote:*` — the alert checker, the snapshot job, `/api/stocks/quote` and order execution all call Finnhub directly, so no background process refreshes the key on the app's behalf. The bound has to be short enough that a snapshot can never outlive a close it predates; the tightest gap is the last pre-open moment (09:30 ET, which still reads closed) to an **early-close half-day** at 13:00 ET, so three hours sits under that 3h30m. Six hours looks fine against a normal 16:00 close and is wrong on half-days.
+
+**Why zeroed quotes expire in 5 minutes.** Finnhub answers an unknown or delisted ticker with `200` and `c: 0` (plus `null` `d`/`dp`), so `finnhubFetch` can't reject on it. In a shared cache those zeros would otherwise be handed to every user for a week; the short expiry still spares an API call per render for a dead ticker parked on someone's watchlist.
+
+### What stays in the process
+
+- **In-flight request coalescing.** `quote-cache.ts` keeps a pending promise per symbol for quotes and profiles (two `Map`s) plus a single one for market status, so concurrent callers share one load — a pending promise can't be handed through Redis. Each promise covers the Redis read as well as the Finnhub fetch, so a caller arriving during the round-trip (or in the gap between Finnhub's answer and the write-back) joins it instead of starting its own. The quote map is keyed `${symbol}:${marketOpen}`, because a promise can settle *from cache* under whichever rule its originator was applying: around the opening bell two callers can disagree about the market for up to 30s, and the one that thinks it's open must not inherit a pre-market snapshot the closed rule waved through.
+- **`positionsCache` in `services/position/position-service.ts`.** Deliberately not moved: it fronts a cheap Neon query, and its epoch-guarded invalidation (a read that began before the last `invalidatePositions` refuses to write its now-stale rows back) is a process-local mechanism that doesn't translate to a shared cache.
 
 ---
 

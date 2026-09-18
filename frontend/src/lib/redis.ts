@@ -17,8 +17,10 @@ import { Redis } from "@upstash/redis"
 
 let client: Redis | null = null
 
-// Per attempt. A cache read must never wait longer than the Finnhub call it
-// is trying to avoid.
+// One budget per command, not per attempt: the SDK evaluates the signal
+// function once while building the request and reuses that signal across the
+// retry, and an abort rethrows rather than retrying. A cache read must never
+// wait longer than the Finnhub call it is trying to avoid.
 const REQUEST_TIMEOUT_MS = 2_000
 
 export function getRedis(): Redis {
@@ -32,9 +34,9 @@ export function getRedis(): Redis {
       // that to the caller as if Redis had answered. The function form
       // rethrows, and gives every request its own fresh signal.
       signal: () => AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      // The default is 5 retries with exponential backoff, ~11s of stalling
-      // per lookup during an outage. One retry covers a dropped socket;
-      // anything worse is a miss.
+      // The default is 6 attempts with exponential backoff — ~4.3s of
+      // sleeping on top of the attempts themselves. One retry covers a
+      // dropped socket; anything worse is a miss.
       retry: { retries: 1 },
     })
   }
