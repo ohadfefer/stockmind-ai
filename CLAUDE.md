@@ -53,9 +53,10 @@ frontend/src/
 ├── components/
 │   ├── ui/               # shadcn/ui primitives (do not manually edit)
 │   ├── pwa/              # Service-worker registration + iOS install hint
+│   ├── profile/          # Investing-profile options + choice cards, shared by onboarding and settings/strategy
 │   └── ...               # Feature dirs: dashboard/, portfolio/, watchlist/, details/, alerts/, account/, settings/
 ├── actions/              # Client-side API calls (see convention below); http.ts is the shared client
-├── services/             # Server-side data fetching (subdirs: ai/, alerts/, dashboard/, position/, stripe/)
+├── services/             # Server-side data fetching (subdirs: ai/, alerts/, dashboard/, position/, settings/, stripe/)
 ├── hooks/                # Custom hooks (use-mobile, use-notifications, use-toast)
 └── lib/                  # auth0, db, redis, finnhub, fmp, format, symbol, push-endpoint, utils
     └── http/             # problem.ts, with-auth.ts, public-routes.ts, read-json-body.ts, ai-budget.ts

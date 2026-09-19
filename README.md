@@ -140,7 +140,7 @@ stockmind-ai/
         │       ├── news/              # Market & per-symbol news
         │       ├── details/[symbol]/  # Stock detail page
         │       ├── account/           # Balance, transfers, history
-        │       ├── settings/          # User preferences (notifications, payments)
+        │       ├── settings/          # User preferences (notifications, strategy profile, payments)
         │       ├── conversation/      # AI assistant chat
         │       └── api/               # Route handlers — see API Documentation
         ├── components/
@@ -151,7 +151,8 @@ stockmind-ai/
         │   ├── details/      # Stock detail widgets
         │   ├── alerts/       # Alerts table + missed-alerts bell
         │   ├── account/      # Account tabs
-        │   ├── settings/     # Settings form (notifications, payments)
+        │   ├── settings/     # Settings panes (notifications, strategy/ profile editor, subscription/)
+        │   ├── profile/      # Investing-profile options, choice cards and interest grid — shared by onboarding and settings
         │   ├── sidebar.tsx
         │   └── header.tsx
         ├── actions/          # Client-side API calls (named exports), all via actions/http.ts
@@ -160,6 +161,7 @@ stockmind-ai/
         │   ├── alerts/       # alerts-service, alert-checker-service, missed-alerts-service
         │   ├── dashboard/    # sector, index, and watchlist aggregates
         │   ├── position/     # position-service, position-history-service
+        │   ├── settings/     # per-pane page-data loaders (strategy-page-data)
         │   ├── stripe/       # stripe-service, webhook-service, subscription-service, billing-service, cancellation-service
         │   └── ...           # user, account, order, execution, transfer, stock, watchlist, push-subscription, notification
         ├── hooks/            # Custom React hooks (use-mobile, use-notifications, use-toast)
@@ -396,7 +398,7 @@ Provisioning is a property of the resolver rather than the wrapper, which is the
 
 The only handlers exempt from a wrapper are the five self-authenticating routes listed in `src/lib/http/public-routes.ts`, which verify a signature or shared secret themselves.
 
-**Body size is capped where it is read through `readJsonBody`.** `src/lib/http/read-json-body.ts` streams and counts bytes, aborting past 64 KiB — `request.json()` buffers the whole body before any field-level check can run, and Next caps Server Actions and proxy-read bodies but not a route handler, with no ALB limit either. The auth wrapper answers the resulting `PayloadTooLargeError` with `413`, so the size rule lives beside the session and onboarding rules rather than being re-typed in every handler. **It is not yet universal:** the three conversation routes and `/api/onboarding` use it; the seven other write routes still call `request.json()` directly.
+**Body size is capped where it is read through `readJsonBody`.** `src/lib/http/read-json-body.ts` streams and counts bytes, aborting past 64 KiB — `request.json()` buffers the whole body before any field-level check can run, and Next caps Server Actions and proxy-read bodies but not a route handler, with no ALB limit either. The auth wrapper answers the resulting `PayloadTooLargeError` with `413`, so the size rule lives beside the session and onboarding rules rather than being re-typed in every handler. **It is not yet universal:** the three conversation routes, `/api/onboarding` and `/api/profile` use it; the seven other write routes still call `request.json()` directly.
 
 **Clients go through `src/actions/http.ts`.** `apiFetch` / `apiSend` / `apiRequest` check `res.ok`, parse the problem body into a thrown `ApiError` (`status`, `code`, `detail`, `extra`), and route a `401`/`onboarding_required` to the right page. Background pollers opt out of the navigation with `redirectOnAuthFailure: false`.
 
@@ -416,6 +418,14 @@ An unauthenticated request is handled by `proxy.ts`: page navigations get a `307
 - `POST /api/onboarding` → **204**. Creates the `users` row, the default account, and the profile; marks onboarding complete.
   Body: `{ fullName, experienceLevel, motivation, interests: string[], investorStyle, engagementCadence }`
   The one route on `withAuth` rather than `withUser` — it is what *creates* the user row, so "no user row yet" is its normal state.
+
+### Profile
+
+The caller's investing profile (the five onboarding answers), a singleton per user — so no id in the path. On `withUser`, not `withAccount`: it hangs off the `users` row and editing it must not provision a brokerage account.
+
+- `PATCH /api/profile` → `{ experienceLevel, motivation, interests, investorStyle, engagementCadence, updatedAt }`.
+  Body: any subset of `{ experienceLevel, motivation, interests: string[], investorStyle, engagementCadence }` — Settings → Strategy edits one answer at a time, so only the fields present change. An empty body is `400`; unknown interest values are dropped rather than rejected, as onboarding does. **404** when the user has no profile row.
+  No `GET`: the settings page renders the profile server-side. Both this route and `/api/onboarding` validate through `parseProfileFields` in `user-profile-service.ts`, so the allowed values live in one place.
 
 ### Market data (Finnhub proxies)
 

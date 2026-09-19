@@ -1,12 +1,8 @@
-import { Target } from "lucide-react"
-import { SettingsPlaceholder } from "@/components/settings/settings-placeholder"
+import { loadStrategyPageData } from "@/services/settings/strategy-page-data"
+import { StrategyContent } from "@/components/settings/strategy/strategy-content"
 
-export default function StrategySettingsPage() {
-  return (
-    <SettingsPlaceholder
-      title="Strategy"
-      description="Configure your trading strategy preferences."
-      icon={Target}
-    />
-  )
+export default async function StrategySettingsPage() {
+  const { profilePromise } = await loadStrategyPageData()
+
+  return <StrategyContent profilePromise={profilePromise} />
 }
