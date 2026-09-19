@@ -7,48 +7,14 @@ import { logAudit } from "@/services/audit-log-service"
 import {
   upsertUserProfile,
   markUserOnboarded,
-  type ExperienceLevel,
-  type Motivation,
-  type InvestorStyle,
-  type EngagementCadence,
+  parseProfileFields,
+  isCompleteProfile,
+  type UserProfileFields,
 } from "@/services/user-profile-service"
 import { getClientIp } from "@/lib/request-ip"
 
-const EXPERIENCE_OPTIONS: ExperienceLevel[] = ["beginner", "novice", "experienced", "expert"]
-const MOTIVATION_OPTIONS: Motivation[] = [
-  "wealth_builder",
-  "income_seeker",
-  "growth_opportunist",
-  "conscious_investor",
-  "stability_maximizer",
-]
-const STYLE_OPTIONS: InvestorStyle[] = ["passive", "hybrid", "active"]
-const CADENCE_OPTIONS: EngagementCadence[] = ["daily", "weekly", "major_events"]
-
-const ALLOWED_INTERESTS = new Set([
-  "ai_tech",
-  "emerging_markets",
-  "clean_energy",
-  "consumer_retail",
-  "real_estate",
-  "financial_services",
-  "biotech",
-  "crypto",
-  "commodities",
-  "defense_aerospace",
-  "infrastructure",
-  "bonds_fixed_income",
-  "high_yield",
-  "dividends",
-])
-
-interface OnboardingPayload {
+interface OnboardingPayload extends UserProfileFields {
   fullName: string
-  experienceLevel: ExperienceLevel
-  motivation: Motivation
-  interests: string[]
-  investorStyle: InvestorStyle
-  engagementCadence: EngagementCadence
 }
 
 function validate(body: unknown): OnboardingPayload | string {
@@ -59,28 +25,11 @@ function validate(body: unknown): OnboardingPayload | string {
   const fullName = b.fullName.trim()
   if (fullName.length > 50) return "Full name must be 50 characters or fewer"
 
-  if (typeof b.experienceLevel !== "string" || !EXPERIENCE_OPTIONS.includes(b.experienceLevel as ExperienceLevel))
-    return "Invalid experience level"
-  if (typeof b.motivation !== "string" || !MOTIVATION_OPTIONS.includes(b.motivation as Motivation))
-    return "Invalid motivation"
-  if (typeof b.investorStyle !== "string" || !STYLE_OPTIONS.includes(b.investorStyle as InvestorStyle))
-    return "Invalid investor style"
-  if (typeof b.engagementCadence !== "string" || !CADENCE_OPTIONS.includes(b.engagementCadence as EngagementCadence))
-    return "Invalid engagement cadence"
+  const profile = parseProfileFields(b)
+  if (typeof profile === "string") return profile
+  if (!isCompleteProfile(profile)) return "Every profile question must be answered"
 
-  if (!Array.isArray(b.interests)) return "Interests must be an array"
-  const interests = b.interests.filter(
-    (v): v is string => typeof v === "string" && ALLOWED_INTERESTS.has(v),
-  )
-
-  return {
-    fullName,
-    experienceLevel: b.experienceLevel as ExperienceLevel,
-    motivation: b.motivation as Motivation,
-    interests,
-    investorStyle: b.investorStyle as InvestorStyle,
-    engagementCadence: b.engagementCadence as EngagementCadence,
-  }
+  return { fullName, ...profile }
 }
 
 /**
