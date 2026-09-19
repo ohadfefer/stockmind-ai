@@ -1,9 +1,43 @@
 import type {
   ExperienceLevel,
   Motivation,
+  Interest,
   InvestorStyle,
   EngagementCadence,
+  UserProfileFields,
 } from "@/services/user-profile-service"
+
+/**
+ * Display copy for the investing profile, shared by the onboarding wizard and
+ * the strategy settings page. The values are typed against the service's
+ * lists, so an option that the server would reject fails to compile here.
+ */
+
+export const PROFILE_QUESTIONS = {
+  experienceLevel: {
+    title: "How experienced are you with investing?",
+    subtitle: "I'll match my voice to yours.",
+  },
+  motivation: {
+    title: "What motivates you to invest?",
+    subtitle:
+      "This helps me tailor insights, alerts and recommendations to your goals and investing style.",
+  },
+  interests: {
+    title: "What sparks your interest?",
+    subtitle: "Choose the topics you're curious about — we'll learn from this in conversation.",
+  },
+  investorStyle: {
+    title: "What kind of investor are you?",
+    subtitle:
+      "This helps me tailor insights, alerts and recommendations to match your investing style.",
+  },
+  engagementCadence: {
+    title: "How often do you like to stay in touch with your investments?",
+    subtitle:
+      "Everyone has a different rhythm - from daily check-ins to only hearing from me when something important happens.",
+  },
+} as const
 
 export const EXPERIENCE_OPTIONS: {
   value: ExperienceLevel
@@ -25,7 +59,7 @@ export const MOTIVATION_OPTIONS: { value: Motivation; title: string; description
   { value: "stability_maximizer", title: "Stability Maximizer", description: "I value safety and want to protect what I've built." },
 ]
 
-export const INTEREST_OPTIONS: { value: string; label: string; image: string }[] = [
+export const INTEREST_OPTIONS: { value: Interest; label: string; image: string }[] = [
   { value: "ai_tech", label: "AI & Technology", image: "/onboarding/interests/ai_tech.jpg" },
   { value: "emerging_markets", label: "Emerging Markets", image: "/onboarding/interests/emerging_markets.jpg" },
   { value: "clean_energy", label: "Clean Energy", image: "/onboarding/interests/clean_energy.jpg" },
@@ -58,3 +92,21 @@ export const CADENCE_OPTIONS: {
   { value: "weekly", title: "Weekly", description: "A weekly check-in helps me stay informed without overdoing it.", badge: "Recommended" },
   { value: "major_events", title: "Only with major events", description: "I want to only know when something important happens." },
 ]
+
+export type SingleChoiceField = Exclude<keyof UserProfileFields, "interests">
+
+export interface ChoiceOption {
+  value: string
+  title: string
+  description: string
+  stars?: number
+  badge?: string
+}
+
+/** The pick-one questions keyed by the profile field they answer. */
+export const CHOICE_OPTIONS: Record<SingleChoiceField, ChoiceOption[]> = {
+  experienceLevel: EXPERIENCE_OPTIONS,
+  motivation: MOTIVATION_OPTIONS,
+  investorStyle: STYLE_OPTIONS,
+  engagementCadence: CADENCE_OPTIONS,
+}

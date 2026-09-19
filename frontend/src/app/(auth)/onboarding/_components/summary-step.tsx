@@ -7,7 +7,7 @@ import {
   MOTIVATION_OPTIONS,
   STYLE_OPTIONS,
   INTEREST_OPTIONS,
-} from "./wizard-options"
+} from "@/components/profile/profile-options"
 import type {
   ExperienceLevel,
   Motivation,

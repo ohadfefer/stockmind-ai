@@ -1,6 +1,6 @@
 "use client"
 
-import { ChoiceCard } from "./choice-card"
+import { ChoiceCard } from "@/components/profile/choice-card"
 import { WizardHeader } from "./wizard-header"
 
 interface Option<T extends string> {

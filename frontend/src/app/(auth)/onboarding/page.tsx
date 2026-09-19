@@ -15,11 +15,12 @@ import { SingleChoiceStep } from "./_components/single-choice-step"
 import { InterestsStep } from "./_components/interests-step"
 import { SummaryStep } from "./_components/summary-step"
 import {
+  PROFILE_QUESTIONS,
   EXPERIENCE_OPTIONS,
   MOTIVATION_OPTIONS,
   STYLE_OPTIONS,
   CADENCE_OPTIONS,
-} from "./_components/wizard-options"
+} from "@/components/profile/profile-options"
 
 type Step =
   | "welcome"
@@ -102,8 +103,7 @@ export default function OnboardingPage() {
         <SingleChoiceStep
           step={1}
           totalSteps={TOTAL_QUESTION_STEPS}
-          title="How experienced are you with investing?"
-          subtitle="I'll match my voice to yours."
+          {...PROFILE_QUESTIONS.experienceLevel}
           options={EXPERIENCE_OPTIONS}
           value={experienceLevel}
           onChange={setExperienceLevel}
@@ -116,8 +116,7 @@ export default function OnboardingPage() {
         <SingleChoiceStep
           step={2}
           totalSteps={TOTAL_QUESTION_STEPS}
-          title="What motivates you to invest?"
-          subtitle="This helps me tailor insights, alerts and recommendations to your goals and investing style."
+          {...PROFILE_QUESTIONS.motivation}
           options={MOTIVATION_OPTIONS}
           value={motivation}
           onChange={setMotivation}
@@ -141,8 +140,7 @@ export default function OnboardingPage() {
         <SingleChoiceStep
           step={4}
           totalSteps={TOTAL_QUESTION_STEPS}
-          title="What kind of investor are you?"
-          subtitle="This helps me tailor insights, alerts and recommendations to match your investing style."
+          {...PROFILE_QUESTIONS.investorStyle}
           options={STYLE_OPTIONS}
           value={investorStyle}
           onChange={setInvestorStyle}
@@ -155,8 +153,7 @@ export default function OnboardingPage() {
         <SingleChoiceStep
           step={5}
           totalSteps={TOTAL_QUESTION_STEPS}
-          title="How often do you like to stay in touch with your investments?"
-          subtitle="Everyone has a different rhythm - from daily check-ins to only hearing from me when something important happens."
+          {...PROFILE_QUESTIONS.engagementCadence}
           options={CADENCE_OPTIONS}
           value={engagementCadence}
           onChange={setEngagementCadence}
