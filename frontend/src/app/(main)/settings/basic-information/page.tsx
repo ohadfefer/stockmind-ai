@@ -1,12 +1,8 @@
-import { IdCard } from "lucide-react"
-import { SettingsPlaceholder } from "@/components/settings/settings-placeholder"
+import { loadBasicInformationPageData } from "@/services/settings/basic-information-page-data"
+import { BasicInformationContent } from "@/components/settings/basic-information/basic-information-content"
 
-export default function BasicInformationSettingsPage() {
-  return (
-    <SettingsPlaceholder
-      title="Basic Information"
-      description="Manage your name, email and profile photo."
-      icon={IdCard}
-    />
-  )
+export default async function BasicInformationSettingsPage() {
+  const { detailsPromise } = await loadBasicInformationPageData()
+
+  return <BasicInformationContent detailsPromise={detailsPromise} />
 }

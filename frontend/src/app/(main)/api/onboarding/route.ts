@@ -1,7 +1,7 @@
 import { withAuth } from "@/lib/http/with-auth"
 import { invalid, noContent } from "@/lib/http/problem"
 import { readJsonBody } from "@/lib/http/read-json-body"
-import { insertUser } from "@/services/user-service"
+import { insertUser, parseFullName } from "@/services/user-service"
 import { createDefaultAccount, getDefaultAccountId } from "@/services/account/account-service"
 import { logAudit } from "@/services/audit-log-service"
 import {
@@ -21,15 +21,14 @@ function validate(body: unknown): OnboardingPayload | string {
   if (!body || typeof body !== "object") return "Invalid request body"
   const b = body as Record<string, unknown>
 
-  if (typeof b.fullName !== "string" || !b.fullName.trim()) return "Full name is required"
-  const fullName = b.fullName.trim()
-  if (fullName.length > 50) return "Full name must be 50 characters or fewer"
+  const name = parseFullName(b.fullName)
+  if ("error" in name) return name.error
 
   const profile = parseProfileFields(b)
   if (typeof profile === "string") return profile
   if (!isCompleteProfile(profile)) return "Every profile question must be answered"
 
-  return { fullName, ...profile }
+  return { fullName: name.fullName, ...profile }
 }
 
 /**
