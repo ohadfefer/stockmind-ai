@@ -35,8 +35,8 @@ function StrategySkeleton() {
     <div className="flex animate-pulse flex-col gap-6">
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <div className="h-6 w-32 rounded bg-secondary" />
-          <div className="h-4 w-36 rounded bg-secondary" />
+          <div className="h-6 w-32 rounded bg-secondary md:h-7" />
+          <div className="h-3 w-36 rounded bg-secondary md:h-4" />
         </div>
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-5">
           <div className="h-5 w-24 rounded bg-secondary" />
@@ -48,11 +48,11 @@ function StrategySkeleton() {
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-start justify-between gap-4 py-5">
             <div className="flex flex-1 flex-col gap-3">
-              <div className="h-5 w-1/2 rounded bg-secondary" />
-              <div className="h-4 w-3/4 rounded bg-secondary" />
-              <div className="h-7 w-24 rounded-md bg-secondary" />
+              <div className="h-5 w-1/2 rounded bg-secondary md:h-6" />
+              <div className="h-4 w-3/4 rounded bg-secondary md:h-5" />
+              <div className="h-6 w-24 rounded-md bg-secondary md:h-7" />
             </div>
-            <div className="size-9 rounded-full bg-secondary" />
+            <div className="size-8 rounded-full bg-secondary md:size-9" />
           </div>
         ))}
       </div>

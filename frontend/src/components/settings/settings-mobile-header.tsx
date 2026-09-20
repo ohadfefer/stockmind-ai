@@ -14,7 +14,10 @@ export function SettingsMobileHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-11 shrink-0 items-center border-b border-border bg-card px-2 md:hidden">
+    // Sits above the scrolling <main> (rendered from Header), so it stays put
+    // without sticky and nothing can scroll into view above it. `relative`
+    // anchors the centered title below.
+    <header className="relative flex h-11 shrink-0 items-center border-b border-border bg-card px-2 md:hidden">
       <button
         type="button"
         onClick={handleBack}

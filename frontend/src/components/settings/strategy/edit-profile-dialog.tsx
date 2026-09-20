@@ -92,10 +92,14 @@ export function EditProfileDialog({ field, profile, onSaved }: EditProfileDialog
         <Button
           variant="outline"
           size="icon"
-          className="shrink-0 rounded-full"
+          // 32px on mobile to sit right with the smaller row type, but the
+          // ::after keeps the tap target at 44px — WCAG 2.5.8 passes at 32,
+          // thumbs don't. Rows are py-5 apart, so the bleed can't overlap a
+          // neighbouring target.
+          className="relative size-8 shrink-0 rounded-full after:absolute after:-inset-1.5 after:content-[''] md:size-9 md:after:inset-0"
           aria-label={`Edit: ${question.title}`}
         >
-          <Pencil />
+          <Pencil className="size-3.5 md:size-4" />
         </Button>
       </DialogTrigger>
       {/* flex-col + max-h so a long option list (the 14 interest tiles)

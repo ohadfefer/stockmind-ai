@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 
 import { LayoutDashboard, Briefcase, Bot, Newspaper } from "lucide-react"
+import { isSettingsRoute } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { MobileTradeDialog } from "@/components/mobile/mobile-trade-dialog"
 
@@ -48,7 +49,7 @@ export function MobileFooter() {
   const inputFocused = useInputFocused()
 
   // Settings has its own full-screen mobile shell (back-arrow header, no nav).
-  if (pathname.startsWith("/settings")) return null
+  if (isSettingsRoute(pathname)) return null
 
   // Hide via CSS (not unmount) so the MobileTradeDialog rendered inside stays
   // mounted — unmounting closes any currently-open dialog as a side effect.
