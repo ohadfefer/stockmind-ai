@@ -237,7 +237,7 @@ function SidebarBody({
           <DropdownMenuContent align="start" side="top" className="w-52">
             <DropdownMenuItem asChild>
               <Link
-                href="/settings/general"
+                href="/settings/basic-information"
                 onClick={onNavigate}
                 className="cursor-pointer"
               >

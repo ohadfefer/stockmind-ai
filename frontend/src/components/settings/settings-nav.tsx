@@ -2,39 +2,15 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { SETTINGS_SECTIONS } from "@/components/settings/settings-sections"
 import { cn } from "@/lib/utils"
-
-type NavItem = { label: string; href: string }
-type NavSection = { id: string; heading: string; items: NavItem[] }
-
-const sections: NavSection[] = [
-  {
-    id: "profile",
-    heading: "Profile",
-    items: [
-      { label: "General", href: "/settings/general" },
-      { label: "Accounts", href: "/settings/accounts" },
-      { label: "Strategy", href: "/settings/strategy" },
-    ],
-  },
-  {
-    id: "subscription",
-    heading: "Subscription",
-    items: [{ label: "Payments", href: "/settings/payments" }],
-  },
-  {
-    id: "brokerage",
-    heading: "Stockmind brokerage",
-    items: [{ label: "Stockmind Brokerage", href: "/settings/brokerage" }],
-  },
-]
 
 export function SettingsNav() {
   const pathname = usePathname()
 
   return (
     <nav className="flex flex-col gap-6">
-      {sections.map((section) => {
+      {SETTINGS_SECTIONS.map((section) => {
         const headingId = `settings-nav-${section.id}`
         return (
           <div

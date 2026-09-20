@@ -2,15 +2,8 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { SETTINGS_NAV_ITEMS } from "@/components/settings/settings-sections"
 import { cn } from "@/lib/utils"
-
-const tabs = [
-  { label: "General", href: "/settings/general" },
-  { label: "Accounts", href: "/settings/accounts" },
-  { label: "Strategy", href: "/settings/strategy" },
-  { label: "Payments", href: "/settings/payments" },
-  { label: "Brokerage", href: "/settings/brokerage" },
-] as const
 
 export function SettingsMobileTabs() {
   const pathname = usePathname()
@@ -20,7 +13,7 @@ export function SettingsMobileTabs() {
       aria-label="Settings sections"
       className="flex overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {tabs.map((tab) => {
+      {SETTINGS_NAV_ITEMS.map((tab) => {
         const active = pathname === tab.href
         return (
           <Link
@@ -34,7 +27,7 @@ export function SettingsMobileTabs() {
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            {tab.label}
+            {tab.shortLabel ?? tab.label}
           </Link>
         )
       })}

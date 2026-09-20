@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch"
 import { useNotifications } from "@/hooks/use-notifications"
 import { IosInstallHint } from "@/components/pwa/ios-install-hint"
 
-export function GeneralSettings() {
+export function NotificationsSettings() {
   const { status, subscribe, unsubscribe } = useNotifications()
   const isEnabled = status === "subscribed"
   const isDenied = status === "denied"
@@ -20,7 +20,7 @@ export function GeneralSettings() {
 
   return (
     <div className="flex flex-col gap-1">
-      <h2 className="text-sm font-semibold text-foreground">General</h2>
+      <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

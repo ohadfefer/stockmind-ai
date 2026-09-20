@@ -1,5 +1,5 @@
-import { GeneralSettings } from "@/components/settings/general"
+import { NotificationsSettings } from "@/components/settings/notifications"
 
-export default function GeneralSettingsPage() {
-  return <GeneralSettings />
+export default function NotificationsSettingsPage() {
+  return <NotificationsSettings />
 }

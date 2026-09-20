@@ -7,12 +7,17 @@
 // Stripe checkout redirect). Falls back to /dashboard when there's nothing
 // recorded — a direct load of /settings/* with no prior in-app navigation.
 
+import { isSettingsRoute } from "@/lib/routes"
+
 const STORAGE_KEY = "stockmind:settings-back-target"
 const FALLBACK_HREF = "/dashboard"
 
 /** Record a visited route. No-ops for /settings/* so tabs don't overwrite it. */
 export function rememberRoute(path: string) {
-  if (typeof window === "undefined" || path.startsWith("/settings")) return
+  if (typeof window === "undefined") return
+  // What we store keeps the query string; what we test against must not, or a
+  // bare "/settings?x" would slip past the exact-match arm of the predicate.
+  if (isSettingsRoute(path.split("?")[0])) return
   try {
     window.sessionStorage.setItem(STORAGE_KEY, path)
   } catch {
