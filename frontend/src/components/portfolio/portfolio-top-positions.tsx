@@ -1,10 +1,10 @@
 "use client"
 
 import { Suspense, use, useMemo } from "react"
-import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { PieChart, Pie, ResponsiveContainer } from "recharts"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
+import { switchPortfolioTab } from "./portfolio-tabs-bar"
 import type { Holding } from "@/services/portfolio/portfolio-service"
 import type { PortfolioReview } from "@/services/ai/portfolio-review-service"
 
@@ -231,12 +231,19 @@ function AiInsightCard({
       <p className="text-sm leading-relaxed text-muted-foreground">
         {review.short || "No insight available. Add holdings to your portfolio."}
       </p>
-      <Link
-        href="/portfolio?tab=analyze"
+      {/* A tab switch, not a navigation — see switchPortfolioTab. pushState
+          skips the router's scroll handling, and this card sits below the
+          fold on mobile, so reset <main> (the scroll container) by hand. */}
+      <button
+        type="button"
+        onClick={() => {
+          switchPortfolioTab("analyze")
+          document.querySelector("main")?.scrollTo({ top: 0 })
+        }}
         className="mt-auto rounded-lg border border-border bg-secondary px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:bg-border"
       >
         View Full Analysis
-      </Link>
+      </button>
     </div>
   )
 }

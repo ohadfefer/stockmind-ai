@@ -3,7 +3,11 @@
 import { Suspense, use } from "react"
 import { ErrorBoundary, SectionError } from "@/components/section-error"
 import { WatchlistListBar } from "@/components/watchlist/watchlist-list-bar"
-import { WatchlistTab, WatchlistTabSkeleton } from "@/components/watchlist/watchlist-tab"
+import { WatchlistTab } from "@/components/watchlist/watchlist-tab"
+import {
+  WatchlistListBarSkeleton,
+  WatchlistTabSkeleton,
+} from "@/components/watchlist/watchlist-skeletons"
 import type {
   WatchlistPageData,
   WatchlistStocks,
@@ -64,16 +68,4 @@ function TabSection({
 }) {
   const { stocks, activeWatchlistId } = use(stocksPromise)
   return <WatchlistTab stocks={stocks} watchlistId={activeWatchlistId} />
-}
-
-function WatchlistListBarSkeleton() {
-  return (
-    <div className="flex animate-pulse items-center gap-1 border-b">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="px-4 py-2.5">
-          <div className="h-5 w-28 rounded bg-secondary" />
-        </div>
-      ))}
-    </div>
-  )
 }
