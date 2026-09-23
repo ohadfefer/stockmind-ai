@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { TabBarShell } from "@/components/tab-bar-shell"
+import { useNavigationLoader } from "@/components/navigation-loader"
 import { InlineNameInput } from "@/components/watchlist/inline-name-input"
 import {
   createWatchlist,
@@ -22,6 +23,7 @@ import type { WatchlistInfo } from "@/types/watchlist"
 
 export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }) {
   const router = useRouter()
+  const { startLoading } = useNavigationLoader()
   const searchParams = useSearchParams()
   const activeId = searchParams.get("id")
   const activeWatchlistId = activeId ? Number(activeId) : watchlists[0]?.id
@@ -67,6 +69,18 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
           <div key={wl.id} className="flex shrink-0 items-center">
             <Link
               href={`/watchlist?id=${wl.id}`}
+              // Switching lists is a real navigation — the server fetches
+              // that list's quotes — so hold the current table under the
+              // overlay instead of letting it go blank. Skipped for the
+              // active tab (the URL wouldn't change, so nothing would
+              // commit to hide it) and for modifier-clicks, which open a
+              // new tab rather than navigating here.
+              onClick={(e) => {
+                if (isActive) return
+                if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+                  startLoading()
+                }
+              }}
               className={cn(
                 "flex items-center gap-2 pl-4 pr-2 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px md:text-sm",
                 isActive
@@ -113,6 +127,9 @@ export function WatchlistListBar({ watchlists }: { watchlists: WatchlistInfo[] }
           onSave={async (name) => {
             const { id } = await createWatchlist(name)
             setIsCreating(false)
+            // Same navigation as a tab click, so same overlay. The id is
+            // freshly created, so the URL always changes.
+            startLoading()
             router.push(`/watchlist?id=${id}`)
             router.refresh()
           }}

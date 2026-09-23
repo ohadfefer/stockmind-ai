@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -9,7 +10,7 @@ import {
   useState,
 } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 interface NavigationLoaderValue {
   startLoading: () => void
@@ -74,7 +75,6 @@ export function NavigationLoaderProvider({
   children: React.ReactNode
 }) {
   const [active, setActive] = useState(false)
-  const pathname = usePathname()
   const fallbackRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const clearFallback = useCallback(() => {
@@ -92,20 +92,48 @@ export function NavigationLoaderProvider({
     fallbackRef.current = setTimeout(() => setActive(false), 10_000)
   }, [clearFallback])
 
-  // A URL change means the destination route committed → navigation is done.
-  useEffect(() => {
+  const stopLoading = useCallback(() => {
     setActive(false)
     clearFallback()
-  }, [pathname, clearFallback])
+  }, [clearFallback])
 
   useEffect(() => clearFallback, [clearFallback])
 
   return (
     <NavigationLoaderContext.Provider value={{ startLoading }}>
+      {/* useSearchParams() needs a Suspense boundary; giving the watcher its
+          own keeps the rest of the shell server-rendered, the same split
+          NavHistoryTracker uses. */}
+      <Suspense fallback={null}>
+        <UrlCommitWatcher onCommit={stopLoading} />
+      </Suspense>
       {children}
       {active && <NavigationOverlay />}
     </NavigationLoaderContext.Provider>
   )
+}
+
+/**
+ * Hides the overlay once the destination URL commits — that's what "the
+ * navigation finished" means here.
+ *
+ * Watches the query string as well as the path. Switching watchlist tabs
+ * navigates to `/watchlist?id=N`, which leaves the pathname untouched, so a
+ * pathname-only watcher would hold the overlay open until the 10s safety net
+ * fired. Callers must still avoid calling startLoading for a click that
+ * can't change the URL (e.g. the already-active tab), since nothing commits.
+ */
+function UrlCommitWatcher({ onCommit }: { onCommit: () => void }) {
+  const pathname = usePathname()
+  // .toString() keeps this a stable string dependency, so a query-only change
+  // still re-runs the effect.
+  const search = useSearchParams().toString()
+
+  useEffect(() => {
+    onCommit()
+  }, [pathname, search, onCommit])
+
+  return null
 }
 
 function NavigationOverlay() {
