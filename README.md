@@ -336,7 +336,7 @@ Three details make that cheap during an outage:
 ### What stays in the process
 
 - **In-flight request coalescing.** `quote-cache.ts` keeps a pending promise per symbol for quotes and profiles (two `Map`s) plus a single one for market status, so concurrent callers share one load — a pending promise can't be handed through Redis. Each promise covers the Redis read as well as the Finnhub fetch, so a caller arriving during the round-trip (or in the gap between Finnhub's answer and the write-back) joins it instead of starting its own. The quote map is keyed `${symbol}:${marketOpen}`, because a promise can settle *from cache* under whichever rule its originator was applying: around the opening bell two callers can disagree about the market for up to 30s, and the one that thinks it's open must not inherit a pre-market snapshot the closed rule waved through.
-- **`positionsCache` in `services/position/position-service.ts`.** Deliberately not moved: it fronts a cheap Neon query, and its epoch-guarded invalidation (a read that began before the last `invalidatePositions` refuses to write its now-stale rows back) is a process-local mechanism that doesn't translate to a shared cache.
+- **Not positions.** `getPositions` reads Neon on every call. It used to keep a 60s per-process cache that the executions route cleared after a trade, but Next loads pages and route handlers through separate runtimes, each with its own copy of the module — the clear reached the route handlers' copy while the portfolio page served pre-trade holdings from its own until the TTL ran out, and a second ECS task would have missed it the same way. A process-local cache is only safe for data no write has to invalidate.
 
 ---
 

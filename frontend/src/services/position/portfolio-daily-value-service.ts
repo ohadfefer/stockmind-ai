@@ -66,7 +66,7 @@ function latestSnapshotDate(now = new Date()): string {
 }
 
 // One entry per account; self-replaces when latestSnapshotDate() rolls over,
-// so the map can't grow unbounded (same shape as positionsCache).
+// so the map can't grow unbounded.
 const statsCache = new Map<number, { date: string; stats: PortfolioStats }>()
 
 export async function getPortfolioStats(accountId: number): Promise<PortfolioStats> {

@@ -9,7 +9,7 @@ import {
   type OrderTerms,
 } from "@/services/order-service"
 import { recordTradeSettlement } from "@/services/cash-ledger-service"
-import { invalidatePositions, updatePosition } from "@/services/position/position-service"
+import { updatePosition } from "@/services/position/position-service"
 import { finnhubFetch } from "@/lib/finnhub"
 import { logAudit } from "@/services/audit-log-service"
 import { getClientIp } from "@/lib/request-ip"
@@ -122,16 +122,10 @@ export const POST = withAccount<Params>(
       throw err
     }
 
-    // After the commit, both of them, and in this order.
-    //
-    // The cache invalidation has to follow the commit or it drops rows that are
-    // about to be replaced by ones no reader can see yet. The audit write has
-    // to stay outside the transaction for a different reason: logAudit swallows
-    // its own errors, and a swallowed error inside an open transaction leaves
-    // it aborted, so the COMMIT would silently roll back a trade this endpoint
-    // had already answered 201 for.
-    invalidatePositions(accountId)
-
+    // After the commit. The audit write has to stay outside the transaction:
+    // logAudit swallows its own errors, and a swallowed error inside an open
+    // transaction leaves it aborted, so the COMMIT would silently roll back a
+    // trade this endpoint had already answered 201 for.
     await logAudit({
       userId,
       accountId,

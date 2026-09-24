@@ -10,22 +10,6 @@ export interface Position {
   updated_at: string
 }
 
-const POSITIONS_TTL_MS = 60_000
-const positionsCache = new Map<
-  number,
-  { positions: Position[]; fetchedAt: number }
->()
-// Bumped on every invalidation. A getPositions read that began before the most
-// recent bump refuses to write its (now stale) rows back into the cache, so a
-// poll racing a concurrent trade can't re-cache pre-trade holdings.
-let positionsEpoch = 0
-
-/** Drop the cached positions for an account (call after a trade mutates them). */
-export function invalidatePositions(accountId: number): void {
-  positionsCache.delete(accountId)
-  positionsEpoch++
-}
-
 interface UpdatePositionParams {
   accountId: number
   symbol: string
@@ -52,13 +36,6 @@ interface UpdatePositionParams {
  * atomic at READ COMMITTED. Running them at SERIALIZABLE, as the executions
  * route now does, costs nothing but the occasional false-positive 40001 the
  * caller's retry absorbs.
- *
- * Does not invalidate the positions cache — the caller must, once its
- * transaction has committed. Invalidating from here would fire while the write
- * is still uncommitted, and a getPositions starting in the gap between the two
- * would read pre-trade rows and cache them for the full TTL. The positionsEpoch
- * guard cannot help: it protects a read already in flight at the moment of
- * invalidation, not one that begins after it.
  */
 export async function updatePosition(
   sql: SqlTag,
@@ -114,13 +91,16 @@ export async function updatePosition(
   }
 }
 
+/**
+ * Reads Neon on every call, deliberately. This used to sit behind a 60s
+ * in-process cache that the executions route cleared after a trade, but Next
+ * loads pages and route handlers through separate runtimes, each with its own
+ * copy of this module: the clear landed in the route handlers' copy while the
+ * portfolio page kept serving pre-trade holdings from its own until the TTL
+ * ran out. A second ECS task would miss the clear the same way. Holdings are
+ * the one thing that must be right after a trade, and this is one indexed read.
+ */
 export async function getPositions(accountId: number): Promise<Position[]> {
-  const cached = positionsCache.get(accountId)
-  if (cached && Date.now() - cached.fetchedAt < POSITIONS_TTL_MS) {
-    return cached.positions
-  }
-
-  const startedEpoch = positionsEpoch
   const sql = getDb()
 
   const rows = await sql`
@@ -130,7 +110,7 @@ export async function getPositions(accountId: number): Promise<Position[]> {
     ORDER BY symbol
   `
 
-  const positions: Position[] = rows.map((r) => ({
+  return rows.map((r) => ({
     id: r.id as number,
     account_id: r.account_id as number,
     symbol: r.symbol as string,
@@ -139,11 +119,4 @@ export async function getPositions(accountId: number): Promise<Position[]> {
     realized_pnl: Number(r.realized_pnl),
     updated_at: r.updated_at as string,
   }))
-
-  // Skip the write if an invalidation landed while this query was in flight —
-  // these rows may predate the trade that triggered it.
-  if (positionsEpoch === startedEpoch) {
-    positionsCache.set(accountId, { positions, fetchedAt: Date.now() })
-  }
-  return positions
 }
