@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Loader2, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -49,6 +50,7 @@ export function EditProfileDialog({ field, profile, onSaved }: EditProfileDialog
   const [draft, setDraft] = useState<Draft>(profile[field])
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
   const question = PROFILE_QUESTIONS[field]
 
   function handleOpenChange(next: boolean) {
@@ -75,6 +77,10 @@ export function EditProfileDialog({ field, profile, onSaved }: EditProfileDialog
       const updated = await updateProfile({ [field]: draft } as UserProfilePatch)
       onSaved(updated)
       setOpen(false)
+      // onSaved already updated this page. The refresh expires its saved
+      // snapshot (staleTimes), which would bring the old answer back on a
+      // return visit.
+      router.refresh()
     } catch (err) {
       // problem+json detail is written to be shown; anything else is either a
       // network failure or a shape we don't recognise, so it gets generic copy.

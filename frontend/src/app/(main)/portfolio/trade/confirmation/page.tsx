@@ -58,7 +58,10 @@ function ConfirmationContent() {
         filledAt,
       })
 
+      // refresh() expires the client cache (staleTimes), so a saved snapshot
+      // of Orders or Portfolio can't come back without this order in it.
       router.push("/portfolio/orders")
+      router.refresh()
     } catch (err) {
       // ApiError.message is the problem+json detail — "Insufficient shares",
       // "Market is closed" and the rest are worth showing verbatim rather

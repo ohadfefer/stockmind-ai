@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Bell, TrendingUp, TrendingDown, Sparkles, CalendarDays, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -52,6 +53,7 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
   const [earningsError, setEarningsError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const { status: notifStatus, subscribe } = useNotifications()
+  const router = useRouter()
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -133,6 +135,9 @@ export function CreateAlertDialog({ symbol }: { symbol: string }) {
         )
         return
       }
+      // Expires saved page snapshots (staleTimes), so Portfolio → Alerts can't
+      // come back without this alert.
+      router.refresh()
       handleOpenChange(false)
     })
   }

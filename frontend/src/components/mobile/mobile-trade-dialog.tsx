@@ -249,7 +249,10 @@ export function MobileTradeDialog({
 
       setOpen(false)
       resetForm()
+      // refresh() expires the client cache (staleTimes), so a saved snapshot
+      // of Orders or Portfolio can't come back without this order in it.
       router.push("/portfolio/orders")
+      router.refresh()
     } catch (err) {
       setSubmitError(
         err instanceof ApiError ? err.message : "Failed to submit order. Please try again.",

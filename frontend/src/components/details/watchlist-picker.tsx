@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,7 @@ export function WatchlistPicker({
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     fetchWatchlistsForSymbol(symbol)
@@ -52,6 +54,9 @@ export function WatchlistPicker({
       await (currentlyHas
         ? removeWatchlistItem(watchlistId, symbol)
         : addWatchlistItem(watchlistId, symbol))
+      // Expires saved page snapshots (staleTimes), so Watchlist and the
+      // dashboard heatmap can't come back without this change.
+      router.refresh()
     } catch {
       // Put the checkbox back. handleOpenChange reads this same array to tell
       // the parent whether the symbol is still followed, so leaving a failed
@@ -104,6 +109,7 @@ export function WatchlistPicker({
                 const created = await createWatchlist(name)
                 setWatchlists((prev) => [...prev, { id: created.id, name: created.name, itemCount: 0, containsSymbol: false }])
                 setIsCreating(false)
+                router.refresh()
               }}
               onCancel={() => setIsCreating(false)}
             />

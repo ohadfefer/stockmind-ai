@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ChevronsUpDown, Plus, Loader2 } from "lucide-react"
 import { addWatchlistItem, DEFAULT_WATCHLIST } from "@/actions/watchlist"
@@ -16,6 +17,7 @@ export function FollowButton({
   const [following, setFollowing] = useState(initialFollowing)
   const [showPicker, setShowPicker] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleClick() {
     if (following) {
@@ -27,6 +29,9 @@ export function FollowButton({
           // state is what we asked for rather than something the server echoes.
           await addWatchlistItem(DEFAULT_WATCHLIST, symbol)
           setFollowing(true)
+          // Expires saved page snapshots (staleTimes), so Watchlist and the
+          // dashboard heatmap can't come back without this symbol.
+          router.refresh()
         } catch {
           // Contain the rejection so it can't escape the transition as an
           // uncaught error. `following` stays false, so the button keeps
