@@ -69,8 +69,9 @@ function logAndRethrow(label: string) {
 /**
  * Kicks off dashboard data fetching without blocking the page render.
  * Returns one promise per visual section so each can stream in under its own
- * Suspense boundary. The auth/account chain and portfolio summary are resolved
- * once and shared between the KPI and heatmap sections.
+ * Suspense boundary. The auth/account chain is resolved once and shared by the
+ * summary, stats and watchlist fetches; the portfolio summary is resolved once
+ * and shared between the KPI and heatmap sections.
  *
  * Market data services (indexes, ETFs, news, sentiment) already degrade to safe
  * empties internally, so they never reject. The portfolio-derived chain
@@ -102,7 +103,12 @@ export function loadDashboardPageData(): DashboardPageData {
     BENCHMARK_ETFS.map((t) => getEtfQuote(t)),
   ).then((quotes) => quotes.filter((e): e is EtfQuote => e !== null))
 
-  const watchlistPromise = getDashboardWatchlistStocks()
+  const watchlistPromise = ctxPromise.then((ctx) =>
+    ctx
+      ? getDashboardWatchlistStocks(ctx.accountId)
+      : ([] as WatchlistStockData[]),
+  )
+
   const indexesPromise = getIndexQuotes()
   const marketNewsPromise = getMarketNews("general")
   const sentimentPromise = getMarketSentiment()

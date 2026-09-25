@@ -90,9 +90,13 @@ export async function getAccountHistory(accountId: number): Promise<HistoryEntry
   return entries
 }
 
+/**
+ * The default account and its cash balance in one round trip — "default" is
+ * the oldest active account, the same rule getOrCreateDefaultAccount applies.
+ * Provisions the account when the user has none.
+ */
 export async function getAccountDetails(userId: number): Promise<AccountDetails> {
   const sql = getDb()
-  const accountId = await getOrCreateDefaultAccount(userId)
 
   const rows = await sql`
     SELECT a.id, a.account_number, a.currency, a.status,
@@ -106,10 +110,19 @@ export async function getAccountDetails(userId: number): Promise<AccountDetails>
              0
            ) AS running_balance
     FROM accounts a
-    WHERE a.id = ${accountId}
+    WHERE a.user_id = ${userId} AND a.status = 'active'
+    ORDER BY a.opened_at
+    LIMIT 1
   `
 
   const row = rows[0]
+  if (!row) {
+    // Onboarding creates the account, so only a user who somehow has none
+    // pays for provisioning plus a second read — which then finds it.
+    await getOrCreateDefaultAccount(userId)
+    return getAccountDetails(userId)
+  }
+
   return {
     id: row.id as number,
     account_number: row.account_number as string,

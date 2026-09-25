@@ -1,8 +1,5 @@
-import { auth0 } from "@/lib/auth0"
-import { getUserIdByAuth0Id } from "@/services/user-service"
 import { getWatchlists } from "@/services/watchlist/watchlist-crud-service"
 import { getWatchlistSymbolsById } from "@/services/watchlist/watchlist-items-service"
-import { getOrCreateDefaultAccount } from "@/services/account/account-service"
 import {
   getCachedQuote,
   getCachedProfile,
@@ -11,18 +8,13 @@ import {
 } from "@/services/stock/quote-cache"
 import type { WatchlistStockData } from "@/types/watchlist"
 
+// Takes the accountId the dashboard already resolved, rather than walking
+// session → user → account again on its own.
 export async function getDashboardWatchlistStocks(
+  accountId: number,
   limit?: number
 ): Promise<WatchlistStockData[]> {
   try {
-    const session = await auth0.getSession()
-    const auth0Id = session?.user?.sub
-    if (!auth0Id) return []
-
-    const userId = await getUserIdByAuth0Id(auth0Id)
-    if (!userId) return []
-
-    const accountId = await getOrCreateDefaultAccount(userId)
     const watchlists = await getWatchlists(accountId)
     const defaultWatchlistId = watchlists[0]?.id
     if (!defaultWatchlistId) return []
