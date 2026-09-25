@@ -2,6 +2,7 @@ import { withAuth } from "@/lib/http/with-auth"
 import { invalid, noContent } from "@/lib/http/problem"
 import { readJsonBody } from "@/lib/http/read-json-body"
 import { insertUser, parseFullName } from "@/services/user-service"
+import { revalidateShellUser } from "@/services/shell-user-service"
 import { createDefaultAccount, getDefaultAccountId } from "@/services/account/account-service"
 import { logAudit } from "@/services/audit-log-service"
 import {
@@ -77,6 +78,9 @@ export const POST = withAuth(async (request, { session }) => {
   })
 
   await markUserOnboarded(userId)
+  // The (main) layout caches the onboarded flag. Clear it so the redirect
+  // that follows lands in the app instead of bouncing back here.
+  revalidateShellUser(auth0Id)
 
   if (wasCreated) {
     await logAudit({

@@ -6,7 +6,7 @@ import { NavHistoryTracker } from "@/components/nav-history-tracker"
 import { NavigationLoaderProvider } from "@/components/navigation-loader"
 import { MainContainer } from "@/components/main-container"
 import { auth0 } from "@/lib/auth0"
-import { getUserName, isUserOnboarded } from "@/services/user-service"
+import { getShellUser } from "@/services/shell-user-service"
 import { getSubscriptionForAuth0Id } from "@/services/stripe/subscription-service"
 
 export default async function MainLayout({
@@ -16,23 +16,19 @@ export default async function MainLayout({
 }>) {
   const session = await auth0.getSession()
   const user = session?.user ?? null
+  const shellUser = user ? await getShellUser(user.sub) : null
 
   // A session can exist without a completed Neon users/account row (e.g. signup
   // that never finished onboarding). Such users have no DB-backed data and the
   // app breaks for them — route them back to onboarding until it's complete.
-  if (user && !(await isUserOnboarded(user.sub))) {
+  if (user && !shellUser?.onboarded) {
     redirect("/onboarding")
   }
 
-  const [displayName, subscription] = user
-    ? await Promise.all([
-        getUserName(user.sub),
-        getSubscriptionForAuth0Id(user.sub),
-      ])
-    : [undefined, null]
+  const subscription = user ? await getSubscriptionForAuth0Id(user.sub) : null
 
   const userProps: SidebarUserProps = {
-    userName: displayName ?? undefined,
+    userName: shellUser?.fullName,
     userImage: user?.picture ?? undefined,
     userPlan: subscription?.plan,
   }

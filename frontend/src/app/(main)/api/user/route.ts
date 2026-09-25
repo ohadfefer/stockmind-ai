@@ -3,6 +3,7 @@ import { withUser } from "@/lib/http/with-auth"
 import { invalid, notFound } from "@/lib/http/problem"
 import { readJsonBody } from "@/lib/http/read-json-body"
 import { parseFullName, updateUserFullName } from "@/services/user-service"
+import { revalidateShellUser } from "@/services/shell-user-service"
 
 /**
  * The caller's own users row. A singleton per user, so no id in the path; the
@@ -16,13 +17,16 @@ import { parseFullName, updateUserFullName } from "@/services/user-service"
  * no GET: the settings page renders the row server-side through
  * services/settings/basic-information-page-data.ts.
  */
-export const PATCH = withUser(async (request, { userId }) => {
+export const PATCH = withUser(async (request, { session, userId }) => {
   const body = await readJsonBody<{ fullName?: unknown }>(request)
   const name = parseFullName(body?.fullName)
   if ("error" in name) return invalid(name.error)
 
   const details = await updateUserFullName(userId, name.fullName)
   if (!details) return notFound("User")
+  // The sidebar reads the name from the layout's cached row. Clear it so the
+  // client's router.refresh() repaints the new name.
+  revalidateShellUser(session.user.sub)
 
   return NextResponse.json(details)
 })
