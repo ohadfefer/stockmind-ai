@@ -1,6 +1,9 @@
 import { auth0 } from "@/lib/auth0"
 import { getDb } from "@/lib/db"
-import { getAccountDetails } from "@/services/account/account-service"
+import {
+  getAccountDetails,
+  type AccountDetails,
+} from "@/services/account/account-service"
 
 export interface AccountContext {
   userId: number
@@ -9,15 +12,16 @@ export interface AccountContext {
 }
 
 /**
- * Single source of truth for "who is the user and which account are we acting
- * on" — resolves the auth session → app user id → default account chain.
- * Returns null only when there is no session or no app user (a genuinely
- * logged-out / un-provisioned state). A user without an account gets one
- * provisioned, so there is no null-account path. A database failure rejects
- * rather than reading as a missing user, so callers render their error state
- * instead of a legitimate-looking empty portfolio.
+ * The auth session → app user id → default account chain behind both views
+ * below. Returns null only when there is no session or no app user (a
+ * genuinely logged-out / un-provisioned state). A user without an account gets
+ * one provisioned, so there is no null-account path. A database failure
+ * rejects rather than reading as a missing user, so callers render their error
+ * state instead of a legitimate-looking empty portfolio.
  */
-export async function resolveAccountContext(): Promise<AccountContext | null> {
+async function resolveUserAccount(): Promise<
+  { userId: number; account: AccountDetails } | null
+> {
   const session = await auth0.getSession()
   if (!session) return null
 
@@ -30,6 +34,9 @@ export async function resolveAccountContext(): Promise<AccountContext | null> {
   const rows = await sql`
     SELECT u.id AS user_id,
            a.id AS account_id,
+           a.account_number,
+           a.currency,
+           a.status,
            COALESCE(
              (SELECT running_balance FROM cash_ledger
               WHERE account_id = a.id
@@ -38,7 +45,7 @@ export async function resolveAccountContext(): Promise<AccountContext | null> {
            ) AS running_balance
     FROM users u
     LEFT JOIN LATERAL (
-      SELECT id FROM accounts
+      SELECT id, account_number, currency, status FROM accounts
       WHERE user_id = u.id AND status = 'active'
       ORDER BY opened_at
       LIMIT 1
@@ -51,17 +58,40 @@ export async function resolveAccountContext(): Promise<AccountContext | null> {
   const userId = row.user_id as number
 
   if (row.account_id == null) {
-    const account = await getAccountDetails(userId)
-    return {
-      userId,
-      accountId: account.id,
-      runningBalance: account.running_balance,
-    }
+    return { userId, account: await getAccountDetails(userId) }
   }
 
   return {
     userId,
-    accountId: row.account_id as number,
-    runningBalance: Number(row.running_balance),
+    account: {
+      id: row.account_id as number,
+      account_number: row.account_number as string,
+      currency: row.currency as string,
+      status: row.status as string,
+      running_balance: Number(row.running_balance),
+    },
   }
+}
+
+/**
+ * Single source of truth for "who is the user and which account are we acting
+ * on" — the ids and cash balance most pages key their queries on.
+ */
+export async function resolveAccountContext(): Promise<AccountContext | null> {
+  const resolved = await resolveUserAccount()
+  if (!resolved) return null
+  return {
+    userId: resolved.userId,
+    accountId: resolved.account.id,
+    runningBalance: resolved.account.running_balance,
+  }
+}
+
+/**
+ * The same lookup, returning the full account row — the account page shows
+ * the account number and currency, which the context above doesn't carry.
+ */
+export async function resolveAccountDetails(): Promise<AccountDetails | null> {
+  const resolved = await resolveUserAccount()
+  return resolved?.account ?? null
 }

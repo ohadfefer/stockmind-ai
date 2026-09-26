@@ -1,7 +1,5 @@
-import { auth0 } from "@/lib/auth0"
-import { getUserIdByAuth0Id } from "@/services/user-service"
+import { resolveAccountDetails } from "@/services/account/account-context"
 import {
-  getAccountDetails,
   getAccountHistory,
   type AccountDetails,
   type HistoryEntry,
@@ -36,20 +34,6 @@ function logAndRethrow(label: string) {
   }
 }
 
-// Resolves the auth session → app user → account chain. Returns null only
-// when there is no session or no app user (a genuinely logged-out state).
-// We resolve the full AccountDetails here rather than via the shared
-// resolveAccountContext() because the account page needs currency/status,
-// which that helper doesn't expose — routing through it would just re-fetch
-// getAccountDetails a second time.
-async function resolveAccount(): Promise<AccountDetails | null> {
-  const session = await auth0.getSession()
-  if (!session) return null
-  const userId = await getUserIdByAuth0Id(session.user.sub)
-  if (!userId) return null
-  return getAccountDetails(userId)
-}
-
 /**
  * Kicks off account data fetching without blocking the page render. The tab
  * bar always needs the account, so that resolves once and is shared. Only
@@ -59,7 +43,7 @@ async function resolveAccount(): Promise<AccountDetails | null> {
  * Suspense boundary.
  */
 export function loadAccountPageData(tab: AccountTab): AccountPageData {
-  const accountPromise = resolveAccount().catch(
+  const accountPromise = resolveAccountDetails().catch(
     logAndRethrow("account details failed"),
   )
 
