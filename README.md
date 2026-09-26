@@ -35,10 +35,10 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - [Auth0](https://auth0.com) via `@auth0/nextjs-auth0` v4
 - [Stripe](https://stripe.com) for subscription billing — Checkout and webhooks (`stripe` Node SDK)
 - [Finnhub](https://finnhub.io) for live quotes, profiles, news, and market status
-- [FMP](https://financialmodelingprep.com) (currently gated behind an issue — see `src/app/(main)/dashboard/page.tsx`)
+- [FMP](https://financialmodelingprep.com) (free plan) for the dashboard's market-index bar
 - [xAI Grok](https://x.ai) (`grok-4-1-fast-reasoning`) via the [Vercel AI SDK](https://sdk.vercel.ai) (`ai` + `@ai-sdk/xai`) for the AI assistant and portfolio review
 - [Upstash QStash](https://upstash.com/qstash) for signed, scheduled webhooks that drive the background jobs (alert checker + position snapshots)
-- [Upstash Redis](https://upstash.com/redis) via `@upstash/redis` (REST) as the shared market-data cache — quotes, profiles, market status; see [Caching](#caching)
+- [Upstash Redis](https://upstash.com/redis) via `@upstash/redis` (REST) as the shared market-data cache — quotes, profiles, market status, the index bar; see [Caching](#caching)
 - [web-push](https://github.com/web-push-libs/web-push) + VAPID keys for browser push notifications
 - [@vercel/analytics](https://vercel.com/docs/analytics) for page analytics
 
@@ -235,7 +235,7 @@ npm run seed:demo  # Reseed the shared demo account
 | Variable          | Description                                                         |
 | ----------------- | ------------------------------------------------------------------- |
 | `FINNHUB_API_KEY` | Finnhub API key — required for quotes, search, profiles, news.     |
-| `FMP_API_KEY`     | Financial Modeling Prep key — used by some dashboard widgets.      |
+| `FMP_API_KEY`     | Financial Modeling Prep key — used by the dashboard's index bar.   |
 
 ### AI — xAI Grok
 
@@ -307,11 +307,11 @@ There is no migration `009`. No file with that prefix exists anywhere in the rep
 
 ## Caching
 
-Market data is cached in **Upstash Redis** over its REST API (`@upstash/redis`), so every request, every poll and every ECS task reads one shared copy instead of each container warming its own from Finnhub. `src/lib/redis.ts` owns the client and the fail-open wrapper; `src/services/stock/quote-cache.ts` is the only module that reads or writes it.
+Market data is cached in **Upstash Redis** over its REST API (`@upstash/redis`), so every request, every poll and every ECS task reads one shared copy instead of each container warming its own from Finnhub or FMP. `src/lib/redis.ts` owns the client and the fail-open wrapper. Two modules read and write it: `src/services/stock/quote-cache.ts` for the Finnhub data, and `src/services/dashboard/index-service.ts` for the dashboard's FMP index bar.
 
 ### Fail-open by construction
 
-Nothing in the cache is a source of truth. Every operation goes through `redisTry(label, op)`, which turns **any** failure — timeout, network, Upstash error, missing credentials — into `undefined`, and `undefined` reads exactly like a miss: the caller goes to Finnhub and the page renders either way. `null` stays reserved for "key not found".
+Nothing in the cache is a source of truth. Every operation goes through `redisTry(label, op)`, which turns **any** failure — timeout, network, Upstash error, missing credentials — into `undefined`, and `undefined` reads exactly like a miss: the caller goes to Finnhub (or FMP) and the page renders either way. `null` stays reserved for "key not found".
 
 Three details make that cheap during an outage:
 
@@ -326,6 +326,7 @@ Three details make that cheap during an outage:
 | `market-status:US` | `{ isOpen, fetchedAt }` | 1 h | 30 s |
 | `quote:{SYMBOL}` | `{ quote, marketWasOpen, fetchedAt }` | 7 d — but 5 min for a zeroed quote | 60 s while the market is open; 3 h while closed, and only if the snapshot was itself taken while closed |
 | `profile:{SYMBOL}` | `{ profile, fetchedAt }` | 7 d | 24 h |
+| `index-quotes` | `{ quotes: [{ …IndexQuote, fetchedAt }], checkedAt }` | 24 h | 15 min from the last refresh *attempt* (`checkedAt`); a symbol FMP fails on keeps its last quote for up to 24 h |
 
 **Freshness comes from `fetchedAt`, not from the key's expiry.** The two can't be collapsed. The closed-market rule turns on *how* the snapshot was taken (`marketWasOpen`) and not just how old it is, and a Finnhub failure falls back to whatever is cached *however old it is* — so an entry has to outlive the window in which it counts as fresh. The `EX` values are a garbage-collection ceiling for symbols nobody looks at any more, nothing else.
 
@@ -333,9 +334,14 @@ Three details make that cheap during an outage:
 
 **Why zeroed quotes expire in 5 minutes.** Finnhub answers an unknown or delisted ticker with `200` and `c: 0` (plus `null` `d`/`dp`), so `finnhubFetch` can't reject on it. In a shared cache those zeros would otherwise be handed to every user for a week; the short expiry still spares an API call per render for a dead ticker parked on someone's watchlist.
 
+**Why the index bar is one entry on a 15-minute clock.** The dashboard's bar is nine FMP `/quote` calls, one per index, and FMP's free plan allows 250 calls a day. So the bar is cached whole: a render reads one key. Freshness is age alone, with no market-status rule, because the Nikkei, Hang Seng, FTSE and STOXX 50 trade while New York is closed. Fifteen minutes is comfortably under the quota at this app's traffic, but not under continuous traffic (96 windows × 9 calls = 864); a 1-hour window is the one that would hold under any load. Two rules make running out harmless:
+
+- **The window restarts on every attempt, not every success.** A refresh that fails outright still stamps `checkedAt`, so an FMP outage or a spent quota costs nine failing calls per window instead of per render.
+- **A failed symbol keeps its last quote for up to 24 h.** Each quote carries its own `fetchedAt`, so one index FMP stops answering for doesn't blank the bar, and a spent quota leaves the last values up until it resets. The 24 h bound means a symbol FMP stops serving for good drops off the bar instead of freezing on it — and since nothing older is ever served, it's also the key's `EX`.
+
 ### What stays in the process
 
-- **In-flight request coalescing.** `quote-cache.ts` keeps a pending promise per symbol for quotes and profiles (two `Map`s) plus a single one for market status, so concurrent callers share one load — a pending promise can't be handed through Redis. Each promise covers the Redis read as well as the Finnhub fetch, so a caller arriving during the round-trip (or in the gap between Finnhub's answer and the write-back) joins it instead of starting its own. The quote map is keyed `${symbol}:${marketOpen}`, because a promise can settle *from cache* under whichever rule its originator was applying: around the opening bell two callers can disagree about the market for up to 30s, and the one that thinks it's open must not inherit a pre-market snapshot the closed rule waved through.
+- **In-flight request coalescing.** `quote-cache.ts` keeps a pending promise per symbol for quotes and profiles (two `Map`s) plus a single one for market status, so concurrent callers share one load — a pending promise can't be handed through Redis. Each promise covers the Redis read as well as the Finnhub fetch, so a caller arriving during the round-trip (or in the gap between Finnhub's answer and the write-back) joins it instead of starting its own. The quote map is keyed `${symbol}:${marketOpen}`, because a promise can settle *from cache* under whichever rule its originator was applying: around the opening bell two callers can disagree about the market for up to 30s, and the one that thinks it's open must not inherit a pre-market snapshot the closed rule waved through. `index-service.ts` keeps one more for the index bar, so concurrent renders on an expired entry share one round of FMP calls.
 - **Not positions.** `getPositions` reads Neon on every call. It used to keep a 60s per-process cache that the executions route cleared after a trade, but Next loads pages and route handlers through separate runtimes, each with its own copy of the module — the clear reached the route handlers' copy while the portfolio page served pre-trade holdings from its own until the TTL ran out, and a second ECS task would have missed it the same way. A process-local cache is only safe for data no write has to invalidate.
 
 ---
