@@ -1,12 +1,22 @@
 import { revalidateTag, unstable_cache } from "next/cache"
 import { getDb } from "@/lib/db"
 
-// Cache tag for the per-user subscription view. Anything that mutates the
-// `users.subscription_plan` or `subscriptions` row for a user must call
-// revalidateTag(getSubscriptionCacheTag(auth0Id)) so the next request reads
-// fresh data instead of the stale Next.js Data Cache entry.
-export function getSubscriptionCacheTag(auth0Id: string): string {
+function getSubscriptionCacheTag(auth0Id: string): string {
   return `subscription:${auth0Id}`
+}
+
+/**
+ * Anything that mutates the `users.subscription_plan` or `subscriptions` row
+ * for a user must call this, or the next render and the AI-budget check keep
+ * reading the old plan from the Next.js Data Cache.
+ *
+ * { expire: 0 } rather than a named profile: "default" and "max" are
+ * stale-while-revalidate, so the very next read — the settings page after a
+ * cancel, the first AI request after an upgrade — would still get the old
+ * row and only refresh it in the background.
+ */
+export function revalidateSubscription(auth0Id: string): void {
+  revalidateTag(getSubscriptionCacheTag(auth0Id), { expire: 0 })
 }
 
 export type SubscriptionType = "one_off" | "recurring"
@@ -103,18 +113,6 @@ export async function upsertSubscription(
   ])
   const insertRows = results[0] as { id: number }[]
   return { id: insertRows[0].id }
-}
-
-export async function setUserSubscriptionPlan(
-  userId: number,
-  plan: UserSubscriptionPlan,
-): Promise<void> {
-  const sql = getDb()
-  await sql`
-    UPDATE users
-    SET subscription_plan = ${plan}, updated_at = NOW()
-    WHERE id = ${userId}
-  `
 }
 
 // Targeted UPDATE for the cancel-at-period-end flow. The webhook
@@ -225,9 +223,9 @@ export interface UserSubscriptionView {
 // idx_subscriptions_user_active guarantees at most one matching row per user.
 //
 // Wrapped in unstable_cache so the (main) layout doesn't pay a DB round-trip
-// on every navigation. Invalidation is tag-driven via getSubscriptionCacheTag —
-// the Stripe webhook and the cancel API call revalidateTag whenever the row
-// changes, so the cached view stays in lock-step with truth.
+// on every navigation. Invalidation is tag-driven — the Stripe webhook and the
+// cancel API call revalidateSubscription whenever the row changes, so the
+// cached view stays in lock-step with truth.
 export async function getSubscriptionForAuth0Id(
   auth0Id: string,
 ): Promise<UserSubscriptionView | null> {
@@ -284,8 +282,5 @@ export async function revalidateSubscriptionByUserId(
   const sql = getDb()
   const rows = await sql`SELECT auth0_id FROM users WHERE id = ${userId}`
   const auth0Id = rows[0]?.auth0_id as string | undefined
-  if (auth0Id) {
-    // Next.js 16 requires a cache-life profile alongside the tag.
-    revalidateTag(getSubscriptionCacheTag(auth0Id), "default")
-  }
+  if (auth0Id) revalidateSubscription(auth0Id)
 }

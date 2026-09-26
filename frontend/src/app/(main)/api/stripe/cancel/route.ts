@@ -1,10 +1,9 @@
-import { revalidateTag } from "next/cache"
 import { withUser } from "@/lib/http/with-auth"
 import { conflict, noContent } from "@/lib/http/problem"
 import {
   getActiveSubscriptionForUserId,
-  getSubscriptionCacheTag,
   markSubscriptionCancelAtPeriodEnd,
+  revalidateSubscription,
 } from "@/services/stripe/subscription-service"
 import { scheduleSubscriptionCancellation } from "@/services/stripe/cancellation-service"
 
@@ -35,7 +34,7 @@ export const POST = withUser(async (_request, { session, userId }) => {
   // Local DB write happened ahead of the Stripe webhook echo — invalidate
   // the cached view so the settings page re-renders with the new "ends on"
   // copy on the very next request, not after the webhook round-trip.
-  revalidateTag(getSubscriptionCacheTag(session.user.sub), "default")
+  revalidateSubscription(session.user.sub)
 
   return noContent()
 })
