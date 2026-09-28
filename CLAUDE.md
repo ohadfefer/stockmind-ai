@@ -26,7 +26,7 @@ No automated test suite is configured yet.
 - **Styling**: Tailwind CSS v4 with CSS variables for theming
 - **UI**: shadcn/ui (new-york style, Radix primitives, Lucide icons); charts via Recharts
 - **Auth**: Auth0 (`@auth0/nextjs-auth0` v4)
-- **Database**: Neon Serverless Postgres (`@neondatabase/serverless`), project `misty-bread-61945131`
+- **Database**: Neon Serverless Postgres (`@neondatabase/serverless`), project `icy-bar-05201403` in `aws-us-east-1` — the same region as ECS; keep them together, since every query is a network round trip
 - **Market data**: Finnhub (primary — quotes, search, profiles, news) + FMP (free plan — the dashboard's index bar)
 - **AI**: xAI Grok via the Vercel AI SDK (`ai` + `@ai-sdk/xai`) — assistant + portfolio review
 - **Payments**: Stripe (Checkout, webhooks) for Pro subscriptions

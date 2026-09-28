@@ -226,9 +226,9 @@ npm run seed:demo  # Reseed the shared demo account
 
 | Variable       | Description                                                  |
 | -------------- | ------------------------------------------------------------ |
-| `DATABASE_URL` | Pooled Neon Postgres connection string used by the app.     |
+| `DATABASE_URL` | Pooled (`-pooler` host) Neon Postgres connection string used by the app. |
 
-<!-- TODO: Vercel's Neon integration also injects PG*/POSTGRES_* and DATABASE_URL_UNPOOLED. Document which (if any) are required by app code vs. only by tooling. Currently only DATABASE_URL is read by `src/lib/db.ts`. -->
+`DATABASE_URL` is the only database variable anything reads (`src/lib/db.ts` and the `scripts/*-test.mjs` scripts). The `PG*`, `POSTGRES_*` and `DATABASE_URL_UNPOOLED` variables that Vercel's Neon integration used to inject are unused. The Neon project lives in `aws-us-east-1`, the same region as the ECS service: every query is a network round trip, so keep the two together.
 
 ### Market Data
 
@@ -610,7 +610,7 @@ To verify, open DevTools → **Application → Manifest / Service Workers**, or 
 
 ## Deployment
 
-StockMind AI was **migrated from Vercel to AWS**. It now runs as a container on **Amazon ECS (Fargate)** behind an **Application Load Balancer**, deployed automatically by **GitHub Actions** on every push to `master`. Everything lives in `us-east-1`.
+StockMind AI was **migrated from Vercel to AWS**. It now runs as a container on **Amazon ECS (Fargate)** behind an **Application Load Balancer**, deployed automatically by **GitHub Actions** on every push to `master`. Everything lives in `us-east-1`, the Neon database included.
 
 ### Request flow
 

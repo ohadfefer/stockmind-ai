@@ -25,11 +25,10 @@ async function resolveUserAccount(): Promise<
   const session = await auth0.getSession()
   if (!session) return null
 
-  // User, default account and balance in one round trip instead of three —
-  // each one crosses the Atlantic to Neon. The LEFT JOIN keeps the user row
-  // when there is no account, so "no app user" (no row) stays distinct from
-  // "user without an account" (null account_id). The account and balance
-  // rules match getAccountDetails.
+  // User, default account and balance in one round trip instead of three.
+  // The LEFT JOIN keeps the user row when there is no account, so "no app
+  // user" (no row) stays distinct from "user without an account" (null
+  // account_id). The account and balance rules match getAccountDetails.
   const sql = getDb()
   const rows = await sql`
     SELECT u.id AS user_id,
