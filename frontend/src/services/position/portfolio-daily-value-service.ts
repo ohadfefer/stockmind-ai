@@ -20,15 +20,19 @@ export async function getPortfolioDailyValues(
 ): Promise<PortfolioDailyValue[]> {
   const sql = getDb()
 
+  // The date is formatted in SQL because the driver parses a DATE into a Date
+  // at local midnight, and toISOString() then moves it back a day in any
+  // process east of UTC. ORDER BY names the table so it sorts the DATE column
+  // (the primary-key index) rather than the text alias.
   const rows = await sql`
-    SELECT date, market_value, cost_basis, cash_balance, net_cash_flow, total_value
+    SELECT to_char(date, 'YYYY-MM-DD') AS date, market_value, cost_basis, cash_balance, net_cash_flow, total_value
     FROM portfolio_daily_value
     WHERE account_id = ${accountId}
-    ORDER BY date ASC
+    ORDER BY portfolio_daily_value.date ASC
   `
 
   return rows.map((r) => ({
-    date: (r.date as Date).toISOString().slice(0, 10),
+    date: r.date as string,
     marketValue: Number(r.market_value),
     costBasis: Number(r.cost_basis),
     cashBalance: Number(r.cash_balance),

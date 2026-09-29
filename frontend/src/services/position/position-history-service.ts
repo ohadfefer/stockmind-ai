@@ -16,18 +16,20 @@ export interface PositionHistoryEntry {
 export async function getPositionHistory(accountId: number): Promise<PositionHistoryEntry[]> {
   const sql = getDb()
 
+  // Date formatted in SQL for the same reason as getPortfolioDailyValues: a
+  // parsed DATE shifts a day through toISOString() east of UTC.
   const rows = await sql`
-    SELECT id, account_id, symbol, date, quantity, market_price, market_value, cost_basis, unrealized_pnl
+    SELECT id, account_id, symbol, to_char(date, 'YYYY-MM-DD') AS date, quantity, market_price, market_value, cost_basis, unrealized_pnl
     FROM position_history
     WHERE account_id = ${accountId}
-    ORDER BY date DESC, symbol
+    ORDER BY position_history.date DESC, symbol
   `
 
   return rows.map((r) => ({
     id: r.id as number,
     account_id: r.account_id as number,
     symbol: r.symbol as string,
-    date: (r.date as Date).toISOString().slice(0, 10),
+    date: r.date as string,
     quantity: Number(r.quantity),
     market_price: Number(r.market_price),
     market_value: Number(r.market_value),

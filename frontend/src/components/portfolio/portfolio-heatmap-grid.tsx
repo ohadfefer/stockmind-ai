@@ -21,12 +21,14 @@ function formatCurrency(value: number): string {
   })
 }
 
-function addOneDay(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number)
-  const next = new Date(y, m - 1, d + 1)
-  const yy = next.getFullYear()
-  const mm = String(next.getMonth() + 1).padStart(2, "0")
-  const dd = String(next.getDate()).padStart(2, "0")
+// The cell's local calendar date as YYYY-MM-DD. The grid is laid out in local
+// dates, so the key must be too: toISOString() is UTC, which puts it a day
+// early east of UTC and makes the (UTC) server render disagree with the
+// browser's during hydration.
+function toDateKey(date: Date): string {
+  const yy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const dd = String(date.getDate()).padStart(2, "0")
   return `${yy}-${mm}-${dd}`
 }
 
@@ -80,7 +82,7 @@ export function PortfolioHeatmapGrid({ dailyValues }: PortfolioHeatmapGridProps)
 
     // Go through Dec 31 and finish the final week
     while (currentDate <= dec31 || (currentDate.getDay() + 6) % 7 !== 0) {
-      const dateStr = currentDate.toISOString().split("T")[0]
+      const dateStr = toDateKey(currentDate)
       const dayOfWeek = (currentDate.getDay() + 6) % 7 // Monday = 0, Sunday = 6
       const month = currentDate.toLocaleDateString("en-US", { month: "short" })
 
@@ -191,7 +193,7 @@ export function PortfolioHeatmapGrid({ dailyValues }: PortfolioHeatmapGridProps)
                           className="rounded-lg bg-card text-card-foreground border-border"
                         >
                           <div className="text-xs">
-                            <p className="font-medium">{addOneDay(day.date)}</p>
+                            <p className="font-medium">{day.date}</p>
                             {day.hasData ? (
                               <>
                                 <p
