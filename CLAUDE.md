@@ -16,9 +16,10 @@ npm run dev      # Dev server (Next.js on localhost:3000)
 npm run build    # Production build (runs prebuild → scripts/check-route-auth.mjs first)
 npm run start    # Run the production build
 npm run lint     # ESLint
+npm run test:e2e # Playwright end-to-end tests (test:e2e:ui for the interactive runner)
 ```
 
-No automated test suite is configured yet.
+End-to-end tests live in `frontend/e2e/` (`@playwright/test`, Chromium). `test:e2e` starts its own `next dev` on :3000 with `DATABASE_URL` set to `E2E_DATABASE_URL`, the `e2e` Neon branch, so tests never touch production. Stop your own dev server first: Playwright refuses to reuse one, and Next 16 allows only one `next dev` per folder anyway. `playwright.config.ts` refuses to run if `E2E_DATABASE_URL` is missing or points at the same endpoint as `DATABASE_URL`.
 
 ## Architecture
 
@@ -67,7 +68,7 @@ scripts/check-route-auth.mjs  # prebuild gate: every API method must use an auth
 
 ### Migrations
 
-Plain `.sql` files in `/migrations/` (`001`…`028`; there is no `009` — a numbering gap, never a file) document the mini-brokerage schema. They're run manually against Neon (psql or the Neon SQL editor) and serve as the schema of record. Add new files with the next numeric prefix; never edit an already-applied migration.
+Plain `.sql` files in `/migrations/` (`001`…`028`; there is no `009` — a numbering gap, never a file) document the mini-brokerage schema. They're run manually against Neon (psql or the Neon SQL editor) and serve as the schema of record. Add new files with the next numeric prefix; never edit an already-applied migration. After applying one to production, reset the `e2e` branch from its parent (Neon console → Branches → e2e → Reset from parent) so the tests see the new schema; the connection string doesn't change.
 
 ### Route Groups & Layouts
 
@@ -89,7 +90,7 @@ Auth0 v4 SDK with the Next.js 16 proxy pattern (`src/lib/auth0.ts`, `src/proxy.t
 
 ### Environment Variables
 
-Local dev reads `frontend/.env.local` (gitignored — never commit). In production every secret lives in AWS SSM Parameter Store under `/stockmind/*` and is injected into the ECS task at runtime. Full table in README → Environment Variables. Keys span: app (`APP_BASE_URL`), Auth0 (`AUTH0_*`), Neon (`DATABASE_URL`), market data (`FINNHUB_API_KEY`, `FMP_API_KEY`), AI (`XAI_API_KEY`), QStash (`QSTASH_*`, `CRON_SECRET`), Upstash Redis (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`), Web Push (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` [build-time], `VAPID_PRIVATE_KEY`), and Stripe (`STRIPE_*`).
+Local dev reads `frontend/.env.local` (gitignored — never commit). In production every secret lives in AWS SSM Parameter Store under `/stockmind/*` and is injected into the ECS task at runtime. Full table in README → Environment Variables. Keys span: app (`APP_BASE_URL`), Auth0 (`AUTH0_*`), Neon (`DATABASE_URL`), market data (`FINNHUB_API_KEY`, `FMP_API_KEY`), AI (`XAI_API_KEY`), QStash (`QSTASH_*`, `CRON_SECRET`), Upstash Redis (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`), Web Push (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` [build-time], `VAPID_PRIVATE_KEY`), Stripe (`STRIPE_*`), and the local-only e2e keys (`E2E_DATABASE_URL`, `E2E_EMAIL`, `E2E_PASSWORD`).
 
 ### Conventions
 

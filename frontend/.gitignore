@@ -12,6 +12,12 @@
 
 # testing
 /coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+# Saved Playwright login sessions hold live session cookies; never commit them
+/playwright/.auth/
 
 # next.js
 /.next/

@@ -20,6 +20,14 @@ build
 *.tsbuildinfo
 next-env.d.ts
 
+# Playwright e2e tests and their output: never part of the image
+e2e
+playwright
+playwright.config.ts
+playwright-report
+test-results
+blob-report
+
 # OS / editor cruft
 .DS_Store
 npm-debug.log*
