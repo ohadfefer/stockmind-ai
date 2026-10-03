@@ -1,5 +1,6 @@
 import path from "node:path"
 import { defineConfig, devices } from "@playwright/test"
+import { AUTH_FILE } from "./e2e/auth-state"
 
 // Playwright doesn't read .env files, so load .env.local the way
 // `npm run seed:demo` does. A variable already set in the shell wins over the
@@ -37,7 +38,27 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // Logs in once per run and saves the session for every test after it.
+    // Never traced: a trace records what was typed. (The HTML report records
+    // typed text too, in step titles, so auth.setup.ts doesn't fill() the
+    // password.) A screenshot is safe (the password field shows dots) and
+    // shows where a failed login got stuck.
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "only-on-failure",
+      },
+    },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
+      dependencies: ["setup"],
+    },
+  ],
   webServer: {
     command: "npm run dev",
     url: `${baseURL}/api/health`,

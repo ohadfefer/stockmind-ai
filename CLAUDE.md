@@ -19,7 +19,7 @@ npm run lint     # ESLint
 npm run test:e2e # Playwright end-to-end tests (test:e2e:ui for the interactive runner)
 ```
 
-End-to-end tests live in `frontend/e2e/` (`@playwright/test`, Chromium). `test:e2e` starts its own `next dev` on :3000 with `DATABASE_URL` set to `E2E_DATABASE_URL`, the `e2e` Neon branch, so tests never touch production. Stop your own dev server first: Playwright refuses to reuse one, and Next 16 allows only one `next dev` per folder anyway. `playwright.config.ts` refuses to run if `E2E_DATABASE_URL` is missing or points at the same endpoint as `DATABASE_URL`.
+End-to-end tests live in `frontend/e2e/` (`@playwright/test`, Chromium). `test:e2e` starts its own `next dev` on :3000 with `DATABASE_URL` set to `E2E_DATABASE_URL`, the `e2e` Neon branch, so tests never touch production. Stop your own dev server first: Playwright refuses to reuse one, and Next 16 allows only one `next dev` per folder anyway. `playwright.config.ts` refuses to run if `E2E_DATABASE_URL` is missing or points at the same endpoint as `DATABASE_URL`. The `setup` project (`e2e/auth.setup.ts`) logs in once per run as `E2E_EMAIL` through Auth0's hosted page and saves the session to `playwright/.auth/user.json` (gitignored: a live session cookie). Every other test starts from that session, except `logged-out.spec.ts`, which starts with an empty `storageState`.
 
 ## Architecture
 
