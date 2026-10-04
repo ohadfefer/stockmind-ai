@@ -34,6 +34,10 @@ const baseURL = "http://localhost:3000"
 export default defineConfig({
   testDir: "./e2e",
   reporter: [["list"], ["html", { open: "never" }]],
+  // `next dev` compiles a route on its first visit, and the data-changing
+  // specs reach several of theirs by client-side navigation, which page.goto
+  // doesn't wait for. The default 5s can run out mid-compile.
+  expect: { timeout: 10_000 },
   use: {
     baseURL,
     trace: "retain-on-failure",
