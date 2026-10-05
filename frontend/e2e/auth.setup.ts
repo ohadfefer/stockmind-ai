@@ -1,4 +1,4 @@
-import { test as setup } from "@playwright/test"
+import { expect, test as setup } from "@playwright/test"
 import { AUTH_FILE } from "./auth-state"
 
 setup("log in as the e2e test user", async ({ page }) => {
@@ -27,9 +27,11 @@ setup("log in as the e2e test user", async ({ page }) => {
   await page.getByRole("button", { name: "Continue", exact: true }).click()
 
   // The session cookie is set by /auth/callback, so arriving at /dashboard is
-  // enough; no need to wait for the page to finish loading. Landing on
-  // /onboarding instead means the test user has no onboarded users row in the
-  // e2e branch.
-  await page.waitForURL("/dashboard", { waitUntil: "commit" })
+  // enough; no need to wait for the page to finish loading. An assertion
+  // rather than waitForURL, so a failure prints where the login got stuck:
+  // still on Auth0 means it rejected the credentials, and /onboarding means
+  // the test user has no onboarded users row in the e2e branch. The longer
+  // timeout covers `next dev` compiling /dashboard on its first visit.
+  await expect(page).toHaveURL("/dashboard", { timeout: 20_000 })
   await page.context().storageState({ path: AUTH_FILE })
 })
