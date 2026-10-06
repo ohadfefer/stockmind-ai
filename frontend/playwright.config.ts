@@ -1,11 +1,13 @@
+import fs from "node:fs"
 import path from "node:path"
 import { defineConfig, devices } from "@playwright/test"
 import { AUTH_FILE } from "./e2e/auth-state"
 
-// Playwright doesn't read .env files, so load .env.local the way
-// `npm run seed:demo` does. A variable already set in the shell wins over the
-// file.
-process.loadEnvFile(path.join(__dirname, ".env.local"))
+// Playwright doesn't read .env files, so load .env.local when it exists. A
+// variable already set in the shell wins over the file. CI has no .env.local:
+// its variables come from the job's environment.
+const envFile = path.join(__dirname, ".env.local")
+if (fs.existsSync(envFile)) process.loadEnvFile(envFile)
 
 // The test server must never touch production: it runs against the "e2e"
 // Neon branch. Compare endpoints rather than whole strings, so a pooled and a
@@ -13,14 +15,32 @@ process.loadEnvFile(path.join(__dirname, ".env.local"))
 const e2eDatabaseUrl = process.env.E2E_DATABASE_URL
 if (!e2eDatabaseUrl) {
   throw new Error(
-    "E2E_DATABASE_URL is not set. Add the e2e Neon branch's pooled connection string to .env.local.",
+    "E2E_DATABASE_URL is not set. Add the e2e Neon branch's pooled connection string to .env.local, or to the environment in CI.",
   )
 }
-const endpointOf = (url: string) =>
-  new URL(url).hostname.split(".")[0].replace(/-pooler$/, "")
+// new URL() puts the whole string, password included, on the error it throws
+// for a malformed one, so throw one that only names the variable.
+const parseDbUrl = (name: string, url: string) => {
+  try {
+    return new URL(url)
+  } catch {
+    throw new Error(`${name} is not a valid connection string.`)
+  }
+}
+// A branch copies production's roles with their passwords, so any role but
+// the branch-only e2e_runner also logs in to production. This check works
+// without DATABASE_URL, which CI doesn't set.
+if (parseDbUrl("E2E_DATABASE_URL", e2eDatabaseUrl).username !== "e2e_runner") {
+  throw new Error(
+    "E2E_DATABASE_URL must log in as e2e_runner, the e2e branch's own role. See README → Testing → One-time setup.",
+  )
+}
+const endpointOf = (name: string, url: string) =>
+  parseDbUrl(name, url).hostname.split(".")[0].replace(/-pooler$/, "")
 if (
   process.env.DATABASE_URL &&
-  endpointOf(e2eDatabaseUrl) === endpointOf(process.env.DATABASE_URL)
+  endpointOf("E2E_DATABASE_URL", e2eDatabaseUrl) ===
+    endpointOf("DATABASE_URL", process.env.DATABASE_URL)
 ) {
   throw new Error(
     "E2E_DATABASE_URL points at the same Neon endpoint as DATABASE_URL. Tests must run against the e2e branch, not production.",

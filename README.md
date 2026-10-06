@@ -218,20 +218,25 @@ npx playwright show-report   # Open the HTML report of the last run
 ### One-time setup
 
 1. `npx playwright install chromium` — downloads the browser.
-2. Sign up a dedicated test user through the app against the production database and finish onboarding, so its `users` row lives in production and survives every reset of the `e2e` branch. Put its credentials in `.env.local` as `E2E_EMAIL` and `E2E_PASSWORD`.
-3. In the Neon console, create a child branch of production named `e2e` and put its pooled connection string in `.env.local` as `E2E_DATABASE_URL`. A child branch, not an empty one, so "Reset from parent" can bring it up to date. If the branch already exists, reset it from its parent after step 2 instead.
+2. Sign up a dedicated test user through the app against the production database and finish onboarding, so its `users` row is in production when the `e2e` branch copies it. Put its credentials in `.env.local` as `E2E_EMAIL` and `E2E_PASSWORD`.
+3. In the Neon console, create a child branch of production named `e2e`. A child branch, not an empty one, so it starts with production's schema and the test user. If the branch already exists, reset it from its parent after step 2 instead. Either way the branch now holds a copy of every user's data, which the tests don't need and the e2e credentials shouldn't reach: on the `e2e` branch, run `DELETE FROM users WHERE id <> <test user's id>`. Every table cascades from `users`, so that leaves only the test user's rows.
+4. On the `e2e` branch, add a role named `e2e_runner` (Neon console → select the `e2e` branch → Roles → Add role). Put the branch's pooled connection string **for that role** in `.env.local` as `E2E_DATABASE_URL`. Don't use the default `neondb_owner`: a branch copies its parent's roles with their passwords, so that string would log in to production too. `e2e_runner` exists only on this branch.
 
 ### How a run works
 
 - `npm run test:e2e` starts its own `next dev` on `:3000` with `DATABASE_URL` set to `E2E_DATABASE_URL`. Stop your own dev server first: Playwright refuses to reuse one, since it talks to production, and Next 16 allows only one `next dev` per folder anyway.
-- `playwright.config.ts` refuses to run if `E2E_DATABASE_URL` is missing or points at the same Neon endpoint as `DATABASE_URL`.
+- `playwright.config.ts` refuses to run if `E2E_DATABASE_URL` is missing, logs in as any role but `e2e_runner`, or points at the same Neon endpoint as `DATABASE_URL`.
 - The `setup` project (`e2e/auth.setup.ts`) logs in once per run through Auth0's hosted page and saves the session to `playwright/.auth/user.json`. Every other test starts from that session, except `logged-out.spec.ts`.
 - The data-changing specs (`watchlist`, `trading`, `alerts`, `settings`) each use their own symbol or resource, so they run in parallel, and undo their writes through the API before or after each test. `trading.spec.ts` deposits $10,000 when the test user's cash is under $1,000 (deposits are limited to one per 72 h). `alerts.spec.ts` stubs `PushManager.prototype.subscribe`, because creating an alert first subscribes the browser to push.
 - Not covered: the AI assistant and portfolio review, Stripe checkout, push delivery and the QStash jobs.
 
 `playwright/.auth/`, `playwright-report/` and `test-results/` are gitignored. Treat them as secrets: the saved session and any failure trace hold a live session cookie.
 
-After applying a migration to production, reset the `e2e` branch (Neon console → Branches → `e2e` → Reset from parent) so the tests see the new schema. Its connection string doesn't change.
+### Migrations and the e2e branch
+
+Apply each new migration to the `e2e` branch first, run `npm run test:e2e`, then apply it to production. That way the migration is tested before it reaches production.
+
+Don't use "Reset from parent" to bring `e2e` up to date. A reset copies production over the whole branch, roles included, so it deletes `e2e_runner` and `E2E_DATABASE_URL` stops working. Keep the reset for when the branch's data gets into a bad state, then delete the other users' data again (setup step 3), add `e2e_runner` again, update `E2E_DATABASE_URL` with its new password, and re-apply any migration that isn't in production yet.
 
 ---
 
@@ -318,7 +323,7 @@ Back the shared market-data cache — see [Caching](#caching). Both are optional
 
 | Variable           | Description                                                                                                  |
 | ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `E2E_DATABASE_URL` | Pooled connection string of the `e2e` Neon branch. Must not be the production endpoint — the config checks. |
+| `E2E_DATABASE_URL` | Pooled connection string of the `e2e` Neon branch, for its `e2e_runner` role. Must not be the production endpoint — the config checks. |
 | `E2E_EMAIL`        | Email of the dedicated Auth0 test user.                                                                      |
 | `E2E_PASSWORD`     | That user's password.                                                                                        |
 
@@ -750,7 +755,7 @@ aws ecs update-service --cluster stockmind-cluster \
 
 ### Database & scheduled jobs
 
-- Apply any pending `/migrations/*.sql` to the Neon database alongside the deploy, then reset the `e2e` branch from its parent so the tests see the new schema (see [Testing](#testing)).
+- Apply any pending `/migrations/*.sql` to the `e2e` branch and run the e2e suite, then to the production database alongside the deploy (see [Migrations and the e2e branch](#migrations-and-the-e2e-branch)).
 - The background jobs run on **QStash schedules** that call the public app URL — point them at `https://getstockmind.com/api/alerts/check`, `https://getstockmind.com/api/alerts/check-earnings`, and `https://getstockmind.com/api/jobs/snapshot-positions` (the last with the `CRON_SECRET` bearer token). See [Background Jobs](#background-jobs).
 
 ---
@@ -768,7 +773,7 @@ Inferred from repo history and conventions:
    - Keep page components focused on rendering; push data fetching into `services/` and client `fetch` calls into `actions/`.
    - Do not hand-edit `src/components/ui/` — regenerate via the `shadcn` CLI.
    - Run `npm run lint` and `npm run test:e2e` before pushing.
-4. **Migrations** — add new `.sql` files under `/migrations/` with the next numeric prefix. Never edit an already-applied migration; write a new one instead.
+4. **Migrations** — add new `.sql` files under `/migrations/` with the next numeric prefix. Never edit an already-applied migration; write a new one instead. Apply each one to the `e2e` branch and run `npm run test:e2e` before applying it to production.
 5. **Secrets** — never commit `.env*.local` files or anything derived from them. The `.gitignore` already excludes them.
 
 ---

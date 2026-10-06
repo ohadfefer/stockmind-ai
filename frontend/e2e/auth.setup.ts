@@ -5,7 +5,9 @@ setup("log in as the e2e test user", async ({ page }) => {
   const email = process.env.E2E_EMAIL
   const password = process.env.E2E_PASSWORD
   if (!email || !password) {
-    throw new Error("E2E_EMAIL and E2E_PASSWORD must be set in .env.local.")
+    throw new Error(
+      "E2E_EMAIL and E2E_PASSWORD must be set, in .env.local or in the environment in CI.",
+    )
   }
 
   // Auth0's hosted login page: email and password on one form. Its labels end
