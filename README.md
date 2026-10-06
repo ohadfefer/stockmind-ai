@@ -726,7 +726,7 @@ Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
 
 ### CI/CD — GitHub Actions
 
-`.github/workflows/deploy.yml` runs on every push to `master` (and via manual `workflow_dispatch`), serialized by a `deploy-ecs` concurrency group so two deploys never overlap:
+`.github/workflows/deploy.yml` runs on every push to `master` (and via manual `workflow_dispatch`, which deploys only when run on `master`), serialized by a `deploy-ecs` concurrency group so two deploys never overlap:
 
 1. Build the `linux/arm64` image on a native Graviton runner (`ubuntu-24.04-arm` — no QEMU emulation), with GitHub Actions layer caching.
 2. Push to ECR tagged both `latest` and the commit SHA. (Single-arch — no provenance/SBOM attestation, since those manifest-lists break Fargate image pulls.)
@@ -741,6 +741,8 @@ Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
 | Variable | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key baked into the client bundle at build time |
 
 `.github/workflows/e2e.yml` runs the Playwright suite on every pull request into `master`. Its secrets are listed in [Testing → In CI](#in-ci).
+
+Deploys are gated on that suite. A repository ruleset on `master` (Settings → Rules → Rulesets) requires a pull request and a passing `e2e` check, with no bypass list, so code reaches `master` only through a tested PR. `deploy.yml` deploys only `master`: a manual run on any other branch skips the job, since that branch's code hasn't passed the gate.
 
 ### Secrets & configuration
 

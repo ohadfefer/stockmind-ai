@@ -25,6 +25,9 @@ permissions:
 
 jobs:
   deploy:
+    # A manual run can pick any branch, but only master's code has passed the
+    # e2e check that the master ruleset requires. Skip the rest.
+    if: github.ref == 'refs/heads/master'
     # Native Graviton runner — builds linux/arm64 directly, no QEMU emulation.
     # If this label is unavailable on your plan, switch to `ubuntu-latest` and
     # add a `docker/setup-qemu-action@v3` step before the build (much slower).
