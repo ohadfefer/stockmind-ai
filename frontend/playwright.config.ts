@@ -53,6 +53,9 @@ const baseURL = "http://localhost:3000"
 
 export default defineConfig({
   testDir: "./e2e",
+  // A test.only left in a commit would otherwise turn CI green after running
+  // one test.
+  forbidOnly: !!process.env.CI,
   reporter: [["list"], ["html", { open: "never" }]],
   // `next dev` compiles a route on its first visit, and the data-changing
   // specs reach several of theirs by client-side navigation, which page.goto
