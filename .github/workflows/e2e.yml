@@ -1,0 +1,70 @@
+name: E2E tests
+
+# Run the Playwright suite on every pull request into master, and on demand.
+# It logs in through the real Auth0 tenant as the dedicated test user and runs
+# against the e2e Neon branch (see README → Testing).
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+# Every run shares one test user and one database branch, so two runs at once
+# would undo each other's writes. Queue them, across all branches. Never cancel
+# one in progress: it could stop between a write and its cleanup.
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    # Pull requests from forks get no secrets, so the suite couldn't log in.
+    # Skip them instead of failing.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The full Chromium, not only the headless shell: alerts.spec.ts runs on
+      # channel "chromium".
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Only what the app needs to serve the pages under test. Redis, xAI,
+      # Stripe, FMP, VAPID and QStash stay out: the app runs without them and
+      # no spec depends on them. Redis above all, since its token can write
+      # the production cache. AUTH0_SECRET only encrypts this run's session
+      # cookie, so it's a value of its own, never production's.
+      #
+      # No report or trace is uploaded: they hold a live session cookie, and
+      # anyone signed in to GitHub can download a public repo's artifacts.
+      - name: Run Playwright tests
+        run: npm run test:e2e
+        env:
+          APP_BASE_URL: http://localhost:3000
+          AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+          AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+          AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+          AUTH0_SECRET: ${{ secrets.E2E_AUTH0_SECRET }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          NEXT_TELEMETRY_DISABLED: 1

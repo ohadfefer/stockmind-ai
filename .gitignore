@@ -7,6 +7,9 @@
 .claude/skills/stripe-projects
 .claude/skills/upgrade-stripe
 
+# macOS Finder view settings, created in every folder Finder opens
+.DS_Store
+
 # Local TODO scratchpads
 stripe-todo.txt
 android-emulator-setup.txt

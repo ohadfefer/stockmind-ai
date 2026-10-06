@@ -47,7 +47,7 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 - [Amazon ECR](https://aws.amazon.com/ecr/) registry + [Amazon ECS on Fargate](https://aws.amazon.com/fargate/) (ARM64/Graviton) for hosting
 - [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/) + [ACM](https://aws.amazon.com/certificate-manager/) for HTTPS, with DNS on [Cloudflare](https://www.cloudflare.com)
 - [SSM Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) (SecureString) for runtime secrets; [CloudWatch Logs](https://aws.amazon.com/cloudwatch/) for container logs
-- [GitHub Actions](https://docs.github.com/actions) CI/CD — build, push to ECR, and roll the ECS service on every push to `master`
+- [GitHub Actions](https://docs.github.com/actions) CI/CD — build, push to ECR, and roll the ECS service on every push to `master`; run the e2e suite on every pull request
 
 **Tooling**
 - ESLint (`eslint-config-next`)
@@ -110,7 +110,8 @@ stockmind-ai/
 ├── CLAUDE.md                 # Repo conventions / agent context
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml        # CI/CD — build ARM64 image, push to ECR, roll ECS service
+│       ├── deploy.yml        # CI/CD — build ARM64 image, push to ECR, roll ECS service
+│       └── e2e.yml           # Playwright e2e suite on every pull request into master
 ├── migrations/               # Plain .sql files — schema of record (run manually)
 │   ├── 001_create_users.sql  # …through 028, applied in filename order.
 │   └── ...                   # 009 does not exist; the gap is historical.
@@ -119,6 +120,8 @@ stockmind-ai/
     ├── .dockerignore         # Keeps secrets (.env*) and build artifacts out of the image
     ├── next.config.ts        # standalone output + baseline security headers
     ├── vercel.json           # Empty ({}) — legacy; scheduled jobs now run via QStash
+    ├── playwright.config.ts  # E2E config — own dev server on the e2e Neon branch, production guard
+    ├── e2e/                  # Playwright tests — Auth0 login setup + one spec per flow
     ├── scripts/
     │   ├── check-route-auth.mjs  # prebuild gate — every API method must use an auth wrapper
     │   └── seed-demo.ts          # Reseeds the shared demo account
@@ -195,11 +198,64 @@ npm run prebuild   # Route-auth gate — fails if any API method skips an auth w
 npm run start      # Start the production build
 npm run lint       # Run ESLint
 npm run seed:demo  # Reseed the shared demo account
+npm run test:e2e   # Playwright end-to-end tests (starts its own dev server)
+npm run test:e2e:ui  # Same, in Playwright's interactive runner
 ```
 
 `prebuild` runs `scripts/check-route-auth.mjs`, which walks every `route.ts` under `src/app/(main)/api/` and asserts each exported HTTP method is wrapped in `withAuth`/`withUser`/`withAccount`, unless its path is listed in `src/lib/http/public-routes.ts`. It checks **methods, not files** — a file whose `GET` is wrapped and whose newly added `DELETE` is a bare `export async function` is exactly the mistake worth catching. It also flags an allowlisted path with no route file behind it, so the exemption list cannot accumulate entries a future route would silently inherit. `npm run build` runs inside the Docker build, so the gate is part of the image.
 
-<!-- TODO: No automated test suite or `npm test` script is configured yet. Add unit/integration tests and document the command here. -->
+---
+
+## Testing
+
+End-to-end tests live in `frontend/e2e/` and run with [Playwright](https://playwright.dev) in Chromium. They log in through the real Auth0 tenant as a dedicated test user and run against a separate Neon branch, so they never write to the production database.
+
+```bash
+npm run test:e2e             # Run the suite headless
+npm run test:e2e:ui          # Interactive runner
+npx playwright show-report   # Open the HTML report of the last run
+```
+
+### One-time setup
+
+1. `npx playwright install chromium` — downloads the browser.
+2. Sign up a dedicated test user through the app against the production database and finish onboarding, so its `users` row is in production when the `e2e` branch copies it. Put its credentials in `.env.local` as `E2E_EMAIL` and `E2E_PASSWORD`.
+3. In the Neon console, create a child branch of production named `e2e`. A child branch, not an empty one, so it starts with production's schema and the test user. If the branch already exists, reset it from its parent after step 2 instead. Either way the branch now holds a copy of every user's data, which the tests don't need and the e2e credentials shouldn't reach: on the `e2e` branch, run `DELETE FROM users WHERE id <> <test user's id>`. Every table cascades from `users`, so that leaves only the test user's rows.
+4. On the `e2e` branch, add a role named `e2e_runner` (Neon console → select the `e2e` branch → Roles → Add role). Put the branch's pooled connection string **for that role** in `.env.local` as `E2E_DATABASE_URL`. Don't use the default `neondb_owner`: a branch copies its parent's roles with their passwords, so that string would log in to production too. `e2e_runner` exists only on this branch.
+
+### How a run works
+
+- `npm run test:e2e` starts its own `next dev` on `:3000` with `DATABASE_URL` set to `E2E_DATABASE_URL`. Stop your own dev server first: Playwright refuses to reuse one, since it talks to production, and Next 16 allows only one `next dev` per folder anyway.
+- `playwright.config.ts` refuses to run if `E2E_DATABASE_URL` is missing, logs in as any role but `e2e_runner`, or points at the same Neon endpoint as `DATABASE_URL`.
+- The `setup` project (`e2e/auth.setup.ts`) logs in once per run through Auth0's hosted page and saves the session to `playwright/.auth/user.json`. Every other test starts from that session, except `logged-out.spec.ts`.
+- The data-changing specs (`watchlist`, `trading`, `alerts`, `settings`) each use their own symbol or resource, so they run in parallel, and undo their writes through the API before or after each test. `trading.spec.ts` deposits $10,000 when the test user's cash is under $1,000 (deposits are limited to one per 72 h). `alerts.spec.ts` stubs `PushManager.prototype.subscribe`, because creating an alert first subscribes the browser to push.
+- Not covered: the AI assistant and portfolio review, Stripe checkout, push delivery and the QStash jobs.
+
+`playwright/.auth/`, `playwright-report/` and `test-results/` are gitignored. Treat them as secrets: the saved session and any failure trace hold a live session cookie.
+
+### In CI
+
+`.github/workflows/e2e.yml` runs the suite on every pull request into `master` and on demand (`workflow_dispatch`). Pull requests from forks are skipped: GitHub gives them no secrets, so they couldn't log in.
+
+- Runs queue in one `e2e` concurrency group across all branches, and one in progress is never cancelled. Every run shares the test user and the `e2e` branch, so two at once would undo each other's writes. For the same reason, don't run the suite locally while CI is running it.
+- `forbidOnly` fails the run if a `test.only` was committed.
+- No report or trace is uploaded. They hold a live session cookie, and anyone signed in to GitHub can download a public repo's artifacts. A failure is read from the job log.
+- The job gets only what the app needs to serve the pages under test. Redis, xAI, Stripe, FMP, VAPID and QStash stay out: the app runs without them and no spec depends on them. Redis above all, since its token can write the production cache. Without it, each render calls Finnhub directly.
+
+**Required repository secrets:**
+
+| Secret | Value |
+| --- | --- |
+| `E2E_DATABASE_URL` / `E2E_EMAIL` / `E2E_PASSWORD` | Same as in `.env.local` |
+| `AUTH0_DOMAIN` / `AUTH0_CLIENT_ID` / `AUTH0_CLIENT_SECRET` | The Auth0 application whose callbacks allow `http://localhost:3000` (the one `.env.local` uses) |
+| `E2E_AUTH0_SECRET` | A fresh `openssl rand -hex 32`. It only encrypts the run's session cookie, so it must never be production's `AUTH0_SECRET`: that one can forge sessions on the live site |
+| `FINNHUB_API_KEY` | Same as in `.env.local` |
+
+### Migrations and the e2e branch
+
+Apply each new migration to the `e2e` branch first, run `npm run test:e2e`, then apply it to production. That way the migration is tested before it reaches production.
+
+Don't use "Reset from parent" to bring `e2e` up to date. A reset copies production over the whole branch, roles included, so it deletes `e2e_runner` and `E2E_DATABASE_URL` stops working. Keep the reset for when the branch's data gets into a bad state, then delete the other users' data again (setup step 3), add `e2e_runner` again, update `E2E_DATABASE_URL` with its new password, and re-apply any migration that isn't in production yet.
 
 ---
 
@@ -228,7 +284,7 @@ npm run seed:demo  # Reseed the shared demo account
 | -------------- | ------------------------------------------------------------ |
 | `DATABASE_URL` | Pooled (`-pooler` host) Neon Postgres connection string used by the app. |
 
-`DATABASE_URL` is the only database variable anything reads (`src/lib/db.ts` and the `scripts/*-test.mjs` scripts). The `PG*`, `POSTGRES_*` and `DATABASE_URL_UNPOOLED` variables that Vercel's Neon integration used to inject are unused. The Neon project lives in `aws-us-east-1`, the same region as the ECS service: every query is a network round trip, so keep the two together.
+`DATABASE_URL` is the only database variable the app reads (`src/lib/db.ts`, which `npm run seed:demo` also goes through). The e2e suite's `E2E_DATABASE_URL` (see [End-to-end tests](#end-to-end-tests)) never reaches the app under its own name: Playwright passes it to its test server as `DATABASE_URL`. The `PG*`, `POSTGRES_*` and `DATABASE_URL_UNPOOLED` variables that Vercel's Neon integration used to inject are unused. The Neon project lives in `aws-us-east-1`, the same region as the ECS service: every query is a network round trip, so keep the two together.
 
 ### Market Data
 
@@ -281,6 +337,16 @@ Back the shared market-data cache — see [Caching](#caching). Both are optional
 | Variable      | Description                                                                                         |
 | ------------- | --------------------------------------------------------------------------------------------------- |
 | `CRON_SECRET` | Shared secret sent by the QStash schedule as `Authorization: Bearer <secret>` to the snapshot-positions job. |
+
+### End-to-end tests
+
+| Variable           | Description                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `E2E_DATABASE_URL` | Pooled connection string of the `e2e` Neon branch, for its `e2e_runner` role. Must not be the production endpoint — the config checks. |
+| `E2E_EMAIL`        | Email of the dedicated Auth0 test user.                                                                      |
+| `E2E_PASSWORD`     | That user's password.                                                                                        |
+
+Read only by `npm run test:e2e`: locally from `.env.local`, in CI from repository secrets — see [Testing](#testing). Never set them in production.
 
 ---
 
@@ -674,6 +740,8 @@ Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
 | Secret | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credentials with ECR push + ECS deploy permissions |
 | Variable | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key baked into the client bundle at build time |
 
+`.github/workflows/e2e.yml` runs the Playwright suite on every pull request into `master`. Its secrets are listed in [Testing → In CI](#in-ci).
+
 ### Secrets & configuration
 
 The runtime secrets are stored in **SSM Parameter Store** as `SecureString` under `/stockmind/*` and referenced by the task definition's `secrets` block, so they're injected as env vars at container start and never baked into the image:
@@ -708,7 +776,7 @@ aws ecs update-service --cluster stockmind-cluster \
 
 ### Database & scheduled jobs
 
-- Apply any pending `/migrations/*.sql` to the Neon database alongside the deploy.
+- Apply any pending `/migrations/*.sql` to the `e2e` branch and run the e2e suite, then to the production database alongside the deploy (see [Migrations and the e2e branch](#migrations-and-the-e2e-branch)).
 - The background jobs run on **QStash schedules** that call the public app URL — point them at `https://getstockmind.com/api/alerts/check`, `https://getstockmind.com/api/alerts/check-earnings`, and `https://getstockmind.com/api/jobs/snapshot-positions` (the last with the `CRON_SECRET` bearer token). See [Background Jobs](#background-jobs).
 
 ---
@@ -725,8 +793,8 @@ Inferred from repo history and conventions:
    - Follow the conventions in [`CLAUDE.md`](./CLAUDE.md) — especially the `services/` and `actions/` split.
    - Keep page components focused on rendering; push data fetching into `services/` and client `fetch` calls into `actions/`.
    - Do not hand-edit `src/components/ui/` — regenerate via the `shadcn` CLI.
-   - Run `npm run lint` before pushing.
-4. **Migrations** — add new `.sql` files under `/migrations/` with the next numeric prefix. Never edit an already-applied migration; write a new one instead.
+   - Run `npm run lint` and `npm run test:e2e` before pushing.
+4. **Migrations** — add new `.sql` files under `/migrations/` with the next numeric prefix. Never edit an already-applied migration; write a new one instead. Apply each one to the `e2e` branch and run `npm run test:e2e` before applying it to production.
 5. **Secrets** — never commit `.env*.local` files or anything derived from them. The `.gitignore` already excludes them.
 
 ---
