@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { useSymbolSearch } from "@/hooks/use-symbol-search"
 import { useNavigationLoader } from "@/components/navigation-loader"
+import { SymbolSearchResults } from "@/components/symbol-search-results"
 
 interface MobileSymbolSearchProps {
   navigateTo?: string
@@ -26,7 +27,7 @@ interface MobileSymbolSearchProps {
  */
 export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSearchProps) {
   const [open, setOpen] = useState(false)
-  const { query, setQuery, results, isLoading } = useSymbolSearch()
+  const { query, setQuery, results } = useSymbolSearch()
   const router = useRouter()
   const { startLoading } = useNavigationLoader()
 
@@ -41,8 +42,6 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
     if (navigateTo.startsWith("/details")) startLoading()
     router.push(`${navigateTo}/${symbol}`)
   }
-
-  const showEmpty = !isLoading && query.trim().length > 0 && results.length === 0
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -96,29 +95,9 @@ export function MobileSymbolSearch({ navigateTo = "/details" }: MobileSymbolSear
 
           {/* Only the results scroll; the fixed-height sheet stays put. */}
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-            {isLoading && (
-              <p className="px-1 py-2 text-sm text-muted-foreground">Searching…</p>
+            {results.length > 0 && (
+              <SymbolSearchResults results={results} onSelect={selectSymbol} />
             )}
-            {showEmpty && (
-              <p className="px-1 py-2 text-sm text-muted-foreground">
-                No matches for “{query.trim()}”.
-              </p>
-            )}
-            {!isLoading &&
-              results.map((item) => (
-                <button
-                  key={item.symbol}
-                  onClick={() => selectSymbol(item.symbol)}
-                  className="flex flex-col gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-secondary active:bg-secondary"
-                >
-                  <span className="font-mono text-sm font-bold text-foreground">
-                    {item.displaySymbol}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {item.description}
-                  </span>
-                </button>
-              ))}
           </div>
         </div>
       </DialogContent>

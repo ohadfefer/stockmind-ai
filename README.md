@@ -22,6 +22,59 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart LR
+    user["Browser / installed PWA"]
+    cf["Cloudflare<br/>DNS + proxy"]
+    auth0["Auth0<br/>login"]
+    gha["GitHub Actions<br/>e2e on PRs, deploy on master"]
+
+    subgraph aws["AWS us-east-1"]
+        alb["Application Load Balancer<br/>TLS via ACM"]
+        app["Next.js 16 app<br/>ECS Fargate, ARM64"]
+        ssm["SSM Parameter Store<br/>secrets"]
+    end
+
+    neon[("Neon Postgres<br/>us-east-1")]
+    redis[("Upstash Redis<br/>market-data cache")]
+    market["Finnhub + FMP<br/>quotes, news, indices"]
+    xai["xAI Grok<br/>AI assistant"]
+    stripe["Stripe<br/>billing"]
+    qstash["Upstash QStash<br/>scheduled jobs"]
+    push["Web Push services"]
+
+    user -->|HTTPS| cf --> alb --> app
+    user -.->|OAuth login| auth0
+    gha -.->|image via ECR| app
+    ssm -.->|secrets at start| app
+    app -->|SQL| neon
+    app -->|fail-open cache| redis
+    app --> market
+    app -->|streamed chat| xai
+    app -->|Checkout| stripe
+    stripe -->|signed webhooks| app
+    qstash -->|signed job calls| app
+    app -->|VAPID| push -->|price alerts| user
+```
+
+Stripe and QStash reach the app through the same Cloudflare → ALB path as browsers; their arrows point straight at the app for readability. The network path in detail is under [Deployment → Request flow](#request-flow).
+
+---
+
+## Engineering Highlights
+
+- **Atomic trade settlement.** Filling an order claims it, writes the execution and the cash-ledger entry, and updates the position in one SERIALIZABLE Postgres transaction, retried on serialization failures and deadlocks. → [Orders](#orders)
+- **Append-only, idempotent cash ledger.** Balances are never updated in place, and a partial unique index means a retried request can't record the same cash movement twice. → [Database](#database)
+- **Fail-open shared cache.** Market data is cached in Upstash Redis and shared by every container. A Redis command gets 2 s at most, a failure bypasses Redis for 15 s, and concurrent requests for the same symbol share one fetch. With Redis down, every page still renders. → [Caching](#caching)
+- **Auth enforced at build time.** A prebuild script fails the build if any API method skips an auth wrapper, and every error response uses one RFC 9457 problem+json format. → [API Documentation](#api-documentation)
+- **SSRF guard on push.** A push subscription's endpoint must belong to a known push service (FCM, Mozilla, WNS, Apple), so the server never sends requests to a URL an attacker supplied. → [Push subscriptions](#push-subscriptions)
+- **Gated deploys.** Playwright e2e tests run against an isolated Neon branch, as a database role that exists only there. Merging into `master` requires a passing run, and only `master` deploys. → [Testing](#testing)
+- **Locked-down hosting.** ARM64 containers on ECS Fargate, reachable only through Cloudflare's IP ranges, with secrets injected from SSM at runtime. → [Deployment](#deployment)
+
+---
+
 ## Tech Stack
 
 **Framework & Language**
@@ -504,7 +557,7 @@ The caller's investing profile (the five onboarding answers), a singleton per us
 All on `withAuth`: market data is not account state, and a quote lookup must not provision an account as a side effect. An upstream failure is `502`, not `500`.
 
 - `GET /api/stocks/quote?symbol=AAPL` → Finnhub quote payload.
-- `GET /api/stocks/search?q=apple` → symbol search. `q` is required and capped at 64 characters.
+- `GET /api/stocks/search?q=apple` → **`application/x-ndjson`**, streamed so the matches render before their prices. First line `{ type: "matches", matches: [{ symbol, displaySymbol, description }] }` (top 5 US listings), then one `{ type: "quote", symbol, quote: { price, changePercent } | null }` per match as each resolves from the shared quote cache (`null` when Finnhub has no quote). A failed search is a plain `502` problem, since nothing has streamed yet. `q` is required and capped at 64 characters.
 - `GET /api/stocks/trades?symbol=AAPL` → **`text/event-stream`** of live trade ticks, proxied off Finnhub's websocket. Consumed by `EventSource`, which sends same-origin cookies but cannot set headers; a `401` surfaces as `onerror`.
 - `GET /api/stocks/upcoming-earnings?symbol=AAPL` → the next scheduled report. **404** when the symbol has nothing on the calendar — callers that treat that as normal opt in with `allowStatus: [404]`.
 
