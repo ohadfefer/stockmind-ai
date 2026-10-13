@@ -8,18 +8,19 @@ export interface SymbolSearchResult extends SymbolSearchMatch {
    * Settles when this symbol's quote arrives, null when it has no price.
    * Never rejects, so a row can use() it under a Suspense boundary (as the
    * dashboard sections do with their promises) without an error boundary.
+   * Absent when the search was made without quotes.
    */
-  quote: Promise<SymbolQuote | null>
+  quote?: Promise<SymbolQuote | null>
 }
 
 /**
  * Debounced ticker search against /api/stocks/search, which answers at most
- * 5 matches. The matches render as soon as they arrive; each row's quote is a
- * promise that settles when its line of the stream does. Owns only the query
- * + results; presentation (inline dropdown vs. mobile overlay) is left to the
- * caller.
+ * 5 matches. The matches render as soon as they arrive; with `withQuotes`,
+ * each row's quote is a promise that settles when its line of the stream
+ * does. Owns only the query + results; presentation (inline dropdown vs.
+ * mobile overlay) is left to the caller.
  */
-export function useSymbolSearch() {
+export function useSymbolSearch(withQuotes: boolean) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SymbolSearchResult[]>([])
 
@@ -35,14 +36,18 @@ export function useSymbolSearch() {
       const pending = new Map<string, (quote: SymbolQuote | null) => void>()
       let gotMatches = false
       try {
-        for await (const event of streamSymbolSearch(query, { signal: controller.signal })) {
+        for await (const event of streamSymbolSearch(query, withQuotes, {
+          signal: controller.signal,
+        })) {
           if (event.type === "matches") {
             gotMatches = true
             setResults(
-              event.matches.map((match) => ({
-                ...match,
-                quote: new Promise((resolve) => pending.set(match.symbol, resolve)),
-              })),
+              withQuotes
+                ? event.matches.map((match) => ({
+                    ...match,
+                    quote: new Promise((resolve) => pending.set(match.symbol, resolve)),
+                  }))
+                : event.matches,
             )
           } else {
             pending.get(event.symbol)?.(event.quote)
@@ -69,7 +74,7 @@ export function useSymbolSearch() {
       clearTimeout(timeout)
       controller.abort()
     }
-  }, [query])
+  }, [query, withQuotes])
 
   return { query, setQuery, results }
 }

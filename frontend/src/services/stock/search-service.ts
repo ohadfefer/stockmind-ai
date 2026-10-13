@@ -1,8 +1,9 @@
 import { finnhubFetch } from "@/lib/finnhub"
 import { getCachedQuote, getMarketIsOpenCached } from "@/services/stock/quote-cache"
 
-// Every match costs a quote lookup, so the cap lives here rather than in the
-// client: trimming after the fact would still have paid for the rest.
+// A priced search spends a quote lookup per match, so the cap lives here
+// rather than in the client: trimming after the fact would still have paid
+// for the rest.
 const MAX_RESULTS = 5
 
 interface FinnhubSearchMatch {
@@ -38,15 +39,21 @@ export type SymbolSearchEvent =
  * hands back one pending quote per match, so the caller can send the list
  * while the prices are still in flight.
  *
+ * Without `withQuotes` it makes no quote or market-status call at all and
+ * `quotes` is empty: the news search only needs the symbols.
+ *
  * Throws only if the search itself fails. The quote promises never reject:
  * getCachedQuote and getMarketIsOpenCached both degrade instead of throwing.
  */
-export async function loadSymbolSearch(query: string): Promise<{
+export async function loadSymbolSearch(
+  query: string,
+  withQuotes: boolean,
+): Promise<{
   matches: SymbolSearchMatch[]
   quotes: Promise<{ symbol: string; quote: SymbolQuote | null }>[]
 }> {
   // Started alongside the search so the quotes don't wait on it afterwards.
-  const marketOpenPromise = getMarketIsOpenCached()
+  const marketOpenPromise = withQuotes ? getMarketIsOpenCached() : null
   // US listings only: the app trades nothing else, and every match costs a
   // quote call. Foreign listings (TL0.DE, TSLA.MX) have no quote on our
   // Finnhub plan, and a failed quote isn't cached, so each one would spend a
@@ -62,13 +69,15 @@ export async function loadSymbolSearch(query: string): Promise<{
     description: match.description,
   }))
 
-  const quotes = matches.map(async ({ symbol }) => {
-    const quote = await getCachedQuote(symbol, await marketOpenPromise)
-    return {
-      symbol,
-      quote: quote?.c ? { price: quote.c, changePercent: quote.dp } : null,
-    }
-  })
+  const quotes = marketOpenPromise
+    ? matches.map(async ({ symbol }) => {
+        const quote = await getCachedQuote(symbol, await marketOpenPromise)
+        return {
+          symbol,
+          quote: quote?.c ? { price: quote.c, changePercent: quote.dp } : null,
+        }
+      })
+    : []
 
   return { matches, quotes }
 }

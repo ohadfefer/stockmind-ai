@@ -16,19 +16,24 @@ import { loadSymbolSearch, type SymbolSearchEvent } from "@/services/stock/searc
  * request for the quotes, which would add a full browser round trip before
  * any price could show. A search failure is still a plain 502 problem, since
  * nothing has been streamed by then.
+ *
+ * Quotes are opt-in with `quotes=true`, since each costs a lookup. Without
+ * it the body is the matches line alone.
  */
 const MAX_QUERY_LENGTH = 64
 
 export const GET = withAuth(async (request) => {
-  const query = new URL(request.url).searchParams.get("q")?.trim()
+  const params = new URL(request.url).searchParams
+  const query = params.get("q")?.trim()
   if (!query) return invalid("q is required")
   if (query.length > MAX_QUERY_LENGTH) {
     return invalid(`q must be at most ${MAX_QUERY_LENGTH} characters`)
   }
+  const withQuotes = params.get("quotes") === "true"
 
   let search: Awaited<ReturnType<typeof loadSymbolSearch>>
   try {
-    search = await loadSymbolSearch(query)
+    search = await loadSymbolSearch(query, withQuotes)
   } catch (err) {
     console.error("[stocks/search] Finnhub failed:", err)
     return badGateway("Symbol search is unavailable right now.")

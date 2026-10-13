@@ -28,6 +28,7 @@ export default function NewsLayout({ children }: { children: React.ReactNode }) 
           navigateTo="/news"
           placeholder="Search symbol news..."
           className="w-full max-w-xs"
+          showQuotes={false}
         />
       </div>
 

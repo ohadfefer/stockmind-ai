@@ -17,7 +17,8 @@ interface SymbolSearchResultsProps {
  * The results list shared by the inline <SymbolSearch> dropdown and the
  * <MobileSymbolSearch> sheet, so both render identical rows: ticker over
  * company on the left, price over day change on the right. The matches show
- * immediately; each price shows a skeleton until its quote settles.
+ * immediately; each price shows a skeleton until its quote settles. Results
+ * fetched without quotes render the left side only.
  */
 export function SymbolSearchResults({ results, onSelect, className }: SymbolSearchResultsProps) {
   return (
@@ -39,9 +40,11 @@ export function SymbolSearchResults({ results, onSelect, className }: SymbolSear
             </span>
           </div>
           {/* One boundary per row, so each price lands as its own quote does. */}
-          <Suspense fallback={<QuoteSkeleton />}>
-            <RowQuote quote={item.quote} />
-          </Suspense>
+          {item.quote && (
+            <Suspense fallback={<QuoteSkeleton />}>
+              <RowQuote quote={item.quote} />
+            </Suspense>
+          )}
         </button>
       ))}
     </div>

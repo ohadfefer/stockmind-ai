@@ -19,14 +19,16 @@ export async function fetchQuote(
 
 /**
  * Yields each line of the search endpoint's NDJSON body as it arrives: the
- * matches first, then the quotes one by one. `init` carries the search hook's
- * per-keystroke AbortSignal, which rejects the pending read when it fires.
+ * matches first, then (with `withQuotes`) the quotes one by one. `init`
+ * carries the search hook's per-keystroke AbortSignal, which rejects the
+ * pending read when it fires.
  */
 export async function* streamSymbolSearch(
   query: string,
+  withQuotes: boolean,
   init?: ApiRequestInit,
 ): AsyncGenerator<SymbolSearchEvent> {
-  const path = `/api/stocks/search?q=${encodeURIComponent(query)}`
+  const path = `/api/stocks/search?q=${encodeURIComponent(query)}${withQuotes ? "&quotes=true" : ""}`
   const res = await apiRequest(path, init)
   if (!res.body) {
     throw new ApiError(res.status, "empty_stream", "Empty response", `${path} returned no body.`)
