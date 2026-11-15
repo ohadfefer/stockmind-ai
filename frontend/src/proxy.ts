@@ -54,7 +54,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   }
 
   // Allow the routes that carry their own authentication — the health probe,
-  // the CRON_SECRET job, the QStash webhooks and the Stripe webhook. The list
+  // the QStash-scheduled jobs and the Stripe webhook. The list
   // lives in lib/http/public-routes so this gate and check-route-auth.mjs read
   // the same array and cannot drift.
   //

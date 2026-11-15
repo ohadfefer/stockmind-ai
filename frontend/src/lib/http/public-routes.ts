@@ -20,9 +20,8 @@
 export const PUBLIC_API_ROUTES = [
   // Liveness probe for the ALB target group and Docker HEALTHCHECK.
   "/api/health",
-  // Scheduled job — Authorization: Bearer ${CRON_SECRET} verified in the handler.
+  // QStash schedules — Upstash signature verified in the handler.
   "/api/jobs/snapshot-positions",
-  // QStash webhooks — Upstash signature verified in the handler.
   "/api/alerts/check",
   "/api/alerts/check-earnings",
   // Stripe webhook — Stripe signature verified in the handler.

@@ -2,9 +2,13 @@ name: Deploy to ECS
 
 # Build the ARM64 image, push to ECR, register a new task-definition
 # revision pinned to the commit SHA, then roll the ECS service to it.
+#
+# ARCHIVED. The app moved back to Vercel in November 2026, which deploys
+# master through its Git integration, so this no longer runs on push. It is
+# kept as the record of how the app ran on ECS Fargate (README → Previous
+# deployment: AWS). A manual run needs that infrastructure and the AWS
+# secrets back in place.
 on:
-  push:
-    branches: [master]
   workflow_dispatch: {}
 
 # Never let two deploys run at once; queue them instead.

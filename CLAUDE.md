@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-StockMind AI is an AI-powered stock research dashboard built on a simulated mini-brokerage. Users explore live market data, place simulated trades, track portfolio P&L, manage watchlists, set price alerts (delivered via Web Push), chat with an AI assistant, and upgrade to a Pro plan. It's installable as a PWA and deployed on AWS ECS Fargate.
+StockMind AI is an AI-powered stock research dashboard built on a simulated mini-brokerage. Users explore live market data, place simulated trades, track portfolio P&L, manage watchlists, set price alerts (delivered via Web Push), chat with an AI assistant, and upgrade to a Pro plan. It's installable as a PWA and deployed on Vercel. It ran on AWS ECS Fargate from June to November 2026; the `Dockerfile`, the archived `deploy.yml` and the README's "Previous deployment: AWS" section are kept on purpose (the repo is recruiter-facing) — don't delete them.
 
 `README.md` holds the exhaustive docs (full API reference, DB schema, env-var tables, deployment). Keep this file as the concise agent cheat-sheet.
 
@@ -27,14 +27,14 @@ End-to-end tests live in `frontend/e2e/` (`@playwright/test`, Chromium). `test:e
 - **Styling**: Tailwind CSS v4 with CSS variables for theming
 - **UI**: shadcn/ui (new-york style, Radix primitives, Lucide icons); charts via Recharts
 - **Auth**: Auth0 (`@auth0/nextjs-auth0` v4)
-- **Database**: Neon Serverless Postgres (`@neondatabase/serverless`), project `icy-bar-05201403` in `aws-us-east-1` — the same region as ECS; keep them together, since every query is a network round trip
+- **Database**: Neon Serverless Postgres (`@neondatabase/serverless`), project `icy-bar-05201403` in `aws-us-east-1` — the same region as the Vercel functions (`iad1`, pinned in `frontend/vercel.json`); keep them together, since every query is a network round trip
 - **Market data**: Finnhub (primary — quotes, search, profiles, news) + FMP (free plan — the dashboard's index bar)
 - **AI**: xAI Grok via the Vercel AI SDK (`ai` + `@ai-sdk/xai`) — assistant + portfolio review
 - **Payments**: Stripe (Checkout, webhooks) for Pro subscriptions
 - **Cache**: Upstash Redis (`@upstash/redis`, REST) holds the shared market-data cache — quotes, profiles, market status, the index bar
 - **Jobs / webhooks**: Upstash QStash (signed) drives the alert checker and daily position snapshots
 - **Push**: `web-push` + VAPID keys, delivered through the PWA service worker
-- **Hosting**: Docker → Amazon ECR → ECS Fargate (ARM64) behind an ALB; CI/CD via GitHub Actions on push to `master` (see README → Deployment)
+- **Hosting**: Vercel (Git integration — production from `master`, previews for PRs; Fluid compute; root directory `frontend`). DNS stays on Cloudflare, DNS-only. GitHub Actions runs only the e2e gate; `deploy.yml` is the archived ECS pipeline, manual-only (see README → Deployment)
 - **Path alias**: `@/*` maps to `frontend/src/*`
 
 ### Project Structure
@@ -90,7 +90,7 @@ Auth0 v4 SDK with the Next.js 16 proxy pattern (`src/lib/auth0.ts`, `src/proxy.t
 
 ### Environment Variables
 
-Local dev reads `frontend/.env.local` (gitignored — never commit). In production every secret lives in AWS SSM Parameter Store under `/stockmind/*` and is injected into the ECS task at runtime. Full table in README → Environment Variables. Keys span: app (`APP_BASE_URL`), Auth0 (`AUTH0_*`), Neon (`DATABASE_URL`), market data (`FINNHUB_API_KEY`, `FMP_API_KEY`), AI (`XAI_API_KEY`), QStash (`QSTASH_*`, `CRON_SECRET`), Upstash Redis (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`), Web Push (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` [build-time], `VAPID_PRIVATE_KEY`), Stripe (`STRIPE_*`), and the local-only e2e keys (`E2E_DATABASE_URL`, `E2E_EMAIL`, `E2E_PASSWORD`).
+Local dev reads `frontend/.env.local` (gitignored — never commit). In production they are Vercel environment variables (Production scope); `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is inlined at build time, so changing it needs a redeploy. Full table in README → Environment Variables. Keys span: app (`APP_BASE_URL`), Auth0 (`AUTH0_*`), Neon (`DATABASE_URL`), market data (`FINNHUB_API_KEY`, `FMP_API_KEY`), AI (`XAI_API_KEY`), QStash (`QSTASH_*` — all three jobs verify its signature; `CRON_SECRET` is no longer read), Upstash Redis (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`), Web Push (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` [build-time], `VAPID_PRIVATE_KEY`), Stripe (`STRIPE_*`), and the local-only e2e keys (`E2E_DATABASE_URL`, `E2E_EMAIL`, `E2E_PASSWORD`).
 
 ### Conventions
 
@@ -102,6 +102,8 @@ Local dev reads `frontend/.env.local` (gitignored — never commit). In producti
 
 **Database** — `lib/db.ts` offers two ways in. `getDb()` is the default: `neon()` over HTTP, stateless, one statement per call — use it for everything unless statements must commit together. `withTransaction(async (sql) => …)` holds a pooled WebSocket session open for a real `BEGIN … COMMIT` at SERIALIZABLE, retrying the whole callback on a 40001/40P01 abort; it exists for pipelines where a later statement needs a value an earlier one returned, like `POST /api/orders/[id]/executions`. Services in an atomic path take an `SqlTag` parameter instead of calling `getDb()` themselves, so the same SQL runs under either driver. Two rules for the callback: no network I/O inside it (a held transaction pins a PgBouncer server slot), and never catch a query error and continue (Postgres refuses every command after one until `ROLLBACK`, so the `COMMIT` silently becomes a rollback). Cache invalidation, audit logging and anything else non-transactional goes after the commit. `DATABASE_URL` must stay the `-pooler` host.
 
-**Caching** — The market-data cache (`services/stock/quote-cache.ts`, plus the dashboard's FMP index bar in `services/dashboard/index-service.ts`) lives in Upstash Redis via `lib/redis.ts`, shared by every request and every ECS task. Never call `getRedis()` directly: go through `redisTry(label, op)`, which turns any failure into `undefined` so the caller treats it as a miss and hits the source (Finnhub, or FMP for the index bar) — nothing cached is a source of truth, and the app must run with Redis unset or dead (`null` means "key not found", not a failure). Freshness is decided in app code from a timestamp in the entry, never from the key's `EX`: `fetchedAt` in quote-cache, `checkedAt` (the last refresh attempt, so failures back off) for the index bar. In quote-cache the `EX` is only a GC ceiling, deliberately much longer, because the closed-market rule turns on the entry's `marketWasOpen` and not just its age, and because the stale-on-Finnhub-error fallback needs the entry to outlive its freshness; the index bar's `EX` equals its 24 h stale-fallback limit. The in-flight promises stay process-local — a pending promise can't go through Redis. Keys, TTLs and the reasoning in README → Caching.
+**Caching** — The market-data cache (`services/stock/quote-cache.ts`, plus the dashboard's FMP index bar in `services/dashboard/index-service.ts`) lives in Upstash Redis via `lib/redis.ts`, shared by every request and every function instance. Never call `getRedis()` directly: go through `redisTry(label, op)`, which turns any failure into `undefined` so the caller treats it as a miss and hits the source (Finnhub, or FMP for the index bar) — nothing cached is a source of truth, and the app must run with Redis unset or dead (`null` means "key not found", not a failure). Freshness is decided in app code from a timestamp in the entry, never from the key's `EX`: `fetchedAt` in quote-cache, `checkedAt` (the last refresh attempt, so failures back off) for the index bar. In quote-cache the `EX` is only a GC ceiling, deliberately much longer, because the closed-market rule turns on the entry's `marketWasOpen` and not just its age, and because the stale-on-Finnhub-error fallback needs the entry to outlive its freshness; the index bar's `EX` equals its 24 h stale-fallback limit. The in-flight promises stay process-local — a pending promise can't go through Redis. Keys, TTLs and the reasoning in README → Caching.
+
+**Serverless** — Every route runs as a Vercel function (Fluid compute, 300 s limit), not a long-lived server. Work after the response goes in `after()` from `next/server`, never a bare `setTimeout` or an un-awaited promise: the function is frozen once it responds (see `POST /api/transfers`). A stream must end itself inside `maxDuration` (see `api/stocks/trades`). Module-level state is per instance: fine for coalescing and best-effort caches, never for anything a write must invalidate. One instance serves several requests, so an uncaught exception takes the others down with it.
 
 **shadcn/ui** — Add components via `npx shadcn@latest add <name>` from `frontend/`. Do not manually edit `src/components/ui/`.

@@ -1,4 +1,5 @@
 import { neon, neonConfig, Pool, type PoolClient } from "@neondatabase/serverless"
+import { attachDatabasePool } from "@vercel/functions"
 import ws from "ws"
 
 /**
@@ -111,10 +112,14 @@ export function serializableBackoff(attempt: number): number {
  * One pool for the process, not one per request.
  *
  * The driver's README warns against creating a Pool outside the request handler
- * — that advice is for serverless functions, where the runtime can freeze or
- * discard the isolate between invocations. This app is a long-lived container
- * (`node server.js` on ECS Fargate), so a module-level pool is the whole point:
- * WebSocket sessions get reused instead of being dialled per settlement.
+ * — the runtime can freeze an instance between invocations, and a WebSocket
+ * left open across the freeze is dead when it thaws. On Vercel's Fluid compute
+ * an instance serves many invocations, so a module-level pool still pays off
+ * (sessions get reused instead of dialled per settlement); attachDatabasePool
+ * is what makes it safe, by keeping the invocation alive after each release
+ * until the idle timeout has closed the session, so nothing is open when the
+ * instance suspends. Outside Vercel it does nothing — the Docker image is a
+ * long-lived `node server.js`, where the pool simply lives with the process.
  *
  * Parked on globalThis because `next dev` re-evaluates modules on every HMR
  * pass, which would otherwise leak a pool per edit.
@@ -138,8 +143,10 @@ function getPool(): Pool {
       // the compute is ready.
       connectionTimeoutMillis: 15_000,
       // Let idle sessions drain so scale-to-zero can still suspend the compute.
-      // Holding connections open indefinitely keeps it awake and billing.
-      idleTimeoutMillis: 30_000,
+      // Holding connections open indefinitely keeps it awake and billing. Short
+      // because on Vercel attachDatabasePool holds the invocation open for this
+      // long after every release; 5s still covers a burst like order → execute.
+      idleTimeoutMillis: 5_000,
     })
 
     // Mandatory, not defensive: an idle client that emits an error with no
@@ -150,11 +157,13 @@ function getPool(): Pool {
     // failing client to the error (`err.client = client`), and that client
     // carries config.connectionString — the DATABASE_URL password in clear
     // text. console.error(err) expands it at Node's *default* inspect depth, so
-    // the credential lands in CloudWatch. err.stack is message plus frames and
+    // the credential lands in the logs. err.stack is message plus frames and
     // carries none of the error's own properties.
     pool.on("error", (err: Error) => {
       console.error("[db] idle pool client error:", err.stack ?? err.message)
     })
+
+    attachDatabasePool(pool)
 
     globalForPool.__stockmindPool = pool
   }

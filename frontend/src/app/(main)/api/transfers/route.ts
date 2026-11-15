@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { after, NextResponse } from "next/server"
 import { withAccount } from "@/lib/http/with-auth"
 import { invalid, problem } from "@/lib/http/problem"
 import {
@@ -98,8 +98,13 @@ export const POST = withAccount(async (request, { userId, accountId }) => {
     ipAddress,
   })
 
-  // Resolve after 10 seconds (simulate processing)
-  setTimeout(async () => {
+  // Resolve after 10 seconds (simulate processing). after(), not a bare
+  // setTimeout: on Vercel the function is frozen once the 202 is sent, so a
+  // timer would never fire and the transfer would stay pending for good.
+  // after() hands the work to the platform's waitUntil, which keeps the
+  // invocation alive until it settles.
+  after(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10_000))
     try {
       await resolveTransfer(transferId)
       await logAudit({
@@ -112,7 +117,7 @@ export const POST = withAccount(async (request, { userId, accountId }) => {
     } catch (err) {
       console.error("Failed to resolve transfer", transferId, err)
     }
-  }, 10_000)
+  })
 
   return NextResponse.json(
     { id: transferId, status: "pending" },

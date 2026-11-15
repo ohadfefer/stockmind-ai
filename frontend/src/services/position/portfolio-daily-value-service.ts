@@ -41,21 +41,21 @@ export async function getPortfolioDailyValues(
   }))
 }
 
-// portfolio_daily_value is written once per weekday by the snapshot cron at
-// 21:30 UTC (see vercel.json), which dates each row with the UTC date. So the
-// stats are stable all day and only change after that run. Key the cache by
-// the latest expected snapshot date: constant within a day (every dashboard
-// hit shares one query) and advancing once the cron has finished, which picks
-// up fresh data with no cross-process invalidation. On weekends/holidays the
-// cron doesn't run, so the key may advance into a day with no new row — that
-// just costs one extra (identical) query, which is fine.
+// portfolio_daily_value is written once per weekday by the snapshot job, which
+// a QStash schedule runs at 21:30 UTC and which dates each row with the UTC
+// date. So the stats are stable all day and only change after that run. Key
+// the cache by the latest expected snapshot date: constant within a day (every
+// dashboard hit shares one query) and advancing once the cron has finished,
+// which picks up fresh data with no cross-process invalidation. On
+// weekends/holidays the cron doesn't run, so the key may advance into a day
+// with no new row — that just costs one extra (identical) query, which is fine.
 //
 // The cutoff is the cron start PLUS settle headroom: the job fetches quotes
 // for every position and writes in a transaction, so it finishes after 21:30.
 // Advancing the key only after it has settled prevents a request landing
 // mid-run from caching pre-snapshot stats under the post-snapshot date (which
 // would pin stale stats until the next day's rollover).
-const SNAPSHOT_CRON_UTC_MINUTES = 21 * 60 + 30 // 21:30 UTC (vercel.json)
+const SNAPSHOT_CRON_UTC_MINUTES = 21 * 60 + 30 // 21:30 UTC (QStash schedule)
 const SNAPSHOT_SETTLE_MINUTES = 30 // headroom for the job to finish
 const SNAPSHOT_CUTOFF_UTC_MINUTES =
   SNAPSHOT_CRON_UTC_MINUTES + SNAPSHOT_SETTLE_MINUTES

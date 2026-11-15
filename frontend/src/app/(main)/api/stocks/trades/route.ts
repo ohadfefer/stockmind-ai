@@ -4,6 +4,14 @@ import { isValidSymbol } from "@/lib/symbol"
 import WebSocket from "ws"
 
 export const runtime = "nodejs"
+// Vercel's ceiling on the Hobby plan with Fluid compute. A stream can't
+// outlive its function, so this bounds every connection.
+export const maxDuration = 300
+
+// End each stream this far inside maxDuration, so the browser sees a clean end
+// and EventSource reconnects on its own, instead of the platform killing the
+// function mid-write.
+const STREAM_LIFETIME_MS = 280_000
 
 /**
  * Server-sent trade ticks, proxied off Finnhub's websocket.
@@ -11,15 +19,11 @@ export const runtime = "nodejs"
  * withAuth, not withAccount — market data, no account state. EventSource
  * cannot set headers but does send same-origin cookies, so the session
  * reaches the wrapper the same way it does on any other route; a 401 surfaces
- * to the client as `onerror`, which LivePrice already handles by closing.
+ * to the client as `onerror` with readyState CLOSED, which LivePrice handles
+ * by giving up.
  *
  * The stream body is deliberately outside guard's reach: guard only covers
  * producing the Response, and everything below happens after it is returned.
- *
- * KNOWN BUG, left alone on purpose: `cleanup()` on the error path is followed
- * by controller.close(), and the ws "close" handler then closes it a second
- * time — a process-level uncaughtException on every navigation away from
- * /details/[symbol]. It is unrelated to the auth sweep and wants its own commit.
  */
 export const GET = withAuth(async (request) => {
   const symbol = new URL(request.url).searchParams.get("symbol")
@@ -34,22 +38,43 @@ export const GET = withAuth(async (request) => {
   }
 
   const encoder = new TextEncoder()
+  let finish = () => {}
   const stream = new ReadableStream({
     start(controller) {
       const ws = new WebSocket(`wss://ws.finnhub.io?token=${apiKey}`)
+      let closed = false
 
-      const cleanup = () => {
+      // The one way out, reached from every path: the lifetime timer, a
+      // Finnhub error, Finnhub hanging up, the browser leaving. Idempotent
+      // because those overlap — closing the controller a second time throws,
+      // and with nothing to catch it that was an uncaughtException on every
+      // navigation away from /details/[symbol]. On Fluid compute one instance
+      // serves several requests, so a crash would take theirs down too.
+      finish = () => {
+        if (closed) return
+        closed = true
+        clearTimeout(lifetime)
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "unsubscribe", symbol }))
-          ws.close()
+        }
+        // Also while CONNECTING, which the old cleanup skipped: the socket
+        // would finish its handshake and subscribe for a reader long gone.
+        ws.close()
+        try {
+          controller.close()
+        } catch {
+          // The reader cancelled first; the stream is already closed.
         }
       }
+
+      const lifetime = setTimeout(finish, STREAM_LIFETIME_MS)
 
       ws.on("open", () => {
         ws.send(JSON.stringify({ type: "subscribe", symbol }))
       })
 
       ws.on("message", (data) => {
+        if (closed) return
         try {
           const parsed = JSON.parse(data.toString())
           if (parsed.type === "trade" && parsed.data?.length > 0) {
@@ -67,19 +92,22 @@ export const GET = withAuth(async (request) => {
         }
       })
 
+      // Also fires for the abort ws.close() causes during a handshake, which
+      // `closed` filters out: that one is ours, not Finnhub's.
       ws.on("error", () => {
+        if (closed) return
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ error: "WebSocket error" })}\n\n`)
         )
-        cleanup()
-        controller.close()
+        finish()
       })
 
-      ws.on("close", () => {
-        controller.close()
-      })
+      ws.on("close", () => finish())
 
-      request.signal.addEventListener("abort", cleanup)
+      request.signal.addEventListener("abort", () => finish())
+    },
+    cancel() {
+      finish()
     },
   })
 

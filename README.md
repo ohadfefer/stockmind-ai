@@ -27,14 +27,13 @@ An AI-powered stock research and analysis dashboard built on top of a simulated 
 ```mermaid
 flowchart LR
     user["Browser / installed PWA"]
-    cf["Cloudflare<br/>DNS + proxy"]
+    cf["Cloudflare<br/>registrar + DNS"]
     auth0["Auth0<br/>login"]
-    gha["GitHub Actions<br/>e2e on PRs, deploy on master"]
+    gha["GitHub Actions<br/>e2e on PRs"]
 
-    subgraph aws["AWS us-east-1"]
-        alb["Application Load Balancer<br/>TLS via ACM"]
-        app["Next.js 16 app<br/>ECS Fargate, ARM64"]
-        ssm["SSM Parameter Store<br/>secrets"]
+    subgraph vercel["Vercel"]
+        edge["Edge network<br/>TLS, static assets"]
+        app["Next.js 16 app<br/>Fluid compute functions, iad1"]
     end
 
     neon[("Neon Postgres<br/>us-east-1")]
@@ -45,10 +44,10 @@ flowchart LR
     qstash["Upstash QStash<br/>scheduled jobs"]
     push["Web Push services"]
 
-    user -->|HTTPS| cf --> alb --> app
+    user -.->|DNS lookup| cf
+    user -->|HTTPS| edge --> app
     user -.->|OAuth login| auth0
-    gha -.->|image via ECR| app
-    ssm -.->|secrets at start| app
+    gha -.->|gates master| app
     app -->|SQL| neon
     app -->|fail-open cache| redis
     app --> market
@@ -59,7 +58,7 @@ flowchart LR
     app -->|VAPID| push -->|price alerts| user
 ```
 
-Stripe and QStash reach the app through the same Cloudflare → ALB path as browsers; their arrows point straight at the app for readability. The network path in detail is under [Deployment → Request flow](#request-flow).
+Cloudflare only answers DNS: the records are DNS-only, so traffic goes straight to Vercel's edge. Stripe and QStash reach the app through the same public URL as browsers. From June to November 2026 the app ran on AWS ECS Fargate instead; that setup is documented under [Previous deployment: AWS](#previous-deployment-aws-ecs-fargate).
 
 ---
 
@@ -67,11 +66,11 @@ Stripe and QStash reach the app through the same Cloudflare → ALB path as brow
 
 - **Atomic trade settlement.** Filling an order claims it, writes the execution and the cash-ledger entry, and updates the position in one SERIALIZABLE Postgres transaction, retried on serialization failures and deadlocks. → [Orders](#orders)
 - **Append-only, idempotent cash ledger.** Balances are never updated in place, and a partial unique index means a retried request can't record the same cash movement twice. → [Database](#database)
-- **Fail-open shared cache.** Market data is cached in Upstash Redis and shared by every container. A Redis command gets 2 s at most, a failure bypasses Redis for 15 s, and concurrent requests for the same symbol share one fetch. With Redis down, every page still renders. → [Caching](#caching)
+- **Fail-open shared cache.** Market data is cached in Upstash Redis and shared by every function instance. A Redis command gets 2 s at most, a failure bypasses Redis for 15 s, and concurrent requests for the same symbol share one fetch. With Redis down, every page still renders. → [Caching](#caching)
 - **Auth enforced at build time.** A prebuild script fails the build if any API method skips an auth wrapper, and every error response uses one RFC 9457 problem+json format. → [API Documentation](#api-documentation)
 - **SSRF guard on push.** A push subscription's endpoint must belong to a known push service (FCM, Mozilla, WNS, Apple), so the server never sends requests to a URL an attacker supplied. → [Push subscriptions](#push-subscriptions)
-- **Gated deploys.** Playwright e2e tests run against an isolated Neon branch, as a database role that exists only there. Merging into `master` requires a passing run, and only `master` deploys. → [Testing](#testing)
-- **Locked-down hosting.** ARM64 containers on ECS Fargate, reachable only through Cloudflare's IP ranges, with secrets injected from SSM at runtime. → [Deployment](#deployment)
+- **Gated deploys.** Playwright e2e tests run against an isolated Neon branch, as a database role that exists only there. Merging into `master` requires a passing run, and only `master` deploys to production. → [Testing](#testing)
+- **Ran on AWS, then moved back for cost.** For five months the app ran as ARM64 containers on ECS Fargate behind an ALB reachable only through Cloudflare's IP ranges, with secrets from SSM and an EventBridge-scheduled Lambda. At ~$60 a month for a portfolio app it moved back to Vercel. That move meant making the code serverless-safe: no work after the response without `after()`, a connection pool that releases before the instance suspends, and streams that end inside the function limit. → [Deployment](#deployment)
 
 ---
 
@@ -96,16 +95,21 @@ Stripe and QStash reach the app through the same Cloudflare → ALB path as brow
 - [@vercel/analytics](https://vercel.com/docs/analytics) for page analytics
 
 **Infrastructure & Deployment**
+- [Vercel](https://vercel.com) — Git-integrated deploys (production from `master`, previews for pull requests), Fluid compute functions pinned to `iad1` (us-east-1, beside Neon)
+- [Cloudflare](https://www.cloudflare.com) as registrar and DNS (DNS-only records pointing at Vercel)
+- [GitHub Actions](https://docs.github.com/actions) — the e2e suite on every pull request, required by the `master` ruleset
+
+*Previously, June–November 2026 — kept in the repo, see [Previous deployment: AWS](#previous-deployment-aws-ecs-fargate):*
 - [Docker](https://www.docker.com) multi-stage build → Next.js standalone image (`node:22-slim`, non-root, ARM64)
 - [Amazon ECR](https://aws.amazon.com/ecr/) registry + [Amazon ECS on Fargate](https://aws.amazon.com/fargate/) (ARM64/Graviton) for hosting
-- [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/) + [ACM](https://aws.amazon.com/certificate-manager/) for HTTPS, with DNS on [Cloudflare](https://www.cloudflare.com)
+- [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/) + [ACM](https://aws.amazon.com/certificate-manager/) for HTTPS, proxied through Cloudflare
 - [SSM Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) (SecureString) for runtime secrets; [CloudWatch Logs](https://aws.amazon.com/cloudwatch/) for container logs
-- [GitHub Actions](https://docs.github.com/actions) CI/CD — build, push to ECR, and roll the ECS service on every push to `master`; run the e2e suite on every pull request
+- [EventBridge Scheduler](https://docs.aws.amazon.com/scheduler/) + [Lambda](https://aws.amazon.com/lambda/) for the daily position snapshot
+- GitHub Actions CD — build, push to ECR, and roll the ECS service on every push to `master`
 
 **Tooling**
 - ESLint (`eslint-config-next`)
 - `shadcn` CLI for component scaffolding
-- Deployed on **AWS ECS (Fargate)** behind an ALB — see [Deployment](#deployment) (migrated from Vercel)
 
 ---
 
@@ -123,7 +127,7 @@ Stripe and QStash reach the app through the same Cloudflare → ALB path as brow
   - Upstash Redis database (the free tier is plenty) for the market-data cache — optional: without it the app falls back to calling Finnhub on every render
   - VAPID key pair for Web Push (generate with `npx web-push generate-vapid-keys`)
   - Stripe account (test mode is sufficient for local dev) and the [Stripe CLI](https://stripe.com/docs/stripe-cli) for forwarding webhooks to localhost
-  - For deployment: an AWS account (ECR, ECS/Fargate, ALB, ACM, SSM) and [Docker](https://www.docker.com) to build images — optional for local dev
+  - For deployment: a [Vercel](https://vercel.com) account — optional for local dev. ([Docker](https://www.docker.com) builds the image from the archived AWS setup.)
 
 ---
 
@@ -163,16 +167,16 @@ stockmind-ai/
 ├── CLAUDE.md                 # Repo conventions / agent context
 ├── .github/
 │   └── workflows/
-│       ├── deploy.yml        # CI/CD — build ARM64 image, push to ECR, roll ECS service
+│       ├── deploy.yml        # Archived AWS pipeline (manual-only) — ARM64 image → ECR → ECS
 │       └── e2e.yml           # Playwright e2e suite on every pull request into master
 ├── migrations/               # Plain .sql files — schema of record (run manually)
 │   ├── 001_create_users.sql  # …through 028, applied in filename order.
 │   └── ...                   # 009 does not exist; the gap is historical.
 └── frontend/                 # Next.js app — all code lives here
-    ├── Dockerfile            # Multi-stage build → Next.js standalone image (ARM64, non-root)
+    ├── Dockerfile            # Multi-stage build → Next.js standalone image (ARM64, non-root) — from the AWS setup
     ├── .dockerignore         # Keeps secrets (.env*) and build artifacts out of the image
-    ├── next.config.ts        # standalone output + baseline security headers
-    ├── vercel.json           # Empty ({}) — legacy; scheduled jobs now run via QStash
+    ├── next.config.ts        # standalone output (for Docker) + baseline security headers
+    ├── vercel.json           # Pins functions to iad1, beside Neon; no crons — QStash drives the jobs
     ├── playwright.config.ts  # E2E config — own dev server on the e2e Neon branch, production guard
     ├── e2e/                  # Playwright tests — Auth0 login setup + one spec per flow
     ├── scripts/
@@ -255,7 +259,7 @@ npm run test:e2e   # Playwright end-to-end tests (starts its own dev server)
 npm run test:e2e:ui  # Same, in Playwright's interactive runner
 ```
 
-`prebuild` runs `scripts/check-route-auth.mjs`, which walks every `route.ts` under `src/app/(main)/api/` and asserts each exported HTTP method is wrapped in `withAuth`/`withUser`/`withAccount`, unless its path is listed in `src/lib/http/public-routes.ts`. It checks **methods, not files** — a file whose `GET` is wrapped and whose newly added `DELETE` is a bare `export async function` is exactly the mistake worth catching. It also flags an allowlisted path with no route file behind it, so the exemption list cannot accumulate entries a future route would silently inherit. `npm run build` runs inside the Docker build, so the gate is part of the image.
+`prebuild` runs `scripts/check-route-auth.mjs`, which walks every `route.ts` under `src/app/(main)/api/` and asserts each exported HTTP method is wrapped in `withAuth`/`withUser`/`withAccount`, unless its path is listed in `src/lib/http/public-routes.ts`. It checks **methods, not files** — a file whose `GET` is wrapped and whose newly added `DELETE` is a bare `export async function` is exactly the mistake worth catching. It also flags an allowlisted path with no route file behind it, so the exemption list cannot accumulate entries a future route would silently inherit. Vercel runs `npm run build` for every deployment (as did the Docker build on AWS), so nothing ships past the gate.
 
 ---
 
@@ -314,7 +318,7 @@ Don't use "Reset from parent" to bring `e2e` up to date. A reset copies producti
 
 ## Environment Variables
 
-**Local development** reads these from `frontend/.env.local` (gitignored — never commit real secrets). **In production** every secret is stored in **AWS SSM Parameter Store** under the `/stockmind/*` prefix as a `SecureString` and injected into the ECS task at runtime (see [Deployment](#deployment)). The only build-time variable is the public VAPID key, passed to the Docker build as a build arg; nothing secret is baked into the image.
+**Local development** reads these from `frontend/.env.local` (gitignored — never commit real secrets). **In production** they are Vercel environment variables, scoped to the Production environment (see [Deployment](#deployment)). The only build-time variable is the public VAPID key; everything else is read at runtime. On AWS the same values lived in SSM Parameter Store — see [Previous deployment: AWS](#previous-deployment-aws-ecs-fargate).
 
 ### Application
 
@@ -337,7 +341,7 @@ Don't use "Reset from parent" to bring `e2e` up to date. A reset copies producti
 | -------------- | ------------------------------------------------------------ |
 | `DATABASE_URL` | Pooled (`-pooler` host) Neon Postgres connection string used by the app. |
 
-`DATABASE_URL` is the only database variable the app reads (`src/lib/db.ts`, which `npm run seed:demo` also goes through). The e2e suite's `E2E_DATABASE_URL` (see [End-to-end tests](#end-to-end-tests)) never reaches the app under its own name: Playwright passes it to its test server as `DATABASE_URL`. The `PG*`, `POSTGRES_*` and `DATABASE_URL_UNPOOLED` variables that Vercel's Neon integration used to inject are unused. The Neon project lives in `aws-us-east-1`, the same region as the ECS service: every query is a network round trip, so keep the two together.
+`DATABASE_URL` is the only database variable the app reads (`src/lib/db.ts`, which `npm run seed:demo` also goes through). The e2e suite's `E2E_DATABASE_URL` (see [End-to-end tests](#end-to-end-tests)) never reaches the app under its own name: Playwright passes it to its test server as `DATABASE_URL`. The `PG*`, `POSTGRES_*` and `DATABASE_URL_UNPOOLED` variables that Vercel's Neon integration used to inject are unused. The Neon project lives in `aws-us-east-1`, the same region as the Vercel functions (`iad1`, pinned in `vercel.json`): every query is a network round trip, so keep the two together.
 
 ### Market Data
 
@@ -361,6 +365,8 @@ Don't use "Reset from parent" to bring `e2e` up to date. A reset copies producti
 | `QSTASH_CURRENT_SIGNING_KEY` | Current signing key used to verify inbound QStash calls. |
 | `QSTASH_NEXT_SIGNING_KEY`    | Next signing key for seamless rotation.                  |
 
+All three scheduled jobs verify the QStash signature with the two signing keys. The app no longer reads `CRON_SECRET`; it was the bearer token the AWS Lambda sent to the snapshot job.
+
 ### Upstash Redis
 
 | Variable                   | Description                                                                 |
@@ -374,7 +380,7 @@ Back the shared market-data cache — see [Caching](#caching). Both are optional
 
 | Variable                      | Description                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (exposed to the browser to register push subscriptions). Inlined at **build time** — locally via `.env.local`, in prod via the Docker `NEXT_PUBLIC_VAPID_PUBLIC_KEY` build arg (set as a GitHub Actions repository variable). |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (exposed to the browser to register push subscriptions). Inlined at **build time** — locally via `.env.local`, in prod from the Vercel environment, so changing it needs a redeploy. (The Docker image takes it as a build arg.) |
 | `VAPID_PRIVATE_KEY`            | VAPID private key (server only) used to sign push payloads via `web-push`.           |
 
 ### Stripe (Subscriptions)
@@ -384,12 +390,6 @@ Back the shared market-data cache — see [Caching](#caching). Both are optional
 | `STRIPE_SECRET_KEY`     | Stripe secret API key (server only). Use a test-mode `sk_test_...` for local dev.                                                                    |
 | `STRIPE_PRICE_ID`       | Price ID of the Pro plan (`price_...`) used as the line item in Checkout.                                                                            |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret used to verify `POST /api/stripe/webhook` payloads. In dev, the `whsec_...` printed by `stripe listen`; in prod, the endpoint secret. |
-
-### Scheduled Jobs
-
-| Variable      | Description                                                                                         |
-| ------------- | --------------------------------------------------------------------------------------------------- |
-| `CRON_SECRET` | Shared secret sent by the QStash schedule as `Authorization: Bearer <secret>` to the snapshot-positions job. |
 
 ### End-to-end tests
 
@@ -426,7 +426,7 @@ There is no migration `009`. No file with that prefix exists anywhere in the rep
 
 ## Caching
 
-Market data is cached in **Upstash Redis** over its REST API (`@upstash/redis`), so every request, every poll and every ECS task reads one shared copy instead of each container warming its own from Finnhub or FMP. `src/lib/redis.ts` owns the client and the fail-open wrapper. Two modules read and write it: `src/services/stock/quote-cache.ts` for the Finnhub data, and `src/services/dashboard/index-service.ts` for the dashboard's FMP index bar.
+Market data is cached in **Upstash Redis** over its REST API (`@upstash/redis`), so every request, every poll and every function instance reads one shared copy instead of each instance warming its own from Finnhub or FMP. `src/lib/redis.ts` owns the client and the fail-open wrapper. Two modules read and write it: `src/services/stock/quote-cache.ts` for the Finnhub data, and `src/services/dashboard/index-service.ts` for the dashboard's FMP index bar.
 
 ### Fail-open by construction
 
@@ -461,7 +461,7 @@ Three details make that cheap during an outage:
 ### What stays in the process
 
 - **In-flight request coalescing.** `quote-cache.ts` keeps a pending promise per symbol for quotes and profiles (two `Map`s) plus a single one for market status, so concurrent callers share one load — a pending promise can't be handed through Redis. Each promise covers the Redis read as well as the Finnhub fetch, so a caller arriving during the round-trip (or in the gap between Finnhub's answer and the write-back) joins it instead of starting its own. The quote map is keyed `${symbol}:${marketOpen}`, because a promise can settle *from cache* under whichever rule its originator was applying: around the opening bell two callers can disagree about the market for up to 30s, and the one that thinks it's open must not inherit a pre-market snapshot the closed rule waved through. `index-service.ts` keeps one more for the index bar, so concurrent renders on an expired entry share one round of FMP calls.
-- **Not positions.** `getPositions` reads Neon on every call. It used to keep a 60s per-process cache that the executions route cleared after a trade, but Next loads pages and route handlers through separate runtimes, each with its own copy of the module — the clear reached the route handlers' copy while the portfolio page served pre-trade holdings from its own until the TTL ran out, and a second ECS task would have missed it the same way. A process-local cache is only safe for data no write has to invalidate.
+- **Not positions.** `getPositions` reads Neon on every call. It used to keep a 60s per-process cache that the executions route cleared after a trade, but Next loads pages and route handlers through separate runtimes, each with its own copy of the module — the clear reached the route handlers' copy while the portfolio page served pre-trade holdings from its own until the TTL ran out, and a second function instance would miss it the same way. A process-local cache is only safe for data no write has to invalidate.
 
 ---
 
@@ -523,7 +523,7 @@ Provisioning is a property of the resolver rather than the wrapper, which is the
 
 The only handlers exempt from a wrapper are the five self-authenticating routes listed in `src/lib/http/public-routes.ts`, which verify a signature or shared secret themselves.
 
-**Body size is capped where it is read through `readJsonBody`.** `src/lib/http/read-json-body.ts` streams and counts bytes, aborting past 64 KiB — `request.json()` buffers the whole body before any field-level check can run, and Next caps Server Actions and proxy-read bodies but not a route handler, with no ALB limit either. The auth wrapper answers the resulting `PayloadTooLargeError` with `413`, so the size rule lives beside the session and onboarding rules rather than being re-typed in every handler. **It is not yet universal:** the three conversation routes, `/api/onboarding` and `/api/profile` use it; the seven other write routes still call `request.json()` directly.
+**Body size is capped where it is read through `readJsonBody`.** `src/lib/http/read-json-body.ts` streams and counts bytes, aborting past 64 KiB — `request.json()` buffers the whole body before any field-level check can run, and Next caps Server Actions and proxy-read bodies but not a route handler, while Vercel's own request limit (4.5 MB) is far above 64 KiB. The auth wrapper answers the resulting `PayloadTooLargeError` with `413`, so the size rule lives beside the session and onboarding rules rather than being re-typed in every handler. **It is not yet universal:** the three conversation routes, `/api/onboarding` and `/api/profile` use it; the seven other write routes still call `request.json()` directly.
 
 **Clients go through `src/actions/http.ts`.** `apiFetch` / `apiSend` / `apiRequest` check `res.ok`, parse the problem body into a thrown `ApiError` (`status`, `code`, `detail`, `extra`), and route a `401`/`onboarding_required` to the right page. Background pollers opt out of the navigation with `redirectOnAuthFailure: false`.
 
@@ -558,7 +558,7 @@ All on `withAuth`: market data is not account state, and a quote lookup must not
 
 - `GET /api/stocks/quote?symbol=AAPL` → Finnhub quote payload.
 - `GET /api/stocks/search?q=apple` → **`application/x-ndjson`**, streamed so the matches render before their prices. First line `{ type: "matches", matches: [{ symbol, displaySymbol, description }] }` (top 5 US listings), then, with `quotes=true`, one `{ type: "quote", symbol, quote: { price, changePercent } | null }` per match as each resolves from the shared quote cache (`null` when Finnhub has no quote). Without it the body is the matches line alone, and no quote or market-status lookup is made — the news search needs only the symbols. A failed search is a plain `502` problem, since nothing has streamed yet. `q` is required and capped at 64 characters.
-- `GET /api/stocks/trades?symbol=AAPL` → **`text/event-stream`** of live trade ticks, proxied off Finnhub's websocket. Consumed by `EventSource`, which sends same-origin cookies but cannot set headers; a `401` surfaces as `onerror`.
+- `GET /api/stocks/trades?symbol=AAPL` → **`text/event-stream`** of live trade ticks, proxied off Finnhub's websocket. Consumed by `EventSource`, which sends same-origin cookies but cannot set headers; a `401` surfaces as `onerror`. A function can't outlive `maxDuration` (300 s), so the server ends each stream at 280 s and `EventSource` reconnects on its own; the client gives up only when the browser reports the connection `CLOSED` (a refusal) or the server sends an error event.
 - `GET /api/stocks/upcoming-earnings?symbol=AAPL` → the next scheduled report. **404** when the symbol has nothing on the calendar — callers that treat that as normal opt in with `allowStatus: [404]`.
 
 ### Portfolio
@@ -582,7 +582,7 @@ There is no `GET` on either collection — `/portfolio/orders` renders server-si
 
 - `POST /api/transfers` → **202** `{ id, status: "pending" }`, `Location: /api/transfers/{id}`.
   Body: `{ direction: "deposit"|"withdrawal", amount, method, description? }`
-  202 rather than 201: the transfer row exists, but the money has not moved — resolution runs ~10s later. `Location` is the status monitor RFC 9110 §15.3.3 asks a 202 to provide, and the account panel polls it until `status` leaves `pending` rather than waiting a fixed delay.
+  202 rather than 201: the transfer row exists, but the money has not moved — resolution runs ~10s later, in an `after()` callback so the serverless function stays alive for it. `Location` is the status monitor RFC 9110 §15.3.3 asks a 202 to provide, and the account panel polls it until `status` leaves `pending` rather than waiting a fixed delay.
   **429 `transfer_cooldown_active`** when inside the 72h window. The gate lives inside the `INSERT` itself, so two concurrent posts cannot both find a clear window.
 - `GET /api/transfers/{id}` → `{ id, direction, amount, method, status, description, initiatedAt, completedAt }`
 - `GET /api/transfers/cooldown` → `{ lastInitiatedAt, nextAllowedAt, remainingMs }`. A property of the account's transfer history, not of any one transfer, so it stays a sibling of the collection.
@@ -653,8 +653,8 @@ Copy the `whsec_...` it prints into `STRIPE_WEBHOOK_SECRET` in `frontend/.env.lo
 
 The five paths in `src/lib/http/public-routes.ts` are reachable without an Auth0 session because each verifies its own caller. That array is the single source of truth for both the proxy allowlist and the build-time guard script, so the two cannot drift. It holds **exact paths only** — a prefix like `/api/jobs/` would silently exempt every future route in that subtree.
 
-- `GET /api/health` — liveness probe returning `{ "status": "ok" }`. Used by the ALB target group and the container `HEALTHCHECK`. Does no I/O, so a slow dependency never marks the task unhealthy.
-- `GET /api/jobs/snapshot-positions` — scheduled job; `Authorization: Bearer ${CRON_SECRET}`. Writes a daily `position_history` row for every open position. Driven by an Upstash QStash schedule on `30 21 * * 1-5` (weekdays 21:30 UTC, after US market close).
+- `GET /api/health` — liveness probe returning `{ "status": "ok" }`. Used by the Docker `HEALTHCHECK` (and by the ALB target group on AWS). Does no I/O, so a slow dependency never marks the container unhealthy.
+- `POST /api/jobs/snapshot-positions` — QStash schedule, same signature scheme as the alert checkers. Writes a daily `position_history` row for every open position and rolls them up into `portfolio_daily_value`. Runs on `30 21 * * 1-5` (weekdays 21:30 UTC, after US market close).
 - `POST /api/alerts/check` — QStash webhook; Upstash signature verified against `QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`. Evaluates every active price alert, atomically claims triggered rows, sends pushes, reverts alerts whose every push failed, and records `missed_alerts` for the rest.
 - `POST /api/alerts/check-earnings` — QStash webhook, same signature scheme. Triggers earnings alerts whose report date has arrived.
 - `POST /api/stripe/webhook` — Stripe webhook; signature verified against `STRIPE_WEBHOOK_SECRET`, pinned to the Node runtime so the raw body can be read verbatim. Handles `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`; mirrors state into `subscriptions` and flips `users.subscription_plan` in a single transaction.
@@ -665,7 +665,7 @@ Three, each deliberate:
 
 1. **`POST /api/alerts/test-notification`** — the API's one RPC endpoint. It is an action, not a resource: there is no "test notification" entity to create. Sends a canned push to every subscription on the caller's account and returns `{ sent: n }`; **422 `no_push_subscriptions`** when there are none. Nothing in the app calls it — it exists to be hit with `curl` when verifying that a device's registration actually delivers, which is otherwise only observable by waiting for a real alert to fire.
 2. **`POST /api/stripe/checkout` and `POST /api/stripe/cancel`** keep their verb-in-path shape. There is no Checkout Session or cancellation resource this app owns — Stripe does — so there is nothing here to name. They use the auth wrappers and problem+json like everything else.
-3. **The five public routes return `{ "error": "..." }`, not problem+json.** Their consumers are QStash, Stripe and a cron secret: none parse the body, all switch on status, and Stripe surfaces the raw body in its dashboard, where a `type` URL pointing at a page that doesn't exist would be worse than a plain string.
+3. **The five public routes return `{ "error": "..." }`, not problem+json.** Their consumers are QStash, Stripe and a health probe: none parse the body, all switch on status, and Stripe surfaces the raw body in its dashboard, where a `type` URL pointing at a page that doesn't exist would be worse than a plain string.
 
 ### Examples
 
@@ -700,9 +700,11 @@ Three recurring processes drive most of the "live" behavior:
 
 1. **Price alert checker** — `POST /api/alerts/check` is triggered by an Upstash QStash schedule. The handler verifies the Upstash signature, fetches current quotes for every active price alert's symbol, and atomically transitions matching rows to `triggered`. Alerts whose push notifications all fail are reverted to `active`; successful ones are mirrored into `missed_alerts` so the user sees them in the bell dropdown.
 2. **Earnings alert checker** — `POST /api/alerts/check-earnings`, same QStash signature scheme. Claims every active `earnings` alert whose `earnings_date` has arrived, pushes it, and mirrors it into `missed_alerts`. Split from the price checker because it is date-driven rather than quote-driven and needs no market-data call at all.
-3. **Position snapshots** — `GET /api/jobs/snapshot-positions` is triggered by an Upstash QStash schedule every weekday at 21:30 UTC (`30 21 * * 1-5`, after US market close). It writes a `position_history` row per open position so the portfolio charts have an end-of-day anchor. This used to run on Vercel Cron; after the move to AWS, `vercel.json` is empty and QStash drives it by calling the public app URL with the `CRON_SECRET` bearer token.
+3. **Position snapshots** — `POST /api/jobs/snapshot-positions` is triggered by an Upstash QStash schedule every weekday at 21:30 UTC (`30 21 * * 1-5`, after US market close). It writes a `position_history` row per open position, plus one `portfolio_daily_value` row per account, so the portfolio charts and stats have an end-of-day anchor. Every write is an upsert on the day's date, so a QStash retry is harmless.
 
-All three run by having QStash call the public app URL on the ALB — there is no AWS-native scheduler (EventBridge) involved. They are the only routes reachable without an Auth0 session besides `/api/health`, and each verifies its own caller; see [API Documentation → Public routes](#public-routes).
+All three run by having QStash call the public app URL, and each verifies the QStash signature itself. They are the only routes reachable without an Auth0 session besides `/api/health` and the Stripe webhook; see [API Documentation → Public routes](#public-routes).
+
+The snapshot has had three schedulers: Vercel Cron at first, then EventBridge Scheduler invoking a Lambda while the app ran on AWS (see [Previous deployment: AWS](#previous-deployment-aws-ecs-fargate)), and now QStash. Keeping it on QStash rather than Vercel Cron puts all three jobs in one place with one auth scheme.
 
 <!-- TODO: The QStash schedules live only in the Upstash console — no cadence for the two alert checkers is recorded in this repo. Document their destination URLs, HTTP methods and frequencies so a new contributor can wire them up from scratch. -->
 
@@ -710,7 +712,7 @@ All three run by having QStash call the public app URL on the ALB — there is n
 
 ## Progressive Web App (PWA)
 
-StockMind AI is an installable PWA — on a phone it can be added to the home screen and launched full-screen (no browser chrome), which is also what unlocks Web Push on iOS. The wiring is framework-level and provider-agnostic; it behaves the same locally and on AWS.
+StockMind AI is an installable PWA — on a phone it can be added to the home screen and launched full-screen (no browser chrome), which is also what unlocks Web Push on iOS. The wiring is framework-level and provider-agnostic; it behaves the same locally, on Vercel, and as it did on AWS.
 
 - **Manifest** — `src/app/manifest.ts` is served by Next.js at `/manifest.webmanifest` (`display: standalone`, 192/512 icons in both `any` and `maskable` variants from `public/icons/`). Next auto-injects the `<link rel="manifest">`.
 - **Service worker** — `public/sw.js`, registered from `app/layout.tsx` via `components/pwa/service-worker-registration.tsx`. It's deliberately minimal: a no-op `fetch` listener (required for Chrome to offer "Install app" rather than a shortcut) plus `push` / `notificationclick` handlers for Web Push. It does **no** asset caching, so a deploy never serves a stale app shell.
@@ -719,8 +721,8 @@ StockMind AI is an installable PWA — on a phone it can be added to the home sc
 
 **Requirements & gotchas**
 
-- A service worker requires a **secure context** (HTTPS, or `localhost` in dev). In production this comes from the ALB + ACM cert — the browser sees `https://getstockmind.com` even though the ALB forwards plain HTTP to the container.
-- **Install from the canonical domain** (`https://getstockmind.com`), not the raw ALB DNS — the ACM cert only covers `getstockmind.com`/`www`, and the manifest `scope`/`start_url` are relative to the origin you install from.
+- A service worker requires a **secure context** (HTTPS, or `localhost` in dev). In production Vercel provides it with a certificate it issues for `getstockmind.com`.
+- **Install from the canonical domain** (`https://getstockmind.com`), not a `*.vercel.app` URL — the manifest `scope`/`start_url` are relative to the origin you install from, and login only works on the domain `APP_BASE_URL` names.
 - Web Push also needs the VAPID keys (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` at build time, `VAPID_PRIVATE_KEY` at runtime) — see [Environment Variables](#environment-variables).
 
 To verify, open DevTools → **Application → Manifest / Service Workers**, or run a **Lighthouse → PWA** audit against the deployed site.
@@ -729,13 +731,78 @@ To verify, open DevTools → **Application → Manifest / Service Workers**, or 
 
 ## Deployment
 
-StockMind AI was **migrated from Vercel to AWS**. It now runs as a container on **Amazon ECS (Fargate)** behind an **Application Load Balancer**, deployed automatically by **GitHub Actions** on every push to `master`. Everything lives in `us-east-1`, the Neon database included.
+Production runs on **Vercel**, deployed by its Git integration. From June to November 2026 the app ran as a container on **AWS ECS Fargate** instead; that setup, its pipeline and the reasons for leaving it are documented under [Previous deployment: AWS](#previous-deployment-aws-ecs-fargate).
+
+### Vercel project
+
+| Setting | Value |
+| --- | --- |
+| Root directory | `frontend` |
+| Framework preset | Next.js |
+| Production branch | `master` — every push deploys to production; every pull request gets a preview |
+| Function region | `iad1` (Washington, D.C. = AWS us-east-1), pinned in `vercel.json` so it sits beside Neon |
+| Fluid compute | On. It raises the function limit to 300 s on the Hobby plan, which the AI chat streams, transfer settlement and the live-trades stream all need (10 s by default without it) |
+| Environment variables | The ones under [Environment Variables](#environment-variables), scoped to Production |
+| Analytics | Vercel Web Analytics, via `<Analytics />` in `app/layout.tsx` |
+
+Production deploys are gated on the e2e suite. A repository ruleset on `master` (Settings → Rules → Rulesets) requires a pull request and a passing `e2e` check, with no bypass list, so code reaches production only through a tested PR. Preview deployments sit behind Vercel Authentication, and login doesn't work on them anyway: Auth0 only accepts callbacks on the production domain.
+
+### Serverless constraints in the code
+
+A long-lived container forgives things a serverless function doesn't. Moving back to Vercel meant fixing four:
+
+- **No work after the response without `after()`.** `POST /api/transfers` settles a transfer 10 s after answering `202`. A bare `setTimeout` worked in the container, but a function is frozen once it responds, so the timer never fired. It now runs inside `after()`, which hands the promise to Vercel's `waitUntil`.
+- **No open connections when an instance suspends.** `withTransaction` keeps a module-level Neon `Pool`, which Fluid compute reuses across invocations on the same instance. `attachDatabasePool` (from `@vercel/functions`) keeps each invocation alive until the pool's 5 s idle timeout has closed the session, so a suspended instance never wakes up holding a dead WebSocket. It does nothing outside Vercel.
+- **Streams end inside the function limit.** `GET /api/stocks/trades` sets `maxDuration = 300` and ends each stream at 280 s; `EventSource` reconnects on its own and the page stays live.
+- **One crash is everyone's crash.** Fluid compute serves several requests from one instance, so the trades stream's old double-`close()` (an `uncaughtException` on every navigation away) had to go. Every exit now goes through one idempotent `finish()`.
+
+Process-local state is per instance: the in-flight request maps, the portfolio-stats cache and the Redis breaker each warm up separately, which costs at most a few extra lookups. Everything shared lives in Redis or Postgres.
+
+### Domain & DNS
+
+`getstockmind.com` is registered at **Cloudflare**, which also hosts the DNS. Both records are **DNS-only (grey cloud)** and point at Vercel, which issues the TLS certificate:
+
+| Name | Type | Target |
+| --- | --- | --- |
+| `getstockmind.com` | A | The address Vercel shows under Settings → Domains |
+| `www` | CNAME | The hostname Vercel shows for `www` |
+
+In Vercel, `www.getstockmind.com` 308-redirects to the apex. Auth0 builds its `redirect_uri` from `APP_BASE_URL` (the apex), so a login that started on `www` would lose its state cookie at the callback; the redirect makes every visit start on the apex.
+
+DNS-only rather than proxied: Vercel advises against running a proxy in front of it, and behind Cloudflare's proxy `x-forwarded-for` would carry Cloudflare's address instead of the visitor's, so `getClientIp` would write Cloudflare into every audit-log row.
+
+### Database, jobs and webhooks
+
+- Apply any pending `/migrations/*.sql` to the `e2e` branch and run the e2e suite, then to the production database alongside the deploy (see [Migrations and the e2e branch](#migrations-and-the-e2e-branch)).
+- The three QStash schedules `POST` to `https://getstockmind.com/api/alerts/check`, `https://getstockmind.com/api/alerts/check-earnings` and `https://getstockmind.com/api/jobs/snapshot-positions` (`30 21 * * 1-5`). See [Background Jobs](#background-jobs).
+- The Stripe webhook endpoint is `https://getstockmind.com/api/stripe/webhook`.
+
+There are no Vercel Cron jobs: `vercel.json` only pins the region.
+
+### Why it moved back from AWS
+
+The AWS setup cost about **$60 a month** for a portfolio app with little traffic, nearly all of it fixed:
+
+| Item | ≈ per month |
+| --- | --- |
+| Application Load Balancer (hourly charge + LCUs) | $17–20 |
+| 7 public IPv4 addresses — the ALB spans 6 availability zones, plus the task | $25 |
+| Fargate task, 0.5 vCPU / 1 GB, ARM64, always on | $14 |
+| ECR storage, CloudWatch Logs | ~$1 |
+
+On Vercel's Hobby plan the same app costs nothing at this traffic. The trade-offs are the serverless constraints above, all handled in code.
+
+---
+
+## Previous deployment: AWS ECS Fargate
+
+From June to November 2026 StockMind AI ran as a container on **Amazon ECS (Fargate)** behind an **Application Load Balancer**, deployed by **GitHub Actions** on every push to `master`. Everything lived in `us-east-1`, the Neon database included. The infrastructure has been retired (see [Why it moved back](#why-it-moved-back-from-aws)), but the `Dockerfile` and `.github/workflows/deploy.yml` are still in the repo: the image still builds, and the workflow can still be run by hand against a rebuilt stack.
 
 ### Request flow
 
 ```
 Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
-                      │  only Cloudflare IPs are allowed into the ALB security group
+                      │  only Cloudflare IPs were allowed into the ALB security group
                       ▼
             Application Load Balancer  (stockmind-alb)
               :80  ── 301 redirect ──▶ :443
@@ -753,19 +820,20 @@ Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
 | Resource | Value |
 | --- | --- |
 | Domain | `https://getstockmind.com` (registrar / DNS: Cloudflare) |
-| ECR repo | `735381630663.dkr.ecr.us-east-1.amazonaws.com/stockmind-ai` (tags: `latest` + commit SHA) |
+| ECR repo | `<account-id>.dkr.ecr.us-east-1.amazonaws.com/stockmind-ai` (tags: `latest` + commit SHA) |
 | ECS cluster | `stockmind-cluster` |
 | ECS service | `stockmind-task-service` — Fargate, desired count 1, rolling deploys |
 | Task definition | `stockmind-task` — ARM64/Linux, 0.5 vCPU, 1 GB, container port 3000 |
 | Container | `stockmind-app` |
-| Load balancer | `stockmind-alb` → `stockmind-alb-2082442465.us-east-1.elb.amazonaws.com` (internet-facing) |
+| Load balancer | `stockmind-alb` — internet-facing, across 6 availability zones |
 | Target group | `stockmind-tg` — IP targets, HTTP :3000, health check `GET /api/health` → 200 |
-| ALB security group | `stockmind-alb-sg` — 80/443 from Cloudflare IP ranges only (via a managed prefix list; the origin is not reachable directly) |
+| ALB security group | `stockmind-alb-sg` — 80/443 from Cloudflare IP ranges only (via a managed prefix list; the origin was not reachable directly) |
 | ECS security group | `stockmind-sg` — 3000 from `stockmind-alb-sg` only |
 | TLS cert | ACM (`getstockmind.com` + `www.getstockmind.com`), DNS-validated |
 | Secrets | SSM Parameter Store under `/stockmind/*` (SecureString) |
 | Logs | CloudWatch Logs group `/ecs/stockmind-task` |
 | Execution role | `ecsTaskExecutionRole` (pulls the image + reads SSM params) |
+| Snapshot scheduler | EventBridge Scheduler `stockmind-snapshot-positions` → Lambda `stockmind-snapshot-positions` |
 
 ### Container image
 
@@ -779,60 +847,57 @@ Browser ──HTTPS──▶ Cloudflare (proxied — getstockmind.com)
 
 ### CI/CD — GitHub Actions
 
-`.github/workflows/deploy.yml` runs on every push to `master` (and via manual `workflow_dispatch`, which deploys only when run on `master`), serialized by a `deploy-ecs` concurrency group so two deploys never overlap:
+`.github/workflows/deploy.yml` ran on every push to `master`, serialized by a `deploy-ecs` concurrency group so two deploys never overlapped:
 
 1. Build the `linux/arm64` image on a native Graviton runner (`ubuntu-24.04-arm` — no QEMU emulation), with GitHub Actions layer caching.
 2. Push to ECR tagged both `latest` and the commit SHA. (Single-arch — no provenance/SBOM attestation, since those manifest-lists break Fargate image pulls.)
 3. Download the current `stockmind-task` definition and render a new revision pointing at the SHA-tagged image.
-4. Update `stockmind-task-service` and **wait for service stability** — the job only goes green once the new task is healthy in the target group and the old one has drained.
+4. Update `stockmind-task-service` and **wait for service stability** — the job only went green once the new task was healthy in the target group and the old one had drained.
 
-**Required GitHub configuration:**
+Deploys were gated the same way production is now: only `master` deployed, and `master` only takes tested PRs. The workflow is now archived — its trigger is `workflow_dispatch` only, so a merge no longer starts it, and a manual run still deploys only `master`.
+
+**GitHub configuration it needed:**
 
 | Kind | Name | Purpose |
 | --- | --- | --- |
 | Secret | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credentials with ECR push + ECS deploy permissions |
 | Variable | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key baked into the client bundle at build time |
 
-`.github/workflows/e2e.yml` runs the Playwright suite on every pull request into `master`. Its secrets are listed in [Testing → In CI](#in-ci).
-
-Deploys are gated on that suite. A repository ruleset on `master` (Settings → Rules → Rulesets) requires a pull request and a passing `e2e` check, with no bypass list, so code reaches `master` only through a tested PR. `deploy.yml` deploys only `master`: a manual run on any other branch skips the job, since that branch's code hasn't passed the gate.
-
 ### Secrets & configuration
 
-The runtime secrets are stored in **SSM Parameter Store** as `SecureString` under `/stockmind/*` and referenced by the task definition's `secrets` block, so they're injected as env vars at container start and never baked into the image:
+The runtime secrets were stored in **SSM Parameter Store** as `SecureString` under `/stockmind/*` and referenced by the task definition's `secrets` block, so they were injected as env vars at container start and never baked into the image:
 
 `APP_BASE_URL`, `AUTH0_SECRET`, `AUTH0_CLIENT_SECRET`, `CRON_SECRET`, `DATABASE_URL`, `FINNHUB_API_KEY`, `FMP_API_KEY`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `VAPID_PRIVATE_KEY`, `XAI_API_KEY`.
 
-Non-secret config (`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `STRIPE_PRICE_ID`) is set as plaintext `environment` entries on the task definition. Changing a secret means updating its SSM value and forcing a new deployment so the container re-reads it.
+Non-secret config (`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `STRIPE_PRICE_ID`) was set as plaintext `environment` entries on the task definition. Changing a secret meant updating its SSM value and forcing a new deployment so the container re-read it.
+
+### Scheduled snapshot
+
+The alert checkers stayed on QStash, but the daily position snapshot ran on AWS: an **EventBridge Scheduler** schedule (`cron(30 21 ? * MON-FRI *)`, UTC) invoked a small **Lambda** (Node.js 22, ARM64, 128 MB). The Lambda read `/stockmind/CRON_SECRET` from SSM — the same parameter the task used — and called `GET /api/jobs/snapshot-positions` with it as a bearer token, throwing on any non-2xx so the invocation was marked failed. On Vercel the route verifies a QStash signature instead.
 
 ### DNS & TLS
 
-`getstockmind.com` is registered and DNS-hosted on **Cloudflare** and **proxied** (orange-cloud) in front of the ALB, so all traffic passes through Cloudflare. The ALB security group only admits Cloudflare's published IP ranges (via a managed prefix list), so the raw ALB DNS is not reachable directly. The ALB terminates TLS with an **ACM** certificate covering `getstockmind.com` and `www.getstockmind.com`; Cloudflare's SSL/TLS mode is **Full (strict)**, and the `:80` listener 301-redirects to `:443`.
+`getstockmind.com` was **proxied** through Cloudflare (orange cloud) in front of the ALB, so all traffic passed through Cloudflare. The ALB security group only admitted Cloudflare's published IP ranges (via a managed prefix list), so the raw ALB hostname was not reachable directly. The ALB terminated TLS with an **ACM** certificate covering `getstockmind.com` and `www.getstockmind.com`; Cloudflare's SSL/TLS mode was **Full (strict)**, the `:80` listener 301-redirected to `:443`, and a Cloudflare redirect rule sent `www` to the apex.
 
 ### Deploying manually
 
-Pushing to `master` is the normal path (you can also hit **Run workflow** on the Actions tab). To ship the same image by hand from `frontend/`:
+Pushing to `master` was the normal path. To ship the same image by hand from the repo root:
 
 ```bash
 # Authenticate Docker to ECR
 aws ecr get-login-password --region us-east-1 \
-  | docker login --username AWS --password-stdin 735381630663.dkr.ecr.us-east-1.amazonaws.com
+  | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
 
 # Build the ARM64 image and push it
 docker buildx build --platform linux/arm64 \
   --build-arg NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key> \
-  -t 735381630663.dkr.ecr.us-east-1.amazonaws.com/stockmind-ai:latest \
+  -t <account-id>.dkr.ecr.us-east-1.amazonaws.com/stockmind-ai:latest \
   --push ./frontend
 
 # Roll the service onto the new image
 aws ecs update-service --cluster stockmind-cluster \
   --service stockmind-task-service --force-new-deployment
 ```
-
-### Database & scheduled jobs
-
-- Apply any pending `/migrations/*.sql` to the `e2e` branch and run the e2e suite, then to the production database alongside the deploy (see [Migrations and the e2e branch](#migrations-and-the-e2e-branch)).
-- The background jobs run on **QStash schedules** that call the public app URL — point them at `https://getstockmind.com/api/alerts/check`, `https://getstockmind.com/api/alerts/check-earnings`, and `https://getstockmind.com/api/jobs/snapshot-positions` (the last with the `CRON_SECRET` bearer token). See [Background Jobs](#background-jobs).
 
 ---
 
