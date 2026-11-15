@@ -35,7 +35,14 @@ export function LivePrice({
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data.price && !data.error) {
+        // The server's Finnhub feed failed. Stop rather than let EventSource
+        // reconnect into the same failure every few seconds.
+        if (data.error) {
+          setIsLive(false)
+          eventSource.close()
+          return
+        }
+        if (data.price) {
           setPrice(data.price)
           setIsLive(true)
         }
@@ -44,9 +51,15 @@ export function LivePrice({
       }
     }
 
+    // The server ends every stream before the function time limit, and a
+    // stream that simply ended leaves readyState CONNECTING: EventSource
+    // reconnects on its own, so stay live through it. CLOSED means the server
+    // refused the connection (401, 5xx) and the browser won't retry.
     eventSource.onerror = () => {
-      setIsLive(false)
-      eventSource.close()
+      if (eventSource.readyState === EventSource.CLOSED) {
+        setIsLive(false)
+        eventSource.close()
+      }
     }
 
     return () => {

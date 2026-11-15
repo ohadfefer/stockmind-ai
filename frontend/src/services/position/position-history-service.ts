@@ -47,7 +47,8 @@ interface PositionRow {
 
 /**
  * Snapshots every open position across all accounts into position_history.
- * Designed to run once daily after market close (4:30 PM ET via Vercel cron).
+ * Runs once each weekday after market close: a QStash schedule POSTs
+ * /api/jobs/snapshot-positions at 21:30 UTC.
  */
 export async function snapshotAllPositions(): Promise<{
   snapshotCount: number

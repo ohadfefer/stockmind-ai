@@ -1,11 +1,23 @@
 import { snapshotAllPositions } from "@/services/position/position-history-service"
 import { NextResponse } from "next/server"
+import { Receiver } from "@upstash/qstash"
 
-export async function GET(request: Request) {
-  // Verify the request is from Vercel Cron using the secret header
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+const receiver = new Receiver({
+  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
+  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
+})
+
+export async function POST(request: Request) {
+  // Verify QStash signature
+  const signature = request.headers.get("upstash-signature")
+  if (!signature) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 })
+  }
+
+  const body = await request.text()
+  const isValid = await receiver.verify({ signature, body }).catch(() => false)
+  if (!isValid) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
   }
 
   try {
